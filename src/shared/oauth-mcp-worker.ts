@@ -30,8 +30,6 @@ type OAuthExecutionContext = McpWorkerContext & {
   auth?: OAuthResourceAuth;
 };
 
-const OWNER_USER_ID = "owner";
-const SUPPORTED_SCOPES = new Set<string>(ASSISTENTE_OAUTH_SCOPES);
 
 export function createOAuthMcpWorker<Environment extends OAuthMcpEnvironment>(
   options: OAuthMcpWorkerOptions<Environment>,
