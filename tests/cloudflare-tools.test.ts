@@ -43,6 +43,14 @@ test("injects the configured Cloudflare account only when execute has no account
     { code: "return 1", account_id: "explicit" },
   );
   assert.deepEqual(
+    withDefaultCloudflareAccount(
+      "execute",
+      { code: "return 1", account_id: "   " },
+      "account-123",
+    ),
+    { code: "return 1", account_id: "account-123" },
+  );
+  assert.deepEqual(
     withDefaultCloudflareAccount("docs", { query: "Workers" }, "account-123"),
     { query: "Workers" },
   );
