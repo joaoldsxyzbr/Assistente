@@ -22,6 +22,7 @@ type OAuthFailureStage =
 
 type AuthorizationErrorLike = Error & {
   code: string;
+  description?: string;
   redirectTo?: string;
 };
 
@@ -58,14 +59,34 @@ function isAuthorizationError(error: unknown): error is AuthorizationErrorLike {
 function logOAuthFailure(
   stage: OAuthFailureStage,
   category: string,
+  code: string,
   status: number,
 ): void {
   console.warn(JSON.stringify({
     event: "oauth_authorization_failure",
     stage,
     category,
+    code,
     status,
   }));
+}
+
+function authorizationErrorCategory(error: AuthorizationErrorLike): string {
+  const description = error.description ?? error.message;
+  switch (description) {
+    case "Missing transaction handle":
+      return "consent_handle_missing";
+    case "This authorization was not started in this browser; start again":
+      return "consent_cookie_missing";
+    case "This authorization belongs to a different browser session; start again":
+      return "consent_cookie_mismatch";
+    case "This authorization expired or was already used; start again":
+      return "consent_transaction_expired_or_used";
+    case "Approved scopes must be ones this server supports":
+      return "consent_invalid_scope";
+    default:
+      return "authorization_request_invalid";
+  }
 }
 
 function authorizationErrorResponse(
@@ -74,16 +95,19 @@ function authorizationErrorResponse(
 ): Response | undefined {
   if (isAuthorizationError(error)) {
     const status = error.redirectTo ? 302 : 400;
-    logOAuthFailure(stage, error.code, status);
+    const category = authorizationErrorCategory(error);
+    logOAuthFailure(stage, category, error.code, status);
     if (error.redirectTo) return Response.redirect(error.redirectTo, status);
     return htmlResponse(
-      "<!doctype html><html lang=\"pt-BR\"><meta charset=\"utf-8\"><title>Autorização inválida</title><h1>Solicitação OAuth inválida ou expirada</h1><p>Inicie a conexão novamente no ChatGPT.</p>",
+      "<!doctype html><html lang=\"pt-BR\"><meta charset=\"utf-8\"><title>Autorização inválida</title><h1>Solicitação OAuth inválida ou expirada</h1><p>Inicie a conexão novamente no ChatGPT.</p><p>Código de diagnóstico: <code>" +
+        category +
+        "</code></p>",
       400,
     );
   }
 
   if (error instanceof Error && error.name === "CimdFetchError") {
-    logOAuthFailure(stage, "cimd_fetch_error", 400);
+    logOAuthFailure(stage, "client_metadata", "metadata_resolution_failed", 400);
     return htmlResponse(
       "<!doctype html><html lang=\"pt-BR\"><meta charset=\"utf-8\"><title>Cliente não verificado</title><h1>Não foi possível verificar o cliente OAuth</h1><p>Inicie a conexão novamente depois de conferir a URL do servidor.</p>",
       400,
