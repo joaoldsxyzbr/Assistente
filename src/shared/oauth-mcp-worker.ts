@@ -81,8 +81,9 @@ function authorizationErrorResponse(
   stage: OAuthFailureStage,
 ): Response | undefined {
   if (error instanceof AuthorizationError) {
-    logOAuthFailure(stage, error.code, 400);
-    if (error.redirectTo) return Response.redirect(error.redirectTo, 302);
+    const status = error.redirectTo ? 302 : 400;
+    logOAuthFailure(stage, error.code, status);
+    if (error.redirectTo) return Response.redirect(error.redirectTo, status);
     return htmlResponse(
       "<!doctype html><html lang=\"pt-BR\"><meta charset=\"utf-8\"><title>Autorização inválida</title><h1>Solicitação OAuth inválida ou expirada</h1><p>Inicie a conexão novamente no ChatGPT.</p>",
       400,
