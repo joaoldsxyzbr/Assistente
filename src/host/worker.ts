@@ -149,7 +149,7 @@ const oauthWorker = createOAuthMcpWorker<AssistenteWorkerEnvironment>({
 
 const consentResponses = createConcurrentResponseCoalescer();
 
-function consentRequestKey(request: Request): string | undefined {
+export function consentRequestKey(request: Request): string | undefined {
   if (request.method !== "POST") return undefined;
   const url = new URL(request.url);
   if (url.pathname !== "/authorize") return undefined;
