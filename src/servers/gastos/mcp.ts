@@ -48,7 +48,10 @@ export function createGastosMcpServer(database: D1Database): McpServer {
             return jsonResult(await summarizeExpenses(database, input.mes as string | undefined));
           }
           if (tool.name === "registrar_movimentacao") {
-            const result = await registerExpense(database, input as RegisterExpenseInput);
+            const result = await registerExpense(
+              database,
+              input as unknown as RegisterExpenseInput,
+            );
             if (result.status === "resultado_incerto") {
               return {
                 isError: true,
@@ -61,7 +64,9 @@ export function createGastosMcpServer(database: D1Database): McpServer {
             return jsonResult(result);
           }
           if (tool.name === "editar_movimentacao") {
-            return jsonResult(await editExpense(database, input as EditExpenseInput));
+            return jsonResult(
+              await editExpense(database, input as unknown as EditExpenseInput),
+            );
           }
           if (tool.name === "marcar_pagamento") {
             return jsonResult(await setExpenseStatus(database, input as {

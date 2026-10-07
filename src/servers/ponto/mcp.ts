@@ -33,7 +33,10 @@ export function createPontoMcpServer(database: D1Database): McpServer {
       async (input) => {
         try {
           if (tool.name === "registrar_ponto") {
-            const result = await registerPunch(database, input as RegisterPunchInput);
+            const result = await registerPunch(
+              database,
+              input as unknown as RegisterPunchInput,
+            );
             if (result.status === "resultado_incerto") {
               return {
                 isError: true,
