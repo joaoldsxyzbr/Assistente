@@ -44,7 +44,9 @@ Cada Worker de domínio usa `MCP_TOKEN`; o host usa `ASSISTENTE_MCP_TOKEN`. São
 | Cloudflare | `MCP_CLOUDFLARE_URL` | `MCP_CLOUDFLARE_TOKEN` |
 | DeskPilot | `MCP_DESKPILOT_URL` | `MCP_DESKPILOT_TOKEN` |
 
-Os dois últimos pares ainda não têm contratos de ferramentas no host. OAuth ou outro mecanismo pode ser adicionado quando o cliente e os contratos de integração estiverem definidos. O endpoint bearer implementado não configura sozinho um conector ChatGPT.
+O fluxo previsto é OAuth 2.1 entre ChatGPT e o host. O código atual ainda usa bearer token nesse endpoint e não implementa o fluxo OAuth. Entre o host e Ponto/Gastos, cada API MCP recebe sua credencial de serviço separada; o token OAuth do usuário não é repassado. O endpoint bearer atual não configura sozinho um conector ChatGPT.
+
+Cloudflare MCP e DeskPilot ainda não têm contratos de ferramentas no host. Para Cloudflare, a integração usará um API Token dedicado chamado `Assistente Cloudflare`, começando com as permissões mínimas e ampliando somente quando uma ferramenta precisar delas.
 
 Os arquivos `wrangler.ponto.jsonc` e `wrangler.gastos.jsonc` apontam aos IDs dos D1s existentes e dão a cada Worker apenas o seu binding. `wrangler.assistente.jsonc` não declara banco. `npm run build:workers` valida os três bundles sem publicar.
 

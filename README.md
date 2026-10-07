@@ -8,7 +8,7 @@ Host central para MCPs independentes por domínio. Cada Worker de domínio receb
 - O esquema dos dois D1s foi inspecionado; nenhum registro pessoal foi lido e nenhum dado ou schema foi alterado.
 - O Worker genérico `cloudflare-mcp` existente não tinha binding para esses D1s nem ferramentas de domínio detectadas. O código do Assistente não o usa como atalho para executar código remoto.
 - Os três Workers estão implementados no repositório, mas ainda não foram publicados. Endpoints, secrets e conexão com um cliente ChatGPT ainda precisam ser configurados.
-- Plano acompanhado em [docs/PLANO.md](docs/PLANO.md) e [Issue #1](https://github.com/joaoldsxyzbr/Assistente/issues/1); implementação em revisão no [PR #2](https://github.com/joaoldsxyzbr/Assistente/pull/2).
+- A fundação foi integrada à `main` pelo [PR #2](https://github.com/joaoldsxyzbr/Assistente/pull/2). O plano e as próximas etapas estão em [docs/PLANO.md](docs/PLANO.md) e na [Issue #1](https://github.com/joaoldsxyzbr/Assistente/issues/1).
 
 ## Estrutura
 
