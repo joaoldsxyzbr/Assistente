@@ -74,3 +74,8 @@ O comando npm run build:workers valida o bundle em dry-run sem publicar.
 | src/shared/oauth-authorization.ts | Fluxo HTTP de autorização, consentimento, diagnóstico seguro e conclusão OAuth |
 | src/shared/oauth-mcp-worker.ts | Montagem do OAuthProvider e proteção/autorização das chamadas MCP |
 | tests/ | Testes sintéticos do host e dos contratos |
+
+
+### Concorrência no consentimento OAuth
+
+O endpoint `POST /authorize` é protegido contra submissões concorrentes da mesma transação antes de entrar no `OAuthProvider`. O host identifica a transação apenas pelo nome do cookie `__Host-oauth-consent-*` — nunca pelo valor do cookie, senha ou body — e coalesce respostas simultâneas por uma janela curta em memória. Isso preserva a semântica single-use de `approveConsent()`: apenas uma execução consome a transação, enquanto uma segunda submissão concorrente recebe um clone da mesma resposta 3xx. Respostas não-3xx e exceções não ficam retidas.
