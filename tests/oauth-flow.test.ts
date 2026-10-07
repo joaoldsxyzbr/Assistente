@@ -1,14 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-  AuthorizationError,
-  type AuthRequest,
-  type OAuthHelpers,
+import type {
+  AuthRequest,
+  OAuthHelpers,
 } from "@cloudflare/workers-oauth-provider";
 import {
   handleAuthorizeRequest,
-  type OAuthMcpEnvironment,
-} from "../src/shared/oauth-mcp-worker.ts";
+  type OAuthAuthorizationEnvironment,
+} from "../src/shared/oauth-authorization.ts";
 
 const strongPassword = "0123456789abcdef0123456789abcdef";
 const consentHandle = "test-consent-handle";
@@ -32,6 +31,13 @@ const authRequest = {
   codeChallengeMethod,
 } as AuthRequest;
 
+function authorizationError(description: string): Error & { code: string } {
+  const error = new Error(description) as Error & { code: string };
+  error.name = "AuthorizationError";
+  error.code = "invalid_request";
+  return error;
+}
+
 function buildHarness() {
   let transactionActive = false;
   let parseCalls = 0;
@@ -43,9 +49,7 @@ function buildHarness() {
       parseCalls += 1;
       const url = new URL(request.url);
       if (request.method !== "GET" || !url.searchParams.get("client_id")) {
-        throw new AuthorizationError("invalid_request", {
-          description: "OAuth parameters are not present on this request",
-        });
+        throw authorizationError("OAuth parameters are not present on this request");
       }
       return authRequest;
     },
@@ -73,21 +77,17 @@ function buildHarness() {
     async approveConsent(request: Request, handle: string) {
       approveCalls += 1;
       if (handle !== consentHandle) {
-        throw new AuthorizationError("invalid_request", {
-          description: "Missing transaction handle",
-        });
+        throw authorizationError("Missing transaction handle");
       }
       if (!request.headers.get("cookie")?.includes(cookiePair)) {
-        throw new AuthorizationError("invalid_request", {
-          description:
-            "This authorization was not started in this browser; start again",
-        });
+        throw authorizationError(
+          "This authorization was not started in this browser; start again",
+        );
       }
       if (!transactionActive) {
-        throw new AuthorizationError("invalid_request", {
-          description:
-            "This authorization expired or was already used; start again",
-        });
+        throw authorizationError(
+          "This authorization expired or was already used; start again",
+        );
       }
 
       transactionActive = false;
@@ -131,7 +131,7 @@ function buildHarness() {
   };
 }
 
-function environment(oauth: OAuthHelpers): OAuthMcpEnvironment {
+function environment(oauth: OAuthHelpers): OAuthAuthorizationEnvironment {
   return {
     ASSISTENTE_OAUTH_PASSWORD: strongPassword,
     OAUTH_PROVIDER: oauth,
