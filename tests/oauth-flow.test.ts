@@ -79,9 +79,15 @@ function buildHarness() {
       if (handle !== consentHandle) {
         throw authorizationError("Missing transaction handle");
       }
-      if (!request.headers.get("cookie")?.includes(cookiePair)) {
+      const cookieHeader = request.headers.get("cookie") ?? "";
+      if (!cookieHeader.includes(`${cookieName}=`)) {
         throw authorizationError(
           "This authorization was not started in this browser; start again",
+        );
+      }
+      if (!cookieHeader.includes(cookiePair)) {
+        throw authorizationError(
+          "This authorization belongs to a different browser session; start again",
         );
       }
       if (!transactionActive) {
@@ -238,7 +244,33 @@ test("rejects approval when the browser-bound consent cookie is missing", async 
   );
 
   assert.equal(response.status, 400);
-  assert.ok((await response.text()).includes("Solicitação OAuth inválida ou expirada"));
+  const html = await response.text();
+  assert.ok(html.includes("Solicitação OAuth inválida ou expirada"));
+  assert.ok(html.includes("consent_cookie_missing"));
+  assert.deepEqual(harness.state(), {
+    transactionActive: true,
+    parseCalls: 1,
+    approveCalls: 1,
+    completeCalls: 0,
+  });
+});
+
+test("rejects approval when the consent cookie belongs to another browser session", async () => {
+  const harness = buildHarness();
+  await startConsent(harness);
+
+  const response = await handleAuthorizeRequest(
+    authorizePostRequest(
+      strongPassword,
+      `${cookieName}=different-cookie-binding`,
+    ),
+    environment(harness.oauth),
+  );
+
+  assert.equal(response.status, 400);
+  const html = await response.text();
+  assert.ok(html.includes("Solicitação OAuth inválida ou expirada"));
+  assert.ok(html.includes("consent_cookie_mismatch"));
   assert.deepEqual(harness.state(), {
     transactionActive: true,
     parseCalls: 1,
@@ -258,7 +290,9 @@ test("rejects an expired or already-consumed consent transaction", async () => {
   );
 
   assert.equal(response.status, 400);
-  assert.ok((await response.text()).includes("Solicitação OAuth inválida ou expirada"));
+  const html = await response.text();
+  assert.ok(html.includes("Solicitação OAuth inválida ou expirada"));
+  assert.ok(html.includes("consent_transaction_expired_or_used"));
   assert.deepEqual(harness.state(), {
     transactionActive: false,
     parseCalls: 1,

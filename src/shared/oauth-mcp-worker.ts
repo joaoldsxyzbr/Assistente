@@ -88,5 +88,17 @@ export function createOAuthMcpWorker<Environment extends OAuthMcpEnvironment>(
       resource_name: options.resourceName,
     },
     clientIdMetadataDocumentEnabled: true,
+    onError({ code, status, internal }) {
+      const category = internal === undefined
+        ? "provider_error"
+        : `${internal.category}.${internal.reason}`;
+      console.warn(JSON.stringify({
+        event: "oauth_provider_failure",
+        stage: "oauth_provider",
+        category,
+        code,
+        status,
+      }));
+    },
   });
 }
