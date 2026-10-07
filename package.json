@@ -9,13 +9,17 @@
   "scripts": {
     "test": "node --experimental-strip-types --test tests/*.test.ts",
     "typecheck": "tsc --noEmit",
-    "check": "npm run typecheck && npm test"
+    "build:workers": "wrangler deploy --dry-run --outdir .wrangler-build/ponto --config wrangler.ponto.jsonc && wrangler deploy --dry-run --outdir .wrangler-build/gastos --config wrangler.gastos.jsonc && wrangler deploy --dry-run --outdir .wrangler-build/assistente --config wrangler.assistente.jsonc",
+    "check": "npm run typecheck && npm test && npm run build:workers"
   },
   "dependencies": {
-    "@modelcontextprotocol/client": "^2.0.0"
+    "@modelcontextprotocol/client": "^2.0.0",
+    "@modelcontextprotocol/server": "^2.0.0",
+    "agents": "^0.20.0"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
-    "typescript": "^6.0.0"
+    "typescript": "^6.0.0",
+    "wrangler": "^4.0.0"
   }
 }

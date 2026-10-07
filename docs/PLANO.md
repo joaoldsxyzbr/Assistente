@@ -1,19 +1,24 @@
 # Plano de implementação
 
-Plano rastreado em [GitHub Issue #1](https://github.com/joaoldsxyzbr/Assistente/issues/1).
+Plano acompanhado em [GitHub Issue #1](https://github.com/joaoldsxyzbr/Assistente/issues/1) e revisão em andamento no [PR #2](https://github.com/joaoldsxyzbr/Assistente/pull/2).
 
 ## Etapas
 
-- [x] Registrar decisões: Assistente como host; MCPs separados por domínio; preservar bancos existentes.
-- [x] Criar o núcleo de configuração, descoberta e roteamento independente por servidor.
-- [x] Cobrir isolamento, falha parcial, nomes conflitantes e timeout após possível escrita.
-- [ ] Confirmar endpoints MCP, autenticação e schemas atuais de ponto e gastos.
-- [ ] Integrar ponto e gastos sem migração ou escrita de dados durante configuração.
-- [ ] Adicionar chamadas compostas com execução paralela de leituras independentes.
-- [ ] Definir implantação dos Workers e bindings de menor privilégio por domínio.
-- [ ] Adicionar autenticação compatível com os mecanismos reais de cada MCP e validar no MCP Inspector.
-- [ ] Acompanhar CI e validar a implantação quando credenciais e destino estiverem prontos.
+- [x] Registrar decisões: Assistente como host, MCPs separados por domínio e bancos existentes preservados.
+- [x] Criar catálogo, configuração e roteamento do host com nomes de ferramentas qualificados.
+- [x] Inspecionar schemas e índices dos D1s e bindings do Worker atual, sem ler registros pessoais.
+- [x] Implementar Ponto e Gastos como Workers independentes, cada um com um binding ao seu D1 existente.
+- [x] Validar operações de domínio, confirmar duplicatas prováveis e tratar respostas incertas sem repetir escritas automaticamente.
+- [x] Criar schemas locais allowlist para o host; não publicar ferramentas genéricas de execução.
+- [x] Adicionar testes com D1 em memória e dados sintéticos.
+- [ ] Validar typecheck e builds dos Workers na CI do PR.
+- [ ] Publicar os três Workers com secrets distintos e conferir a conexão via MCP Inspector.
+- [ ] Definir a autenticação e registrar o endpoint host no cliente ChatGPT escolhido.
+- [ ] Especificar contratos e permissões antes de adicionar Cloudflare MCP e DeskPilot.
+- [ ] Adicionar consultas compostas que leiam domínios em paralelo quando o fluxo do host estiver conectado.
 
-## Critério para iniciar operações reais
+## Critério para operações reais
 
-Antes de habilitar leitura ou escrita em dados reais, confirmar o endpoint, o fluxo de autenticação e os schemas publicados por cada servidor. Para escritas, cada MCP deve oferecer validação, idempotência e forma de consultar o resultado final.
+Antes de conectar o host a um cliente, configurar URLs HTTPS e secrets no runtime e testar a autenticação. A primeira verificação operacional deve começar por chamadas de leitura; as escritas já têm validações e confirmação para duplicatas e exclusões, mas ainda precisam de validação no MCP Inspector antes da publicação.
+
+Até esta etapa, não houve deploy, leitura de registros pessoais nem alteração de dados/schema nos D1s.
