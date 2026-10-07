@@ -46,6 +46,8 @@ No `POST /authorize`, a senha é conferida e a mesma requisição OAuth é valid
 
 Esse desenho deixa o estado sensível com a própria biblioteca OAuth: clientes, grants, authorization codes e tokens continuam no `OAUTH_KV`. Os parâmetros presentes na URL de autorização são públicos pelo protocolo (client_id, redirect_uri, state, PKCE e scopes) e são revalidados no POST; query strings continuam redigidas na observabilidade.
 
+A página de autorização não define `form-action` no CSP, porque essa diretiva também restringe os redirects subsequentes do POST e impediria o retorno para o callback do ChatGPT. Mantemos `default-src 'none'`, `base-uri 'none'` e `frame-ancestors 'none'`.
+
 Falhas esperadas registram somente etapa, categoria, código do erro e status HTTP. Para depuração de fronteira, o Worker também grava no `OAUTH_KV` marcadores de curta duração sob `diagnostic:oauth:*`, contendo somente etapa, horário, status HTTP e, em respostas OAuth de erro, um código simples validado. Senhas, tokens, authorization codes, cookies e credenciais não entram nesses marcadores nem nos logs estruturados.
 
 ## Segurança e limites
