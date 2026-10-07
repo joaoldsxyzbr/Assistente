@@ -23,6 +23,18 @@ npm run check
 
 `npm run check` executa o verificador TypeScript e os testes do núcleo.
 
+O host pode ser criado no runtime que o hospeda e recebe as variáveis desse ambiente:
+
+```ts
+import { createAssistenteHost } from "./src/index.ts";
+
+const host = createAssistenteHost(env);
+const statuses = await host.connect();
+const tools = host.getTools();
+```
+
+O chamador disponibiliza `tools` ao modelo e encaminha cada chamada para `host.callTool(nome, argumentos)`. Cada ferramenta recebe um nome com prefixo do seu MCP, como `mcp_ponto__registrar`.
+
 ## Configuração de MCPs
 
 Cada MCP precisa de endpoint HTTPS e token bearer próprios. Configure as variáveis do ambiente de execução indicadas em [docs/ARQUITETURA.md](docs/ARQUITETURA.md). Não coloque tokens em arquivos versionados.
