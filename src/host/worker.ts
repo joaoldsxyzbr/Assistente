@@ -11,7 +11,10 @@ import {
 import { RemoteMcpClient } from "./remote-client.ts";
 import { toolNameForServer } from "./host.ts";
 import { createOAuthMcpWorker } from "../shared/oauth-mcp-worker.ts";
-import { createConcurrentResponseCoalescer } from "../shared/concurrent-response.ts";
+import {
+  createConcurrentResponseCoalescer,
+  oauthConsentRequestKey,
+} from "../shared/concurrent-response.ts";
 
 export interface AssistenteWorkerEnvironment extends Environment {
   ASSISTENTE_OAUTH_PASSWORD?: string;
@@ -149,30 +152,13 @@ const oauthWorker = createOAuthMcpWorker<AssistenteWorkerEnvironment>({
 
 const consentResponses = createConcurrentResponseCoalescer();
 
-export function consentRequestKey(request: Request): string | undefined {
-  if (request.method !== "POST") return undefined;
-  const url = new URL(request.url);
-  if (url.pathname !== "/authorize") return undefined;
-
-  const cookie = request.headers.get("cookie");
-  if (cookie === null) return undefined;
-
-  for (const part of cookie.split(";")) {
-    const name = part.trim().split("=", 1)[0];
-    if (name.startsWith("__Host-oauth-consent-")) {
-      return name;
-    }
-  }
-  return undefined;
-}
-
 export default {
   async fetch(
     request: Request,
     environment: AssistenteWorkerEnvironment,
     context: Parameters<typeof oauthWorker.fetch>[2],
   ): Promise<Response> {
-    const key = consentRequestKey(request);
+    const key = await oauthConsentRequestKey(request);
     if (key === undefined) {
       return oauthWorker.fetch(request, environment, context);
     }

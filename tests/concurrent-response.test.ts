@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createConcurrentResponseCoalescer } from "../src/shared/concurrent-response.ts";
+import {
+  createConcurrentResponseCoalescer,
+  oauthConsentRequestKey,
+} from "../src/shared/concurrent-response.ts";
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -76,4 +79,46 @@ test("removes failed executions so a retry can run", async () => {
   await assert.rejects(() => coalescer.run("same", execute));
   assert.equal((await coalescer.run("same", execute)).status, 302);
   assert.equal(calls, 2);
+});
+
+
+test("matches the consent cookie for the current handle when several exist", async () => {
+  const handle = "current-consent-handle";
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(handle),
+  );
+  const hash = [...new Uint8Array(digest)]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+  const expected = "__Host-oauth-consent-" + hash.slice(0, 16);
+
+  const request = new Request("https://assistente.example.test/authorize", {
+    method: "POST",
+    headers: {
+      Cookie:
+        "__Host-oauth-consent-deadbeefdeadbeef=stale; " +
+        expected +
+        "=bound",
+    },
+    body: new URLSearchParams({
+      handle,
+      decision: "approve",
+      password: "not-used-by-the-key",
+    }),
+  });
+
+  assert.equal(await oauthConsentRequestKey(request), expected);
+});
+
+test("does not identify unrelated requests as consent submissions", async () => {
+  const request = new Request("https://assistente.example.test/oauth/token", {
+    method: "POST",
+    headers: {
+      Cookie: "__Host-oauth-consent-deadbeefdeadbeef=opaque",
+    },
+    body: new URLSearchParams({ handle: "unused" }),
+  });
+
+  assert.equal(await oauthConsentRequestKey(request), undefined);
 });
