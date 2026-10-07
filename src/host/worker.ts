@@ -1,6 +1,7 @@
 import { fromJsonSchema, McpServer } from "@modelcontextprotocol/server";
 import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
 import { MCP_TOOL_CATALOG } from "../mcps/catalog.ts";
+import { withDefaultCloudflareAccount } from "../mcps/cloudflare/tools.ts";
 import type { McpToolContract } from "../mcps/contracts.ts";
 import type { McpServerId } from "./contracts.ts";
 import {
@@ -14,6 +15,7 @@ import { oauthSecuritySchemesForTool } from "../shared/oauth-helpers.ts";
 
 export interface AssistenteWorkerEnvironment extends Environment {
   ASSISTENTE_OAUTH_PASSWORD?: string;
+  MCP_CLOUDFLARE_ACCOUNT_ID?: string;
   OAUTH_PROVIDER?: OAuthHelpers;
 }
 
@@ -51,6 +53,7 @@ async function callRemoteTool(
   remoteName: string,
   args: Record<string, unknown>,
   isWrite: boolean,
+  defaultCloudflareAccountId?: string,
 ) {
   const client = new RemoteMcpClient(configuration);
   let callStarted = false;
@@ -58,7 +61,10 @@ async function callRemoteTool(
   try {
     await client.connect();
     callStarted = true;
-    const result = await client.callTool(remoteName, args);
+    const remoteArgs = configuration.id === "cloudflare"
+      ? withDefaultCloudflareAccount(remoteName, args, defaultCloudflareAccountId)
+      : args;
+    const result = await client.callTool(remoteName, remoteArgs);
     return {
       content: textContent(result),
       isError: result.isError ?? false,
@@ -140,6 +146,7 @@ export function createAssistenteMcpServer(
             definition.name,
             args,
             definition.isWrite,
+            environment.MCP_CLOUDFLARE_ACCOUNT_ID,
           ),
       );
     }
