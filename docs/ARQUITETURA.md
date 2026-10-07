@@ -38,6 +38,15 @@ O host publica mcp:read como escopo básico. A ferramenta execute exige também 
 
 O token do ChatGPT não é encaminhado ao MCP remoto. O API Token Cloudflare não autentica o ChatGPT nem substitui o OAuth da conexão com o Worker.
 
+### Transação de consentimento
+
+No `GET /authorize`, o pedido OAuth é validado por `parseAuthRequest` e armazenado por `beginConsent` no `OAUTH_KV` como uma transação de curta duração, vinculada a um cookie `__Host-*` do navegador. O formulário envia apenas o `handle`, a decisão e a senha para `POST /authorize`.
+
+No `POST /authorize`, o Worker **não** reinterpreta a query OAuth. `approveConsent` reabre a transação usando o `handle` e o cookie, recupera o pedido original e a consome uma única vez; `completeAuthorization` conclui o authorization code flow. Assim, a autorização não depende de o navegador preservar `client_id`, `redirect_uri`, `state`, PKCE ou outros parâmetros na URL do POST.
+
+Falhas esperadas do consentimento registram somente etapa, categoria/código do erro e status HTTP. Senhas, tokens, cookies, authorization codes, query strings e credenciais não entram nos logs.
+
+
 ## Segurança e limites
 
 - O host aceita somente endpoint HTTPS sem credenciais na URL, query string ou fragmento.
@@ -46,7 +55,7 @@ O token do ChatGPT não é encaminhado ao MCP remoto. O API Token Cloudflare nã
 - Erros remotos não revelam URL, token ou exceção interna.
 - Nenhum Worker deste repositório tem binding D1.
 - Nenhum código ou configuração deste repositório lê, cria ou migra os D1 de Ponto e Gastos.
-- O OAuth grava clientes, códigos e tokens apenas no KV dedicado assistente-oauth.
+- O OAuth grava clientes, transações de consentimento, códigos e tokens apenas no KV dedicado assistente-oauth.
 
 ## Deploy
 
