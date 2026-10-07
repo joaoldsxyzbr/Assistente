@@ -4,6 +4,7 @@ import {
   hasAllOAuthScopes,
   hasValidOAuthPassword,
   isOAuthPasswordConfigured,
+  oauthSecuritySchemesForTool,
   renderConsentPage,
   requestUsesWriteTool,
   requiredOAuthScopesForToolCall,
@@ -28,6 +29,15 @@ test("requires read scope for all calls and write scope for execute", () => {
   assert.equal(hasAllOAuthScopes(["mcp:write"], ["mcp:read"]), false);
   assert.equal(hasAllOAuthScopes(["mcp:read"], ["mcp:read", "mcp:write"]), false);
   assert.equal(hasAllOAuthScopes(["mcp:read", "mcp:write"], ["mcp:read", "mcp:write"]), true);
+});
+
+test("declares OAuth scopes that match read and write enforcement", () => {
+  assert.deepEqual(oauthSecuritySchemesForTool(false), [
+    { type: "oauth2", scopes: ["mcp:read"] },
+  ]);
+  assert.deepEqual(oauthSecuritySchemesForTool(true), [
+    { type: "oauth2", scopes: ["mcp:read", "mcp:write"] },
+  ]);
 });
 
 test("requires write scope for the Cloudflare execute tool without consuming the request", async () => {
