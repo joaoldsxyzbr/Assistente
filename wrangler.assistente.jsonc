@@ -30,6 +30,7 @@
   ],
   "vars": {
     "MCP_CLOUDFLARE_URL": "https://mcp.cloudflare.com/mcp",
-    "MCP_CLOUDFLARE_ACCOUNT_ID": "924f32dc9eeb8946dc033801c0c17c42"
+    "MCP_CLOUDFLARE_ACCOUNT_ID": "924f32dc9eeb8946dc033801c0c17c42",
+    "PONTO_D1_DATABASE_ID": "96b39cda-f037-4259-b406-09fea5431469"
   }
 }
