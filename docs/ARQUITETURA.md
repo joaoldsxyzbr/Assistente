@@ -1,24 +1,35 @@
 # Arquitetura do Assistente
 
-## Papel do projeto
+## Camadas e responsabilidades
 
-O Assistente organiza ferramentas de vários domínios sem juntar seus dados ou credenciais. O host mantém um catálogo explícito e encaminha cada chamada a um servidor MCP. Cada domínio tem implantação e permissões próprias.
+| Camada | Responsabilidade |
+|---|---|
+| Plugin `Assistente Geral` | Entrada única no ChatGPT; mantém skills, regras conversacionais de domínio, interpretação da intenção e orientação sobre quando consultar, escrever ou pedir confirmação. As skills são mantidas no plugin, fora deste repositório. |
+| Worker host `assistente` | Hub técnico: publica apenas contratos aprovados, autentica conexões de serviço e encaminha cada ferramenta ao MCP de destino. Não tem binding D1 nem executa as regras conversacionais. |
+| MCPs especializados | Expõem operações de cada domínio, validam entradas e invariantes no servidor e acessam somente os dados e secrets daquele domínio. |
 
-```text
-Cliente MCP
-└── Assistente host (sem acesso direto a bancos)
-    ├── Ponto MCP ─── binding PONTO_DB ─── D1 de ponto existente
-    └── Gastos MCP ── binding GASTOS_DB ── D1 de gastos existente
-```
+As instruções conversacionais têm como fonte canônica o plugin `Assistente Geral`; não devem ser copiadas para o Worker como uma segunda fonte de regras. O código do host mantém somente o catálogo técnico allowlist, os schemas necessários para chamar ferramentas e as proteções de integração. As regras que precisam ser garantidas mesmo fora do chat — como validação, idempotência e limites de escrita — continuam impostas pelo MCP de domínio.
 
-Cloudflare MCP e DeskPilot seguem como integrações planejadas. O host não revela ferramentas dessas conexões sem um contrato local aprovado.
+O Assistente agrega e roteia vários MCPs; não substitui os servidores especialistas nem combina credenciais e bancos. Ponto e Gastos já estão separados. Cloudflare MCP e DeskPilot são futuras conexões e só ficarão disponíveis depois que seus contratos e permissões forem definidos.
+
+## Topologia atual
+
+O plugin `Assistente Geral` conecta-se ao host `assistente`. O host encaminha cada chamada aprovada ao servidor de domínio correspondente:
+
+| Servidor | Binding de dados | Estado |
+|---|---|---|
+| Assistente host | Nenhum | Implementado; ainda não publicado |
+| Ponto MCP | Somente `PONTO_DB` | Implementado; ainda não publicado |
+| Gastos MCP | Somente `GASTOS_DB` | Implementado; ainda não publicado |
+| Cloudflare MCP | Sem contrato local aprovado | Planejado |
+| DeskPilot | Sem contrato local aprovado | Planejado |
 
 ## Limites e segurança
 
 - Os bancos existentes são preservados; não há migrações nem criação de tabelas.
 - O Worker de Ponto tem apenas `PONTO_DB`; o Worker de Gastos tem apenas `GASTOS_DB`; o host não tem binding D1.
 - Cada Worker valida um token bearer independente no caminho `/mcp`. Tokens precisam ter no mínimo 32 caracteres e ficam em secrets do runtime.
-- O host usa uma lista local de ferramentas e schemas. Não repassa execução de código genérica nem descobre permissões implicitamente no MCP remoto.
+- O host publica somente ferramentas e schemas declarados no catálogo local. Não repassa execução de código genérica nem descobre permissões implicitamente no MCP remoto.
 - O host encaminha cada chamada a um único servidor. Uma falha não impede o uso de outro domínio.
 - Escritas não são repetidas automaticamente após falha de rede. Se uma resposta se perder, o host orienta consultar o MCP de origem antes de tentar de novo.
 - Respostas de status não expõem endpoints, tokens ou exceções remotas.
@@ -33,22 +44,21 @@ Foram inspecionados somente metadados de schema e índices dos D1s existentes. N
 
 Os MCPs de Ponto e Gastos estão implementados no repositório com acesso ao respectivo binding. Ainda não foram publicados nem chamados contra registros de produção. O Worker existente `cloudflare-mcp` não tinha bindings D1 nem ferramentas de domínio detectadas na inspeção; por isso não é tratado como interface para esses serviços.
 
-## Configuração
+## Configuração e autenticação
 
 O domínio planejado do host é `assistente.joaolds.xyz.br`; o endpoint MCP será `https://assistente.joaolds.xyz.br/mcp`. Ele ainda não está ligado ao Worker nem validado por DNS.
 
-Cada Worker de domínio usa `MCP_TOKEN`; o host usa `ASSISTENTE_MCP_TOKEN`. São secrets distintos. No host, forneça URL HTTPS e token correspondente por conexão:
+Há três relações de credenciais diferentes:
 
-| Servidor | Endpoint | Token no host |
+| Origem → destino | Credencial | Local |
 |---|---|---|
-| Ponto | `MCP_PONTO_URL` | `MCP_PONTO_TOKEN` |
-| Gastos | `MCP_GASTOS_URL` | `MCP_GASTOS_TOKEN` |
-| Cloudflare | `MCP_CLOUDFLARE_URL` | `MCP_CLOUDFLARE_TOKEN` |
-| DeskPilot | `MCP_DESKPILOT_URL` | `MCP_DESKPILOT_TOKEN` |
+| ChatGPT / plugin Assistente Geral → host | OAuth 2.1 do usuário | Fluxo planejado; o código atual ainda usa bearer token e não implementa OAuth |
+| Host → cada MCP | Credencial de serviço própria para aquele endpoint | Secrets do Worker host; não encaminhar o OAuth do usuário |
+| MCP Cloudflare → API da Cloudflare | API Token dedicado `Assistente Cloudflare`, com permissões mínimas | Secret do componente MCP Cloudflare que chama a API; não expor ao ChatGPT nem reutilizar como credencial host→MCP |
 
-O fluxo previsto é OAuth 2.1 entre ChatGPT e o host. O código atual ainda usa bearer token nesse endpoint e não implementa o fluxo OAuth. Entre o host e Ponto/Gastos, cada API MCP recebe sua credencial de serviço separada; o token OAuth do usuário não é repassado. O endpoint bearer atual não configura sozinho um conector ChatGPT.
+O host ainda usa `ASSISTENTE_MCP_TOKEN` para proteger seu endpoint atual. Para os MCPs de Ponto e Gastos, use `MCP_TOKEN` em cada Worker de domínio e configure no host `MCP_PONTO_URL`, `MCP_PONTO_TOKEN`, `MCP_GASTOS_URL` e `MCP_GASTOS_TOKEN`. Os tokens de serviço são distintos e o valor no host corresponde ao secret do MCP de destino.
 
-Cloudflare MCP e DeskPilot ainda não têm contratos de ferramentas no host. Para Cloudflare, a integração usará um API Token dedicado chamado `Assistente Cloudflare`, começando com as permissões mínimas e ampliando somente quando uma ferramenta precisar delas.
+Cloudflare MCP e DeskPilot ainda não têm contratos de ferramentas no host. Para cada nova integração, defina antes as ferramentas allowlist, schemas, escopo de permissão e secrets do serviço.
 
 Os arquivos `wrangler.ponto.jsonc` e `wrangler.gastos.jsonc` apontam aos IDs dos D1s existentes e dão a cada Worker apenas o seu binding. `wrangler.assistente.jsonc` não declara banco. `npm run build:workers` valida os três bundles sem publicar.
 
@@ -63,8 +73,8 @@ Os valores monetários são tratados em centavos inteiros. As ferramentas valida
 ## Organização do código
 
 ```text
-src/contracts/       contratos locais das ferramentas liberadas
-src/host/             configuração e roteamento do host
+src/contracts/       contratos locais das ferramentas liberadas pelo host
+src/host/             configuração e roteamento do hub
 src/servers/ponto/    servidor e serviços do domínio Ponto
 src/servers/gastos/   servidor e serviços do domínio Gastos
 src/shared/           autenticação e contratos D1 compartilhados
