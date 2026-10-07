@@ -55,7 +55,7 @@ export function withDefaultCloudflareAccount(
 ): Record<string, unknown> {
   if (
     remoteName !== "execute" ||
-    typeof args.account_id === "string" ||
+    (typeof args.account_id === "string" && args.account_id.trim().length > 0) ||
     defaultAccountId === undefined ||
     defaultAccountId.trim().length === 0
   ) {
