@@ -13,6 +13,7 @@ A fundação inicial foi integrada à `main` pelo [PR #2](https://github.com/joa
 - [x] Adicionar testes com D1 em memória e dados sintéticos.
 - [x] Validar typecheck, testes e builds dry-run dos três Workers na CI do PR.
 - [ ] Implementar OAuth 2.1 entre ChatGPT e o host, com authorization code + PKCE e renovação de sessão.
+- [ ] Configurar `assistente.joaolds.xyz.br` como domínio customizado do Worker host e validar DNS/TLS.
 - [ ] Configurar credenciais de API distintas do host para os MCPs de Ponto e Gastos.
 - [ ] Publicar os três Workers com secrets distintos e validar as conexões via MCP Inspector, começando por leituras.
 - [ ] Registrar o endpoint do host no cliente ChatGPT e validar o fluxo OAuth.

@@ -35,6 +35,8 @@ Os MCPs de Ponto e Gastos estão implementados no repositório com acesso ao res
 
 ## Configuração
 
+O domínio planejado do host é `assistente.joaolds.xyz.br`; o endpoint MCP será `https://assistente.joaolds.xyz.br/mcp`. Ele ainda não está ligado ao Worker nem validado por DNS.
+
 Cada Worker de domínio usa `MCP_TOKEN`; o host usa `ASSISTENTE_MCP_TOKEN`. São secrets distintos. No host, forneça URL HTTPS e token correspondente por conexão:
 
 | Servidor | Endpoint | Token no host |
