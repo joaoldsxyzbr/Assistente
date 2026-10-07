@@ -26,7 +26,12 @@ export type McpServerConfiguration =
   | UnconfiguredMcpServer
   | MisconfiguredMcpServer;
 
-export type Environment = Readonly<Record<string, string | undefined>>;
+export type Environment = Readonly<Record<string, unknown>>;
+
+function environmentString(env: Environment, key: string): string {
+  const value = env[key];
+  return typeof value === "string" ? value.trim() : "";
+}
 
 function validEndpoint(value: string): string | undefined {
   try {
@@ -49,8 +54,8 @@ function validEndpoint(value: string): string | undefined {
 
 export function readMcpConfigurations(env: Environment): McpServerConfiguration[] {
   return MCP_SERVER_CATALOG.map((server) => {
-    const endpointValue = env[server.endpointVariable]?.trim() ?? "";
-    const bearerToken = env[server.tokenVariable]?.trim() ?? "";
+    const endpointValue = environmentString(env, server.endpointVariable);
+    const bearerToken = environmentString(env, server.tokenVariable);
 
     if (endpointValue.length === 0 && bearerToken.length === 0) {
       return { id: server.id, label: server.label, status: "unconfigured" };

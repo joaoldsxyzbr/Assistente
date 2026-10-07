@@ -1,14 +1,20 @@
 import { fromJsonSchema, McpServer } from "@modelcontextprotocol/server";
+import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
 import { MCP_TOOL_CATALOG } from "../mcps/catalog.ts";
 import type { McpToolContract } from "../mcps/contracts.ts";
 import type { McpServerId, McpToolDefinition } from "./contracts.ts";
-import { readMcpConfigurations, type Environment, type McpServerConfiguration } from "./config.ts";
+import {
+  readMcpConfigurations,
+  type Environment,
+  type McpServerConfiguration,
+} from "./config.ts";
 import { RemoteMcpClient } from "./remote-client.ts";
 import { toolNameForServer } from "./host.ts";
-import { createAuthenticatedMcpWorker } from "../shared/authenticated-mcp-worker.ts";
+import { createOAuthMcpWorker } from "../shared/oauth-mcp-worker.ts";
 
 export interface AssistenteWorkerEnvironment extends Environment {
-  ASSISTENTE_MCP_TOKEN?: string;
+  ASSISTENTE_OAUTH_PASSWORD?: string;
+  OAUTH_PROVIDER?: OAuthHelpers;
 }
 
 function toolManifest(serverId: McpServerId): McpToolContract[] {
@@ -79,7 +85,7 @@ export function createAssistenteMcpServer(
   environment: AssistenteWorkerEnvironment,
 ): McpServer {
   const configurations = readMcpConfigurations(environment);
-  const server = new McpServer({ name: "assistente", version: "0.3.0" });
+  const server = new McpServer({ name: "assistente", version: "0.4.0" });
 
   server.registerTool(
     "assistente_status",
@@ -112,7 +118,7 @@ export function createAssistenteMcpServer(
       server.registerTool(
         qualifiedName,
         {
-          description: `${configuration.label}: ${definition.description}`,
+          description: configuration.label + ": " + definition.description,
           inputSchema: fromJsonSchema<Record<string, unknown>>(definition.inputSchema),
         },
         async (args) =>
@@ -129,7 +135,13 @@ export function createAssistenteMcpServer(
   return server;
 }
 
-export default createAuthenticatedMcpWorker(
-  (environment: AssistenteWorkerEnvironment) => createAssistenteMcpServer(environment),
-  (environment: AssistenteWorkerEnvironment) => environment.ASSISTENTE_MCP_TOKEN,
-);
+const writeToolNames = MCP_TOOL_CATALOG
+  .filter((tool) => tool.isWrite)
+  .map((tool) => toolNameForServer(tool.serverId, tool));
+
+export default createOAuthMcpWorker<AssistenteWorkerEnvironment>({
+  createServer: (environment) => createAssistenteMcpServer(environment),
+  resource: "https://assistente.joaolds.xyz.br/mcp",
+  resourceName: "Assistente MCP",
+  writeToolNames,
+});

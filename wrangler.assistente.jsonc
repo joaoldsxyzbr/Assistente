@@ -3,5 +3,15 @@
   "name": "assistente",
   "main": "src/host/worker.ts",
   "compatibility_date": "2026-10-07",
-  "workers_dev": true
+  "compatibility_flags": ["global_fetch_strictly_public"],
+  "workers_dev": true,
+  "kv_namespaces": [
+    {
+      "binding": "OAUTH_KV",
+      "id": "5a3768dfe8a7431c953f5ed0720825d6"
+    }
+  ],
+  "vars": {
+    "MCP_CLOUDFLARE_URL": "https://mcp.cloudflare.com/mcp"
+  }
 }
