@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { CLOUDFLARE_TOOL_CATALOG } from "../src/mcps/cloudflare/tools.ts";
+import {
+  CLOUDFLARE_TOOL_CATALOG,
+  withDefaultCloudflareAccount,
+} from "../src/mcps/cloudflare/tools.ts";
 import { MCP_TOOL_CATALOG } from "../src/mcps/catalog.ts";
 
 test("the hub allowlist contains only the Cloudflare MCP contracts", () => {
@@ -21,4 +24,26 @@ test("the Cloudflare API executor is marked as potentially writing", () => {
 
   assert.equal(execute?.isWrite, true);
   assert.deepEqual(execute?.inputSchema.required, ["code"]);
+});
+
+
+test("injects the configured Cloudflare account only when execute has no account", () => {
+  const args = { code: "return 1" };
+
+  assert.deepEqual(
+    withDefaultCloudflareAccount("execute", args, " account-123 "),
+    { code: "return 1", account_id: "account-123" },
+  );
+  assert.deepEqual(
+    withDefaultCloudflareAccount(
+      "execute",
+      { code: "return 1", account_id: "explicit" },
+      "account-123",
+    ),
+    { code: "return 1", account_id: "explicit" },
+  );
+  assert.deepEqual(
+    withDefaultCloudflareAccount("docs", { query: "Workers" }, "account-123"),
+    { query: "Workers" },
+  );
 });
