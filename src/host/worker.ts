@@ -10,6 +10,7 @@ import {
 } from "./config.ts";
 import { RemoteMcpClient } from "./remote-client.ts";
 import { createOAuthMcpWorker } from "../shared/oauth-mcp-worker.ts";
+import { oauthSecuritySchemesForTool } from "../shared/oauth-helpers.ts";
 
 export interface AssistenteWorkerEnvironment extends Environment {
   ASSISTENTE_OAUTH_PASSWORD?: string;
@@ -105,6 +106,9 @@ export function createAssistenteMcpServer(
         properties: {},
         additionalProperties: false,
       }),
+      _meta: {
+        securitySchemes: oauthSecuritySchemesForTool(false),
+      },
     },
     async () => ({
       content: [{ type: "text", text: JSON.stringify(configurationSummary(configurations)) }],
@@ -126,6 +130,9 @@ export function createAssistenteMcpServer(
         {
           description: configuration.label + ": " + definition.description,
           inputSchema: fromJsonSchema<Record<string, unknown>>(definition.inputSchema),
+          _meta: {
+            securitySchemes: oauthSecuritySchemesForTool(definition.isWrite),
+          },
         },
         async (args) =>
           callRemoteTool(

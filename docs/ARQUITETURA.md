@@ -21,6 +21,8 @@ Ponto e Gastos ficam fora deste repositório. Nenhum Worker daqui acessa ou alte
 
 O catálogo local é a fonte de verdade das ferramentas publicadas. O Worker não descobre nem publica ferramentas remotas dinamicamente.
 
+Cada ferramenta declara seu contrato OAuth no descriptor MCP: leitura usa `mcp:read`; ferramentas classificadas como escrita usam `mcp:read` + `mcp:write`. Isso permite ao ChatGPT fazer reautorização de escopo (*step-up*) sem pedir permissões fora do contrato da ferramenta.
+
 Para cada chamada:
 1. o token OAuth do ChatGPT é validado;
 2. o Worker verifica o escopo necessário;

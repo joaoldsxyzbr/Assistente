@@ -51,6 +51,13 @@ export function requiredOAuthScopesForToolCall(
     : ["mcp:read"];
 }
 
+export function oauthSecuritySchemesForTool(isWriteToolCall: boolean) {
+  return [{
+    type: "oauth2" as const,
+    scopes: [...requiredOAuthScopesForToolCall(isWriteToolCall)],
+  }];
+}
+
 export function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (character) => {
     const code = character.charCodeAt(0);
