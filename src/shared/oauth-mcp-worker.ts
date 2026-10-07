@@ -12,6 +12,10 @@ import {
   requiredOAuthScopesForToolCall,
 } from "./oauth-helpers.ts";
 import {
+  readSafeOAuthErrorCode,
+  recordOAuthBoundary,
+} from "./oauth-boundary-diagnostics.ts";
+import {
   handleAuthorizeRequest,
   type OAuthAuthorizationEnvironment,
 } from "./oauth-authorization.ts";
@@ -72,7 +76,7 @@ export function createOAuthMcpWorker<Environment extends OAuthMcpEnvironment>(
     },
   };
 
-  return new OAuthProvider<Environment>({
+  const provider = new OAuthProvider<Environment>({
     apiRoute: "/mcp",
     apiHandler,
     defaultHandler,
@@ -101,4 +105,69 @@ export function createOAuthMcpWorker<Environment extends OAuthMcpEnvironment>(
       }));
     },
   });
+
+  type ProviderFetch = OAuthProvider<Environment>["fetch"];
+  const originalFetch = provider.fetch.bind(provider) as ProviderFetch;
+
+  const instrumentedFetch: ProviderFetch = async (...args) => {
+    const [request, environment] = args;
+    const pathname = new URL(request.url).pathname;
+    const isTokenRequest = pathname === "/oauth/token";
+    const isAuthorizeRequest = pathname === "/authorize";
+
+    if (isTokenRequest) {
+      await recordOAuthBoundary(environment.OAUTH_KV, "token_request_seen");
+    }
+
+    try {
+      const response = await originalFetch(...args);
+
+      if (isTokenRequest) {
+        await recordOAuthBoundary(
+          environment.OAUTH_KV,
+          "token_response",
+          response.status,
+          await readSafeOAuthErrorCode(response),
+        );
+      } else if (isAuthorizeRequest && request.method === "POST") {
+        await recordOAuthBoundary(
+          environment.OAUTH_KV,
+          "authorize_post_response",
+          response.status,
+        );
+      } else if (isAuthorizeRequest && request.method === "GET") {
+        await recordOAuthBoundary(
+          environment.OAUTH_KV,
+          "authorize_get_response",
+          response.status,
+        );
+      }
+
+      return response;
+    } catch (error) {
+      if (isTokenRequest) {
+        await recordOAuthBoundary(
+          environment.OAUTH_KV,
+          "token_handler_exception",
+          500,
+          "internal_error",
+        );
+      } else if (isAuthorizeRequest) {
+        await recordOAuthBoundary(
+          environment.OAUTH_KV,
+          "authorize_handler_exception",
+          500,
+          "internal_error",
+        );
+      }
+      throw error;
+    }
+  };
+
+  Object.defineProperty(provider, "fetch", {
+    configurable: true,
+    value: instrumentedFetch,
+  });
+
+  return provider;
 }
