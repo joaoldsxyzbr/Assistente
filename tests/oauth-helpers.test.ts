@@ -78,6 +78,8 @@ test("detects write calls in JSON-RPC batches even if Content-Type is misleading
 
 test("escapes OAuth client-controlled content before rendering consent", () => {
   const html = renderConsentPage({
+    clientId: "https://chatgpt.example/client.json",
+    redirectUri: "https://client.example/callback",
     clientName: "<script>alert(1)</script>",
     clientDomain: "chatgpt.example",
     redirectHost: "client.example",
