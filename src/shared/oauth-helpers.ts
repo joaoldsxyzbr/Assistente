@@ -67,10 +67,11 @@ function labelForScope(scope: string): string {
 
 export function renderConsentPage(
   details: ConsentDescription,
-  handle: string,
+  formAction: string,
 ): string {
   const clientName = escapeHtml(details.clientName);
   const redirectHost = escapeHtml(details.redirectHost);
+  const safeAction = escapeHtml(formAction);
   const publisher = details.clientDomain
     ? "Publicador identificado: <strong>" + escapeHtml(details.clientDomain) + "</strong>."
     : "O nome deste aplicativo foi informado pelo próprio cliente e não foi verificado.";
@@ -99,8 +100,7 @@ export function renderConsentPage(
     loopbackWarning,
     "<h2>Permissões solicitadas</h2>",
     scopes,
-    "<form method=\"post\" action=\"/authorize\">",
-    '<input type="hidden" name="handle" value="' + escapeHtml(handle) + '">',
+    '<form method="post" action="' + safeAction + '">',
     "<p><label for=\"password\">Senha de autorização do Assistente</label></p>",
     '<p><input id="password" name="password" type="password" required autocomplete="current-password"></p>',
     '<p><button name="decision" value="approve">Permitir</button> ',
@@ -112,7 +112,8 @@ export function renderConsentPage(
   ].join("\n");
 }
 
-export function renderPasswordRetryPage(handle: string): string {
+export function renderPasswordRetryPage(formAction: string): string {
+  const safeAction = escapeHtml(formAction);
   return [
     "<!doctype html>",
     '<html lang="pt-BR">',
@@ -125,8 +126,7 @@ export function renderPasswordRetryPage(handle: string): string {
     "<main>",
     "<h1>Senha incorreta</h1>",
     "<p>Confira a senha do Assistente e tente novamente.</p>",
-    "<form method=\"post\" action=\"/authorize\">",
-    '<input type="hidden" name="handle" value="' + escapeHtml(handle) + '">',
+    '<form method="post" action="' + safeAction + '">',
     '<input type="hidden" name="decision" value="approve">',
     "<p><label for=\"password\">Senha de autorização do Assistente</label></p>",
     '<p><input id="password" name="password" type="password" required autocomplete="current-password" autofocus></p>',

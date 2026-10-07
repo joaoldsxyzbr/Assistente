@@ -10,16 +10,9 @@ import {
 } from "../src/shared/oauth-authorization.ts";
 
 const strongPassword = "0123456789abcdef0123456789abcdef";
-const consentHandle = "test-consent-handle";
-const cookieName = "__Host-oauth-consent-test";
-const cookieValue = "test-cookie-binding";
-const cookiePair = `${cookieName}=${cookieValue}`;
-
 const clientId = "https://chatgpt.example/client.json";
 const redirectUri = "https://client.example/callback";
 const state = "test-state";
-const codeChallenge = "test-challenge";
-const codeChallengeMethod = "S256";
 
 const authRequest = {
   clientId,
@@ -27,8 +20,9 @@ const authRequest = {
   scope: ["mcp:read", "mcp:write", "offline_access"],
   state,
   responseType: "code",
-  codeChallenge,
-  codeChallengeMethod,
+  codeChallenge: "test-challenge",
+  codeChallengeMethod: "S256",
+  issuer: "https://assistente.example.test",
 } as AuthRequest;
 
 function authorizationError(description: string): Error & { code: string } {
@@ -39,16 +33,14 @@ function authorizationError(description: string): Error & { code: string } {
 }
 
 function buildHarness() {
-  let transactionActive = false;
   let parseCalls = 0;
-  let approveCalls = 0;
   let completeCalls = 0;
 
   const oauth = {
     async parseAuthRequest(request: Request) {
       parseCalls += 1;
       const url = new URL(request.url);
-      if (request.method !== "GET" || !url.searchParams.get("client_id")) {
+      if (!url.searchParams.get("client_id")) {
         throw authorizationError("OAuth parameters are not present on this request");
       }
       return authRequest;
@@ -64,57 +56,6 @@ function buildHarness() {
         scope: [...authRequest.scope],
       };
     },
-    async beginConsent() {
-      transactionActive = true;
-      return {
-        handle: consentHandle,
-        headers: new Headers({
-          "Set-Cookie":
-            `${cookiePair}; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=600`,
-        }),
-      };
-    },
-    async approveConsent(request: Request, handle: string) {
-      approveCalls += 1;
-      if (handle !== consentHandle) {
-        throw authorizationError("Missing transaction handle");
-      }
-      const cookieHeader = request.headers.get("cookie") ?? "";
-      if (!cookieHeader.includes(`${cookieName}=`)) {
-        throw authorizationError(
-          "This authorization was not started in this browser; start again",
-        );
-      }
-      if (!cookieHeader.includes(cookiePair)) {
-        throw authorizationError(
-          "This authorization belongs to a different browser session; start again",
-        );
-      }
-      if (!transactionActive) {
-        throw authorizationError(
-          "This authorization expired or was already used; start again",
-        );
-      }
-
-      transactionActive = false;
-      return {
-        request: authRequest,
-        headers: new Headers({
-          "Set-Cookie":
-            `${cookieName}=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0`,
-        }),
-      };
-    },
-    async denyConsent() {
-      transactionActive = false;
-      return {
-        request: authRequest,
-        redirectTo: "https://client.example/callback?denied=1",
-        headers: new Headers({
-          Location: "https://client.example/callback?denied=1",
-        }),
-      };
-    },
     async completeAuthorization() {
       completeCalls += 1;
       return {
@@ -125,15 +66,7 @@ function buildHarness() {
 
   return {
     oauth,
-    expire: () => {
-      transactionActive = false;
-    },
-    state: () => ({
-      transactionActive,
-      parseCalls,
-      approveCalls,
-      completeCalls,
-    }),
+    state: () => ({ parseCalls, completeCalls }),
   };
 }
 
@@ -144,61 +77,59 @@ function environment(oauth: OAuthHelpers): OAuthAuthorizationEnvironment {
   };
 }
 
-function authorizeGetRequest(): Request {
+function authorizeUrl(): URL {
   const url = new URL("https://assistente.example.test/authorize");
   url.searchParams.set("response_type", "code");
   url.searchParams.set("client_id", clientId);
   url.searchParams.set("redirect_uri", redirectUri);
   url.searchParams.set("scope", authRequest.scope.join(" "));
   url.searchParams.set("state", state);
-  url.searchParams.set("code_challenge", codeChallenge);
-  url.searchParams.set("code_challenge_method", codeChallengeMethod);
-  return new Request(url);
+  url.searchParams.set("code_challenge", "test-challenge");
+  url.searchParams.set("code_challenge_method", "S256");
+  return url;
 }
 
-function authorizePostRequest(password: string, cookie?: string): Request {
-  const headers = new Headers();
-  if (cookie !== undefined) headers.set("Cookie", cookie);
+function authorizeGetRequest(): Request {
+  return new Request(authorizeUrl());
+}
 
-  return new Request("https://assistente.example.test/authorize", {
+function authorizePostRequest(
+  password: string,
+  decision = "approve",
+  withOAuthQuery = true,
+): Request {
+  const url = withOAuthQuery
+    ? authorizeUrl()
+    : new URL("https://assistente.example.test/authorize");
+
+  return new Request(url, {
     method: "POST",
-    headers,
-    body: new URLSearchParams({
-      handle: consentHandle,
-      decision: "approve",
-      password,
-    }),
+    body: new URLSearchParams({ decision, password }),
   });
 }
 
-async function startConsent(harness: ReturnType<typeof buildHarness>) {
+test("GET renders a stateless consent form and sets no consent cookie", async () => {
+  const harness = buildHarness();
   const response = await handleAuthorizeRequest(
     authorizeGetRequest(),
     environment(harness.oauth),
   );
 
   assert.equal(response.status, 200);
-  const setCookie = response.headers.get("set-cookie");
-  assert.notEqual(setCookie, null);
-  if (setCookie === null) throw new Error("Consent cookie was not returned");
-  assert.ok(setCookie.startsWith(cookiePair));
+  assert.equal(response.headers.get("set-cookie"), null);
 
   const html = await response.text();
-  assert.ok(html.includes('<form method="post" action="/authorize">'));
-  assert.ok(html.includes(`name="handle" value="${consentHandle}"`));
-  assert.equal(html.includes('name="client_id"'), false);
-  assert.equal(html.includes('name="redirect_uri"'), false);
-  assert.equal(html.includes('name="state"'), false);
+  assert.ok(html.includes('<form method="post" action="/authorize?'));
+  assert.ok(html.includes("client_id="));
+  assert.equal(html.includes('name="handle"'), false);
+  assert.deepEqual(harness.state(), { parseCalls: 1, completeCalls: 0 });
+});
 
-  return setCookie.split(";")[0]!;
-}
-
-test("completes consent from the stored transaction even when POST has no OAuth query", async () => {
+test("POST revalidates the same OAuth URL and completes without cookies", async () => {
   const harness = buildHarness();
-  const cookie = await startConsent(harness);
 
   const response = await handleAuthorizeRequest(
-    authorizePostRequest(strongPassword, cookie),
+    authorizePostRequest(strongPassword),
     environment(harness.oauth),
   );
 
@@ -207,96 +138,66 @@ test("completes consent from the stored transaction even when POST has no OAuth 
     response.headers.get("location"),
     "https://client.example/callback?authorized=1",
   );
-  assert.deepEqual(harness.state(), {
-    transactionActive: false,
-    parseCalls: 1,
-    approveCalls: 1,
-    completeCalls: 1,
-  });
+  assert.deepEqual(harness.state(), { parseCalls: 1, completeCalls: 1 });
 });
 
-test("keeps the consent transaction available after an incorrect password", async () => {
+test("incorrect password returns retry form without parsing OAuth again", async () => {
   const harness = buildHarness();
-  const cookie = await startConsent(harness);
 
   const response = await handleAuthorizeRequest(
-    authorizePostRequest("incorrect-password", cookie),
+    authorizePostRequest("incorrect-password"),
     environment(harness.oauth),
   );
 
   assert.equal(response.status, 401);
-  assert.ok((await response.text()).includes("Senha incorreta"));
-  assert.deepEqual(harness.state(), {
-    transactionActive: true,
-    parseCalls: 1,
-    approveCalls: 0,
-    completeCalls: 0,
-  });
+  const html = await response.text();
+  assert.ok(html.includes("Senha incorreta"));
+  assert.ok(html.includes('<form method="post" action="/authorize?'));
+  assert.deepEqual(harness.state(), { parseCalls: 0, completeCalls: 0 });
 });
 
-test("rejects approval when the browser-bound consent cookie is missing", async () => {
+test("POST without the original OAuth query is rejected", async () => {
   const harness = buildHarness();
-  await startConsent(harness);
 
   const response = await handleAuthorizeRequest(
+    authorizePostRequest(strongPassword, "approve", false),
+    environment(harness.oauth),
+  );
+
+  assert.equal(response.status, 400);
+  assert.ok((await response.text()).includes("authorization_request_invalid"));
+  assert.deepEqual(harness.state(), { parseCalls: 1, completeCalls: 0 });
+});
+
+test("deny uses the validated OAuth redirect", async () => {
+  const harness = buildHarness();
+
+  const response = await handleAuthorizeRequest(
+    authorizePostRequest("", "deny"),
+    environment(harness.oauth),
+  );
+
+  assert.equal(response.status, 302);
+  const location = new URL(response.headers.get("location")!);
+  assert.equal(location.origin + location.pathname, redirectUri);
+  assert.equal(location.searchParams.get("error"), "access_denied");
+  assert.equal(location.searchParams.get("state"), state);
+  assert.deepEqual(harness.state(), { parseCalls: 1, completeCalls: 0 });
+});
+
+test("repeated valid POSTs do not depend on one-time browser state", async () => {
+  const harness = buildHarness();
+
+  const first = await handleAuthorizeRequest(
+    authorizePostRequest(strongPassword),
+    environment(harness.oauth),
+  );
+  const second = await handleAuthorizeRequest(
     authorizePostRequest(strongPassword),
     environment(harness.oauth),
   );
 
-  assert.equal(response.status, 400);
-  const html = await response.text();
-  assert.ok(html.includes("Solicitação OAuth inválida ou expirada"));
-  assert.ok(html.includes("consent_cookie_missing"));
-  assert.deepEqual(harness.state(), {
-    transactionActive: true,
-    parseCalls: 1,
-    approveCalls: 1,
-    completeCalls: 0,
-  });
-});
-
-test("rejects approval when the consent cookie belongs to another browser session", async () => {
-  const harness = buildHarness();
-  await startConsent(harness);
-
-  const response = await handleAuthorizeRequest(
-    authorizePostRequest(
-      strongPassword,
-      `${cookieName}=different-cookie-binding`,
-    ),
-    environment(harness.oauth),
-  );
-
-  assert.equal(response.status, 400);
-  const html = await response.text();
-  assert.ok(html.includes("Solicitação OAuth inválida ou expirada"));
-  assert.ok(html.includes("consent_cookie_mismatch"));
-  assert.deepEqual(harness.state(), {
-    transactionActive: true,
-    parseCalls: 1,
-    approveCalls: 1,
-    completeCalls: 0,
-  });
-});
-
-test("rejects an expired or already-consumed consent transaction", async () => {
-  const harness = buildHarness();
-  const cookie = await startConsent(harness);
-  harness.expire();
-
-  const response = await handleAuthorizeRequest(
-    authorizePostRequest(strongPassword, cookie),
-    environment(harness.oauth),
-  );
-
-  assert.equal(response.status, 400);
-  const html = await response.text();
-  assert.ok(html.includes("Solicitação OAuth inválida ou expirada"));
-  assert.ok(html.includes("consent_transaction_expired_or_used"));
-  assert.deepEqual(harness.state(), {
-    transactionActive: false,
-    parseCalls: 1,
-    approveCalls: 1,
-    completeCalls: 0,
-  });
+  assert.equal(first.status, 302);
+  assert.equal(second.status, 302);
+  assert.deepEqual(harness.state(), { parseCalls: 2, completeCalls: 2 });
 });
