@@ -17,14 +17,10 @@ export type OAuthAuthorizationEnvironment = Readonly<Record<string, unknown>> & 
   OAUTH_KV?: OAuthDiagnosticStore;
 };
 
-type OAuthFailureStage =
-  | "authorize_get"
-  | "authorize_post_deny"
-  | "authorize_post_approve";
+type OAuthFailureStage = "authorize_get" | "authorize_post";
 
 type AuthorizationErrorLike = Error & {
   code: string;
-  description?: string;
   redirectTo?: string;
 };
 
@@ -34,20 +30,31 @@ const SUPPORTED_SCOPES = new Set<string>(ASSISTENTE_OAUTH_SCOPES);
 function htmlResponse(
   html: string,
   status = 200,
-  initialHeaders?: HeadersInit,
 ): Response {
-  const headers = new Headers(initialHeaders);
-  headers.set("Content-Type", "text/html; charset=utf-8");
-  headers.set("Cache-Control", "no-store");
-  headers.set("Pragma", "no-cache");
-  headers.set("Referrer-Policy", "no-referrer");
-  headers.set("X-Content-Type-Options", "nosniff");
-  headers.set(
-    "Content-Security-Policy",
-    "default-src 'none'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
-  );
-  headers.set("X-Frame-Options", "DENY");
+  const headers = new Headers({
+    "Content-Type": "text/html; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Pragma": "no-cache",
+    "Referrer-Policy": "no-referrer",
+    "X-Content-Type-Options": "nosniff",
+    "Content-Security-Policy":
+      "default-src 'none'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
+    "X-Frame-Options": "DENY",
+  });
   return new Response(html, { status, headers });
+}
+
+function formActionFor(request: Request): string {
+  const url = new URL(request.url);
+  return url.pathname + url.search;
+}
+
+function accessDeniedRedirect(request: AuthRequest): string {
+  const redirect = new URL(request.redirectUri);
+  redirect.searchParams.set("error", "access_denied");
+  if (request.state !== undefined) redirect.searchParams.set("state", request.state);
+  if (request.issuer !== undefined) redirect.searchParams.set("iss", request.issuer);
+  return redirect.toString();
 }
 
 function isAuthorizationError(error: unknown): error is AuthorizationErrorLike {
@@ -73,37 +80,22 @@ function logOAuthFailure(
   }));
 }
 
-function authorizationErrorCategory(error: AuthorizationErrorLike): string {
-  const description = error.description ?? error.message;
-  switch (description) {
-    case "Missing transaction handle":
-      return "consent_handle_missing";
-    case "This authorization was not started in this browser; start again":
-      return "consent_cookie_missing";
-    case "This authorization belongs to a different browser session; start again":
-      return "consent_cookie_mismatch";
-    case "This authorization expired or was already used; start again":
-      return "consent_transaction_expired_or_used";
-    case "Approved scopes must be ones this server supports":
-      return "consent_invalid_scope";
-    default:
-      return "authorization_request_invalid";
-  }
-}
-
 function authorizationErrorResponse(
   error: unknown,
   stage: OAuthFailureStage,
 ): Response | undefined {
   if (isAuthorizationError(error)) {
     const status = error.redirectTo ? 302 : 400;
-    const category = authorizationErrorCategory(error);
-    logOAuthFailure(stage, category, error.code, status);
-    if (error.redirectTo) return Response.redirect(error.redirectTo, status);
+    logOAuthFailure(
+      stage,
+      "authorization_request_invalid",
+      error.code,
+      status,
+    );
+    if (error.redirectTo) return Response.redirect(error.redirectTo, 302);
+
     return htmlResponse(
-      "<!doctype html><html lang=\"pt-BR\"><meta charset=\"utf-8\"><title>Autorização inválida</title><h1>Solicitação OAuth inválida ou expirada</h1><p>Inicie a conexão novamente no ChatGPT.</p><p>Código de diagnóstico: <code>" +
-        category +
-        "</code></p>",
+      "<!doctype html><html lang=\"pt-BR\"><meta charset=\"utf-8\"><title>Autorização inválida</title><h1>Solicitação OAuth inválida</h1><p>Inicie a conexão novamente no ChatGPT.</p><p>Código de diagnóstico: <code>authorization_request_invalid</code></p>",
       400,
     );
   }
@@ -122,9 +114,8 @@ function authorizationErrorResponse(
 async function issueAuthorization(
   oauth: OAuthHelpers,
   request: AuthRequest,
-  scope: string[],
-  headers?: HeadersInit,
 ): Promise<Response> {
+  const scope = request.scope.filter((item) => SUPPORTED_SCOPES.has(item));
   const completed = await oauth.completeAuthorization({
     request,
     userId: OWNER_USER_ID,
@@ -132,9 +123,8 @@ async function issueAuthorization(
     scope,
     props: { userId: OWNER_USER_ID },
   });
-  const responseHeaders = new Headers(headers);
-  responseHeaders.set("Location", completed.redirectTo);
-  return new Response(null, { status: 302, headers: responseHeaders });
+
+  return Response.redirect(completed.redirectTo, 302);
 }
 
 async function authorizeGet(
@@ -144,11 +134,8 @@ async function authorizeGet(
   try {
     const authorizationRequest = await oauth.parseAuthRequest(request);
     const details = await oauth.describeConsent(authorizationRequest);
-    const transaction = await oauth.beginConsent(authorizationRequest);
     return htmlResponse(
-      renderConsentPage(details, transaction.handle),
-      200,
-      transaction.headers,
+      renderConsentPage(details, formActionFor(request)),
     );
   } catch (error) {
     const response = authorizationErrorResponse(error, "authorize_get");
@@ -169,49 +156,34 @@ async function authorizePost(
     return new Response("Solicitação inválida", { status: 400 });
   }
 
-  const handleValue = form.get("handle");
-  const decisionValue = form.get("decision");
-  if (typeof handleValue !== "string" || handleValue.length === 0) {
+  const decision = form.get("decision");
+  if (decision !== "approve" && decision !== "deny") {
     return new Response("Solicitação inválida", { status: 400 });
   }
 
-  if (decisionValue === "deny") {
-    try {
-      const denied = await oauth.denyConsent(request, handleValue);
-      return new Response(null, { status: 302, headers: denied.headers });
-    } catch (error) {
-      const response = authorizationErrorResponse(error, "authorize_post_deny");
-      if (response !== undefined) return response;
-      throw error;
-    }
-  }
-
-  if (decisionValue !== "approve") {
-    return new Response("Solicitação inválida", { status: 400 });
-  }
-
-  if (!hasValidOAuthPassword(password, form.get("password"))) {
-    return htmlResponse(renderPasswordRetryPage(handleValue), 401);
+  if (
+    decision === "approve" &&
+    !hasValidOAuthPassword(password, form.get("password"))
+  ) {
+    return htmlResponse(
+      renderPasswordRetryPage(formActionFor(request)),
+      401,
+    );
   }
 
   try {
-    // The complete OAuth request was validated on GET and stored by
-    // beginConsent. On POST, approveConsent re-opens that transaction using
-    // the opaque handle plus the browser-bound cookie. Re-parsing the POST URL
-    // would incorrectly require the original OAuth query string to survive the
-    // form submission.
-    const approved = await oauth.approveConsent(request, handleValue);
-    const scope = approved.request.scope.filter((item) =>
-      SUPPORTED_SCOPES.has(item)
-    );
-    return issueAuthorization(
-      oauth,
-      approved.request,
-      scope,
-      approved.headers,
-    );
+    // The form posts to the exact validated OAuth URL from GET. The provider
+    // validates the client, redirect URI, state, scopes and PKCE again here.
+    // No browser-bound consent cookie or extra consent transaction is needed.
+    const authorizationRequest = await oauth.parseAuthRequest(request);
+
+    if (decision === "deny") {
+      return Response.redirect(accessDeniedRedirect(authorizationRequest), 302);
+    }
+
+    return issueAuthorization(oauth, authorizationRequest);
   } catch (error) {
-    const response = authorizationErrorResponse(error, "authorize_post_approve");
+    const response = authorizationErrorResponse(error, "authorize_post");
     if (response !== undefined) return response;
     throw error;
   }
@@ -245,8 +217,7 @@ export async function handleAuthorizeRequest(
     return new Response("OAuth não configurado", { status: 503 });
   }
 
-  if (request.method === "GET") {
-    return authorizeGet(request, oauth);
-  }
-  return authorizePost(request, oauth, password);
+  return request.method === "GET"
+    ? authorizeGet(request, oauth)
+    : authorizePost(request, oauth, password);
 }
