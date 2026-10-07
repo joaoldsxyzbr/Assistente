@@ -11,6 +11,10 @@ import {
 import { RemoteMcpClient } from "./remote-client.ts";
 import { toolNameForServer } from "./host.ts";
 import { createOAuthMcpWorker } from "../shared/oauth-mcp-worker.ts";
+import {
+  createConcurrentResponseCoalescer,
+  oauthConsentRequestKey,
+} from "../shared/concurrent-response.ts";
 
 export interface AssistenteWorkerEnvironment extends Environment {
   ASSISTENTE_OAUTH_PASSWORD?: string;
@@ -139,9 +143,29 @@ const writeToolNames = MCP_TOOL_CATALOG
   .filter((tool) => tool.isWrite)
   .map((tool) => toolNameForServer(tool.serverId, tool));
 
-export default createOAuthMcpWorker<AssistenteWorkerEnvironment>({
+const oauthWorker = createOAuthMcpWorker<AssistenteWorkerEnvironment>({
   createServer: (environment) => createAssistenteMcpServer(environment),
   resource: "https://assistente.joaolds.xyz.br/mcp",
   resourceName: "Assistente MCP",
   writeToolNames,
 });
+
+const consentResponses = createConcurrentResponseCoalescer();
+
+export default {
+  async fetch(
+    request: Request,
+    environment: AssistenteWorkerEnvironment,
+    context: Parameters<typeof oauthWorker.fetch>[2],
+  ): Promise<Response> {
+    const key = await oauthConsentRequestKey(request);
+    if (key === undefined) {
+      return oauthWorker.fetch(request, environment, context);
+    }
+
+    return consentResponses.run(
+      key,
+      () => oauthWorker.fetch(request, environment, context),
+    );
+  },
+};
