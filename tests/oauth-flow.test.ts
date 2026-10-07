@@ -173,7 +173,9 @@ async function startConsent(harness: ReturnType<typeof buildHarness>) {
 
   assert.equal(response.status, 200);
   const setCookie = response.headers.get("set-cookie");
-  assert.ok(setCookie?.startsWith(cookiePair));
+  assert.notEqual(setCookie, null);
+  if (setCookie === null) throw new Error("Consent cookie was not returned");
+  assert.ok(setCookie.startsWith(cookiePair));
 
   const html = await response.text();
   assert.ok(html.includes('<form method="post" action="/authorize">'));
