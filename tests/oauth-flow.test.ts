@@ -117,6 +117,8 @@ test("GET renders a stateless consent form and sets no consent cookie", async ()
 
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("set-cookie"), null);
+  const csp = response.headers.get("content-security-policy") ?? "";
+  assert.equal(csp.includes("form-action"), false);
 
   const html = await response.text();
   assert.ok(html.includes('<form method="post" action="/authorize?'));

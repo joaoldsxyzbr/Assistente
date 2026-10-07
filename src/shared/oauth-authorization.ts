@@ -38,7 +38,7 @@ function htmlResponse(
     "Referrer-Policy": "no-referrer",
     "X-Content-Type-Options": "nosniff",
     "Content-Security-Policy":
-      "default-src 'none'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
+      "default-src 'none'; base-uri 'none'; frame-ancestors 'none'",
     "X-Frame-Options": "DENY",
   });
   return new Response(html, { status, headers });
