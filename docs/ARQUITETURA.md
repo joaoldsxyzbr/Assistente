@@ -38,7 +38,7 @@ Operações que podem escrever não recebem retry automático. Se a chamada já 
 |---|---|---|
 | ChatGPT → Worker | OAuth 2.1 + PKCE | `mcp:read` é básico; `mcp:write` é exigido para escrita |
 | Navegador → autorização | `ASSISTENTE_OAUTH_PASSWORD` | senha conferida antes de concluir a autorização |
-| Worker → Cloudflare MCP | `MCP_CLOUDFLARE_TOKEN` | bearer separado do OAuth do ChatGPT |
+| Worker → Cloudflare MCP | `MCP_CLOUDFLARE_TOKEN` | bearer separado do OAuth do ChatGPT; `MCP_CLOUDFLARE_ACCOUNT_ID` seleciona a conta padrão |
 | Cloudflare MCP → API Cloudflare | API Token Cloudflare | permissões do token limitam os recursos acessíveis |
 
 O token do ChatGPT nunca é encaminhado ao MCP remoto.
@@ -69,7 +69,8 @@ O `OAUTH_KV` guarda o estado exigido pela biblioteca OAuth. Marcadores `diagnost
 - `assistente.joaolds.xyz.br` como custom domain;
 - `workers.dev` e previews desativados;
 - binding `OAUTH_KV`;
-- endpoint do Cloudflare MCP.
+- endpoint do Cloudflare MCP;
+- conta Cloudflare padrão injetada automaticamente no `execute` quando a chamada não informa `account_id`.
 
 `npm run build:workers` faz build dry-run. O pipeline conectado ao Cloudflare usa `wrangler versions upload`; promoção de versão é uma etapa separada.
 
