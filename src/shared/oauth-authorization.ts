@@ -1,7 +1,6 @@
-import {
-  authorizationErrorRedirect,
-  type AuthRequest,
-  type OAuthHelpers,
+import type {
+  AuthRequest,
+  OAuthHelpers,
 } from "@cloudflare/workers-oauth-provider";
 import type { OAuthDiagnosticStore } from "./oauth-boundary-diagnostics.ts";
 import {
@@ -48,6 +47,14 @@ function htmlResponse(
 function formActionFor(request: Request): string {
   const url = new URL(request.url);
   return url.pathname + url.search;
+}
+
+function accessDeniedRedirect(request: AuthRequest): string {
+  const redirect = new URL(request.redirectUri);
+  redirect.searchParams.set("error", "access_denied");
+  if (request.state !== undefined) redirect.searchParams.set("state", request.state);
+  if (request.issuer !== undefined) redirect.searchParams.set("iss", request.issuer);
+  return redirect.toString();
 }
 
 function isAuthorizationError(error: unknown): error is AuthorizationErrorLike {
@@ -171,10 +178,7 @@ async function authorizePost(
     const authorizationRequest = await oauth.parseAuthRequest(request);
 
     if (decision === "deny") {
-      return Response.redirect(
-        authorizationErrorRedirect(authorizationRequest, "access_denied"),
-        302,
-      );
+      return Response.redirect(accessDeniedRedirect(authorizationRequest), 302);
     }
 
     return issueAuthorization(oauth, authorizationRequest);

@@ -42,7 +42,7 @@ O token do ChatGPT não é encaminhado ao MCP remoto. O API Token Cloudflare nã
 
 No `GET /authorize`, o Worker valida a requisição com `parseAuthRequest`, mostra o cliente, destino e escopos e renderiza o formulário. O `action` do formulário preserva a própria URL OAuth validada, incluindo os parâmetros públicos necessários ao authorization code flow.
 
-No `POST /authorize`, a senha é conferida e a mesma requisição OAuth é validada novamente por `parseAuthRequest`. Se aprovada, `completeAuthorization` emite o código; se negada, `authorizationErrorRedirect` devolve `access_denied` ao cliente. Não existe transação de consentimento própria, cookie `__Host-oauth-consent-*`, handle oculto ou camada de deduplicação.
+No `POST /authorize`, a senha é conferida e a mesma requisição OAuth é validada novamente por `parseAuthRequest`. Se aprovada, `completeAuthorization` emite o código; se negada, o Worker devolve `access_denied` ao redirect já validado. Não existe transação de consentimento própria, cookie `__Host-oauth-consent-*`, handle oculto ou camada de deduplicação.
 
 Esse desenho deixa o estado sensível com a própria biblioteca OAuth: clientes, grants, authorization codes e tokens continuam no `OAUTH_KV`. Os parâmetros presentes na URL de autorização são públicos pelo protocolo (client_id, redirect_uri, state, PKCE e scopes) e são revalidados no POST; query strings continuam redigidas na observabilidade.
 
