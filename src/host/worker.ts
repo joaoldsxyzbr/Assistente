@@ -2,14 +2,13 @@ import { fromJsonSchema, McpServer } from "@modelcontextprotocol/server";
 import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
 import { MCP_TOOL_CATALOG } from "../mcps/catalog.ts";
 import type { McpToolContract } from "../mcps/contracts.ts";
-import type { McpServerId, McpToolDefinition } from "./contracts.ts";
+import type { McpServerId } from "./contracts.ts";
 import {
   readMcpConfigurations,
   type Environment,
   type McpServerConfiguration,
 } from "./config.ts";
 import { RemoteMcpClient } from "./remote-client.ts";
-import { toolNameForServer } from "./host.ts";
 import { createOAuthMcpWorker } from "../shared/oauth-mcp-worker.ts";
 
 export interface AssistenteWorkerEnvironment extends Environment {
@@ -19,6 +18,14 @@ export interface AssistenteWorkerEnvironment extends Environment {
 
 function toolManifest(serverId: McpServerId): McpToolContract[] {
   return MCP_TOOL_CATALOG.filter((tool) => tool.serverId === serverId);
+}
+
+function toolNameForServer(serverId: McpServerId, remoteName: string): string {
+  const safeRemoteName = remoteName.replace(/[^A-Za-z0-9_-]/g, "_");
+  if (safeRemoteName.length === 0) {
+    throw new Error("Tool name cannot be empty after normalization");
+  }
+  return `mcp_${serverId}__${safeRemoteName}`;
 }
 
 function textContent(result: { content: readonly unknown[] }): Array<{
@@ -46,6 +53,7 @@ async function callRemoteTool(
 ) {
   const client = new RemoteMcpClient(configuration);
   let callStarted = false;
+
   try {
     await client.connect();
     callStarted = true;
@@ -85,7 +93,7 @@ export function createAssistenteMcpServer(
   environment: AssistenteWorkerEnvironment,
 ): McpServer {
   const configurations = readMcpConfigurations(environment);
-  const server = new McpServer({ name: "assistente", version: "0.4.0" });
+  const server = new McpServer({ name: "assistente", version: "0.1.0" });
 
   server.registerTool(
     "assistente_status",
@@ -104,17 +112,15 @@ export function createAssistenteMcpServer(
   );
 
   const routes = new Set<string>();
+
   for (const configuration of configurations) {
     if (configuration.status !== "configured") continue;
+
     for (const definition of toolManifest(configuration.id)) {
-      const remoteDefinition: McpToolDefinition = {
-        name: definition.name,
-        description: definition.description,
-        inputSchema: definition.inputSchema,
-      };
-      const qualifiedName = toolNameForServer(configuration.id, remoteDefinition);
+      const qualifiedName = toolNameForServer(configuration.id, definition.name);
       if (routes.has(qualifiedName)) continue;
       routes.add(qualifiedName);
+
       server.registerTool(
         qualifiedName,
         {
@@ -137,7 +143,7 @@ export function createAssistenteMcpServer(
 
 const writeToolNames = MCP_TOOL_CATALOG
   .filter((tool) => tool.isWrite)
-  .map((tool) => toolNameForServer(tool.serverId, tool));
+  .map((tool) => toolNameForServer(tool.serverId, tool.name));
 
 export default createOAuthMcpWorker<AssistenteWorkerEnvironment>({
   createServer: (environment) => createAssistenteMcpServer(environment),

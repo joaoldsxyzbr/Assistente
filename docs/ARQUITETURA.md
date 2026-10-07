@@ -2,79 +2,85 @@
 
 ## Objetivo
 
-Este repositório implementa um hub MCP para o plugin Assistente Geral. O plugin mantém as skills e regras conversacionais; o Worker host agrega os contratos dos MCPs conectados e roteia cada chamada ao destino certo.
+Este repositório implementa o hub MCP do plugin Assistente Geral. O plugin mantém skills e regras conversacionais; o Worker `assistente` autentica o ChatGPT, publica uma allowlist de ferramentas e encaminha cada chamada ao MCP de destino.
 
-A estrutura recomendada é **um módulo por MCP em src/mcps/<nome> e um único Worker host**. Cada módulo isola contrato, schema, credenciais e integração. Os diretórios não são implantados como Workers separados.
+A regra estrutural é simples: **um Worker, um endpoint MCP e um módulo local por integração**.
 
 ## Responsabilidades
 
-| Camada | O que contém |
+| Camada | Responsabilidade |
 |---|---|
-| Plugin Assistente Geral | Skills e regras de domínio/conversa, roteamento por intenção e apresentação dos resultados. É a fonte canônica dessas instruções e vive fora deste repositório. |
-| Worker host assistente | Endpoint MCP único, autenticação OAuth, catálogo allowlist e roteamento para os módulos MCP. Não tem acesso direto a APIs de domínio nem a D1. |
-| src/mcps/cloudflare/ | Contratos das ferramentas aprovadas para a integração Cloudflare. Novos MCPs recebem pastas próprias. |
-| MCP de destino | Validação técnica da chamada, autenticação no serviço e aplicação das permissões do token. |
+| Assistente Geral | Skills, regras de domínio, interpretação da intenção e apresentação dos resultados |
+| Worker `assistente` | OAuth, catálogo allowlist, escopos e roteamento MCP |
+| `src/mcps/<nome>/` | Contratos das ferramentas aprovadas de cada integração |
+| MCP de destino | Execução técnica e aplicação das permissões do token de serviço |
 
-Regras conversacionais não são copiadas para o Worker. Proteções que precisam funcionar mesmo fora do chat — schema, allowlist, validação e autorização no serviço — continuam aplicadas pelo código e pelo MCP de destino.
+Ponto e Gastos ficam fora deste repositório. Nenhum Worker daqui acessa ou altera seus bancos.
 
-## Escopo atual
+## Fluxo MCP
 
-- Incluído: um Worker assistente e o conector ao Cloudflare MCP.
-- Fora deste repositório: servidores e acesso a dados de Ponto e Gastos. As skills e regras continuam no plugin Assistente Geral; os D1 existentes não são alterados.
-- Futuro: outros MCPs podem ser adicionados em pastas próprias, com contrato, endpoint e credencial independentes.
+O catálogo local é a fonte de verdade das ferramentas publicadas. O Worker não descobre nem publica ferramentas remotas dinamicamente.
 
-O catálogo inicial do Cloudflare MCP expõe três ferramentas: docs, search e execute. O host não expõe ferramentas remotas descobertas dinamicamente; cada ferramenta precisa estar declarada no contrato local.
+Para cada chamada:
+1. o token OAuth do ChatGPT é validado;
+2. o Worker verifica o escopo necessário;
+3. abre uma conexão com o MCP remoto;
+4. executa uma vez;
+5. fecha a conexão.
+
+Operações que podem escrever não recebem retry automático. Se a chamada já começou e falha, o resultado é tratado como potencialmente incerto.
 
 ## Autenticação e autorização
 
 | Origem → destino | Credencial | Regra |
 |---|---|---|
-| ChatGPT → Worker | OAuth 2.1 com authorization code + PKCE | Metadados de descoberta, Client ID Metadata Documents, registro dinâmico, offline_access e refresh tokens |
-| Navegador → autorização | Senha do proprietário em secret ASSISTENTE_OAUTH_PASSWORD | O POST volta para a mesma URL OAuth validada; cliente, redirect, state, scopes e PKCE são revalidados antes de emitir o código |
-| Worker → Cloudflare MCP | API Token Cloudflare em MCP_CLOUDFLARE_TOKEN | Bearer separado do OAuth do ChatGPT |
-| Cloudflare MCP → Cloudflare API | API Token Assistente Cloudflare | O token limita operações aos recursos e permissões que o proprietário concedeu |
+| ChatGPT → Worker | OAuth 2.1 + PKCE | `mcp:read` é básico; `mcp:write` é exigido para escrita |
+| Navegador → autorização | `ASSISTENTE_OAUTH_PASSWORD` | senha conferida antes de concluir a autorização |
+| Worker → Cloudflare MCP | `MCP_CLOUDFLARE_TOKEN` | bearer separado do OAuth do ChatGPT |
+| Cloudflare MCP → API Cloudflare | API Token Cloudflare | permissões do token limitam os recursos acessíveis |
 
-O host publica mcp:read como escopo básico. A ferramenta execute exige também mcp:write e recebe desafio OAuth de insufficient_scope quando o token não possui essa permissão.
+O token do ChatGPT nunca é encaminhado ao MCP remoto.
 
-O token do ChatGPT não é encaminhado ao MCP remoto. O API Token Cloudflare não autentica o ChatGPT nem substitui o OAuth da conexão com o Worker.
+### Fluxo de autorização
 
-### Fluxo de autorização simples
+No `GET /authorize`, o Worker valida a requisição OAuth e renderiza a tela de autorização.
 
-No `GET /authorize`, o Worker valida a requisição com `parseAuthRequest`, mostra o cliente, destino e escopos e renderiza o formulário. O `action` do formulário preserva a própria URL OAuth validada, incluindo os parâmetros públicos necessários ao authorization code flow.
+No `POST /authorize`, a senha é conferida e a mesma requisição OAuth é validada novamente antes de `completeAuthorization` emitir o código. O formulário não cria cookie, handle ou transação própria de consentimento.
 
-No `POST /authorize`, a senha é conferida e a mesma requisição OAuth é validada novamente por `parseAuthRequest`. Se aprovada, `completeAuthorization` emite o código; se negada, o Worker devolve `access_denied` ao redirect já validado. Não existe transação de consentimento própria, cookie `__Host-oauth-consent-*`, handle oculto ou camada de deduplicação.
+A página mantém CSP mínima: `default-src 'none'`, `base-uri 'none'` e `frame-ancestors 'none'`. Não usa `form-action`, pois essa diretiva bloquearia a cadeia de redirect até o callback do ChatGPT.
 
-Esse desenho deixa o estado sensível com a própria biblioteca OAuth: clientes, grants, authorization codes e tokens continuam no `OAUTH_KV`. Os parâmetros presentes na URL de autorização são públicos pelo protocolo (client_id, redirect_uri, state, PKCE e scopes) e são revalidados no POST; query strings continuam redigidas na observabilidade.
+O `OAUTH_KV` guarda o estado exigido pela biblioteca OAuth. Marcadores `diagnostic:oauth:*` continuam temporariamente ativos até a confirmação do primeiro fluxo E2E pós-correção de CSP; eles armazenam somente etapa, horário, status e código OAuth seguro.
 
-A página de autorização não define `form-action` no CSP, porque essa diretiva também restringe os redirects subsequentes do POST e impediria o retorno para o callback do ChatGPT. Mantemos `default-src 'none'`, `base-uri 'none'` e `frame-ancestors 'none'`.
+## Segurança
 
-Falhas esperadas registram somente etapa, categoria, código do erro e status HTTP. Para depuração de fronteira, o Worker também grava no `OAUTH_KV` marcadores de curta duração sob `diagnostic:oauth:*`, contendo somente etapa, horário, status HTTP e, em respostas OAuth de erro, um código simples validado. Senhas, tokens, authorization codes, cookies e credenciais não entram nesses marcadores nem nos logs estruturados.
+- endpoints MCP remotos precisam ser HTTPS e não podem conter credenciais, query string ou fragmento;
+- a allowlist local impede exposição automática de ferramentas remotas;
+- secrets não entram no Git nem em respostas de status;
+- erros remotos não revelam endpoint, token ou exceção interna;
+- query strings são redigidas na observabilidade;
+- invocation logs permanecem desativados;
+- não há binding D1 neste Worker.
 
-## Segurança e limites
+## Configuração e deploy
 
-- O host aceita somente endpoint HTTPS sem credenciais na URL, query string ou fragmento.
-- O catálogo local é allowlist; configurar um MCP não publica automaticamente qualquer ferramenta.
-- Chamadas são encaminhadas a um único MCP. O host não fornece execução genérica de código além do que o MCP Cloudflare já expõe, nem tenta novamente uma chamada que possa ter escrito.
-- Erros remotos não revelam URL, token ou exceção interna.
-- Nenhum Worker deste repositório tem binding D1.
-- Nenhum código ou configuração deste repositório lê, cria ou migra os D1 de Ponto e Gastos.
-- O OAuth grava clientes, grants, códigos e tokens apenas no KV dedicado assistente-oauth; o formulário de autorização não cria estado adicional no navegador ou no KV.
+`wrangler.assistente.jsonc` é a fonte declarativa do Worker:
+- `assistente.joaolds.xyz.br` como custom domain;
+- `workers.dev` e previews desativados;
+- binding `OAUTH_KV`;
+- endpoint do Cloudflare MCP.
 
-## Deploy
+`npm run build:workers` faz build dry-run. O pipeline conectado ao Cloudflare usa `wrangler versions upload`; promoção de versão é uma etapa separada.
 
-O domínio assistente.joaolds.xyz.br aponta para o Worker assistente. O endpoint MCP é https://assistente.joaolds.xyz.br/mcp. O binding OAUTH_KV e o endpoint Cloudflare MCP estão definidos em wrangler.assistente.jsonc. A senha OAuth deve ser criada como secret fora do Git antes de ativar a versão.
-
-O comando npm run build:workers valida o bundle em dry-run sem publicar.
-
-## Organização do código
+## Organização
 
 | Caminho | Responsabilidade |
 |---|---|
-| src/host/ | Endpoint, roteamento e montagem das ferramentas |
-| src/mcps/contracts.ts | Contrato comum dos módulos MCP |
-| src/mcps/catalog.ts | Catálogo agregado que o host expõe |
-| src/mcps/cloudflare/ | Schemas e ferramentas do Cloudflare MCP |
-| src/shared/oauth-authorization.ts | Fluxo HTTP de autorização, consentimento, diagnóstico seguro e conclusão OAuth |
-| src/shared/oauth-mcp-worker.ts | Montagem do OAuthProvider e proteção/autorização das chamadas MCP |
-| tests/ | Testes sintéticos do host e dos contratos |
+| `src/host/config.ts` | valida a configuração dos MCPs |
+| `src/host/remote-client.ts` | cliente MCP remoto |
+| `src/host/worker.ts` | Worker real: servidor MCP, roteamento e catálogo |
+| `src/mcps/` | contratos allowlist por integração |
+| `src/shared/oauth-authorization.ts` | página e fluxo HTTP de autorização |
+| `src/shared/oauth-mcp-worker.ts` | OAuthProvider, escopos e proteção do endpoint MCP |
+| `tests/` | testes das regras puras e contratos |
 
+Não existe segunda implementação de host. Novas abstrações só entram quando houver necessidade concreta.
