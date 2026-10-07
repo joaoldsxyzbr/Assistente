@@ -191,7 +191,7 @@ async function handleAuthorizeRequest(
   }
 
   const password = environment.ASSISTENTE_OAUTH_PASSWORD;
-  if (!isOAuthPasswordConfigured(password)) {
+  if (password === undefined || !isOAuthPasswordConfigured(password)) {
     return htmlResponse(
       "<!doctype html><html lang=\"pt-BR\"><meta charset=\"utf-8\"><title>OAuth não configurado</title><h1>Autorização ainda não configurada</h1><p>O administrador precisa definir o segredo ASSISTENTE_OAUTH_PASSWORD no Worker.</p>",
       503,
