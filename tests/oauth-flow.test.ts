@@ -16,14 +16,20 @@ const cookieName = "__Host-oauth-consent-test";
 const cookieValue = "test-cookie-binding";
 const cookiePair = `${cookieName}=${cookieValue}`;
 
+const clientId = "https://chatgpt.example/client.json";
+const redirectUri = "https://client.example/callback";
+const state = "test-state";
+const codeChallenge = "test-challenge";
+const codeChallengeMethod = "S256";
+
 const authRequest = {
-  clientId: "https://chatgpt.example/client.json",
-  redirectUri: "https://client.example/callback",
+  clientId,
+  redirectUri,
   scope: ["mcp:read", "mcp:write", "offline_access"],
-  state: "test-state",
+  state,
   responseType: "code",
-  codeChallenge: "test-challenge",
-  codeChallengeMethod: "S256",
+  codeChallenge,
+  codeChallengeMethod,
 } as AuthRequest;
 
 function buildHarness() {
@@ -135,12 +141,12 @@ function environment(oauth: OAuthHelpers): OAuthMcpEnvironment {
 function authorizeGetRequest(): Request {
   const url = new URL("https://assistente.example.test/authorize");
   url.searchParams.set("response_type", "code");
-  url.searchParams.set("client_id", authRequest.clientId);
-  url.searchParams.set("redirect_uri", authRequest.redirectUri);
+  url.searchParams.set("client_id", clientId);
+  url.searchParams.set("redirect_uri", redirectUri);
   url.searchParams.set("scope", authRequest.scope.join(" "));
-  url.searchParams.set("state", authRequest.state);
-  url.searchParams.set("code_challenge", authRequest.codeChallenge ?? "");
-  url.searchParams.set("code_challenge_method", authRequest.codeChallengeMethod ?? "");
+  url.searchParams.set("state", state);
+  url.searchParams.set("code_challenge", codeChallenge);
+  url.searchParams.set("code_challenge_method", codeChallengeMethod);
   return new Request(url);
 }
 
