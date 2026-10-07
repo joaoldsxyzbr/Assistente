@@ -4,7 +4,14 @@
   "main": "src/host/worker.ts",
   "compatibility_date": "2026-10-07",
   "compatibility_flags": ["global_fetch_strictly_public"],
-  "workers_dev": true,
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [
+    {
+      "pattern": "assistente.joaolds.xyz.br",
+      "custom_domain": true
+    }
+  ],
   "observability": {
     "enabled": true,
     "redact_query_string": true,
