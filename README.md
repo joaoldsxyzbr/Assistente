@@ -8,7 +8,8 @@ O **Assistente** é o hub MCP do plugin **Assistente Geral**. O plugin cuida das
 - **1 endpoint MCP:** `https://assistente.joaolds.xyz.br/mcp`.
 - **1 módulo por MCP:** `src/mcps/<nome>`.
 - **Allowlist local:** configurar um MCP não publica ferramentas automaticamente.
-- **Cloudflare MCP:** primeira integração, com `docs`, `search` e `execute`.
+- **Assistente Geral:** usa o app **Assistente MCPs** como sua conexão MCP; não depende diretamente do app Cloudflare.
+- **Cloudflare MCP:** primeira integração atrás do hub, com `docs`, `search` e `execute`.
 - **Ponto e Gastos:** ficam fora deste repositório e continuam sob as regras do plugin Assistente Geral.
 
 Detalhes e decisões duráveis ficam em [docs/ARQUITETURA.md](docs/ARQUITETURA.md). Trabalho pendente fica em Issues.
