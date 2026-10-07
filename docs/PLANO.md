@@ -12,6 +12,7 @@ A fundação inicial foi integrada à `main` pelo [PR #2](https://github.com/joa
 - [x] Criar schemas locais allowlist para o host; não publicar ferramentas genéricas de execução.
 - [x] Adicionar testes com D1 em memória e dados sintéticos.
 - [x] Validar typecheck, testes e builds dry-run dos três Workers na CI do PR.
+- [x] Corrigir Workers Builds do host para usar o arquivo Wrangler explícito e enviar versões sem ativá-las em produção.
 - [ ] Implementar OAuth 2.1 entre ChatGPT e o host, com authorization code + PKCE e renovação de sessão.
 - [ ] Configurar `assistente.joaolds.xyz.br` como domínio customizado do Worker host e validar DNS/TLS.
 - [ ] Configurar credenciais de API distintas do host para os MCPs de Ponto e Gastos.

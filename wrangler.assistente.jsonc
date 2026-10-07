@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "assistente-host-mcp",
+  "name": "assistente",
   "main": "src/host/worker.ts",
   "compatibility_date": "2026-10-07",
   "workers_dev": true

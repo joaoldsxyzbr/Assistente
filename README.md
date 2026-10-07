@@ -15,9 +15,13 @@ Host central para MCPs independentes por domínio. Cada Worker de domínio receb
 
 | Worker | Responsabilidade | Acesso a dados |
 |---|---|---|
-| `assistente-host-mcp` | Catálogo e roteamento para ferramentas aprovadas | Sem binding D1 |
+| `assistente` | Catálogo e roteamento para ferramentas aprovadas | Sem binding D1 |
 | `assistente-ponto-mcp` | Registros de ponto e banco de horas | Somente `PONTO_DB` |
 | `assistente-gastos-mcp` | Movimentações e resumos financeiros | Somente `GASTOS_DB` |
+
+## Cloudflare Workers Builds
+
+O Worker host conectado ao GitHub se chama `assistente`. Configure o diretório raiz como `/`, deixe o build command vazio e use `npx wrangler versions upload --config wrangler.assistente.jsonc` como deploy command. Isso valida e envia uma versão sem ativá-la em produção. Para ativar o Worker, use `npx wrangler deploy --config wrangler.assistente.jsonc` somente depois de configurar OAuth, secrets e conexões de runtime. O preview command é `npx wrangler preview --config wrangler.assistente.jsonc`.
 
 ## Requisitos e verificações
 
