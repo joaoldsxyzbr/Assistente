@@ -44,7 +44,7 @@ No `GET /authorize`, o pedido OAuth é validado por `parseAuthRequest` e armazen
 
 No `POST /authorize`, o Worker **não** reinterpreta a query OAuth. `approveConsent` reabre a transação usando o `handle` e o cookie, recupera o pedido original e a consome uma única vez; `completeAuthorization` conclui o authorization code flow. Assim, a autorização não depende de o navegador preservar `client_id`, `redirect_uri`, `state`, PKCE ou outros parâmetros na URL do POST.
 
-Falhas esperadas do consentimento registram somente etapa, categoria/código do erro e status HTTP. Senhas, tokens, cookies, authorization codes, query strings e credenciais não entram nos logs.
+Falhas esperadas do consentimento registram somente etapa, categoria, código do erro e status HTTP. O Worker também usa o `onError` da biblioteca OAuth para registrar apenas a categoria e o motivo estáveis das falhas do token endpoint. Workers Logs fica habilitado para permitir diagnóstico do fluxo real. Senhas, tokens, cookies, authorization codes, query strings, descrições com dados do pedido e credenciais não entram nos logs.
 
 
 ## Segurança e limites
