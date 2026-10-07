@@ -46,3 +46,21 @@ export const CLOUDFLARE_TOOL_CATALOG: readonly McpToolContract[] = [
     isWrite: true,
   },
 ];
+
+
+export function withDefaultCloudflareAccount(
+  remoteName: string,
+  args: Record<string, unknown>,
+  defaultAccountId: string | undefined,
+): Record<string, unknown> {
+  if (
+    remoteName !== "execute" ||
+    typeof args.account_id === "string" ||
+    defaultAccountId === undefined ||
+    defaultAccountId.trim().length === 0
+  ) {
+    return args;
+  }
+
+  return { ...args, account_id: defaultAccountId.trim() };
+}
