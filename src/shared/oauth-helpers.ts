@@ -36,6 +36,21 @@ export function hasValidOAuthPassword(
   return difference === 0;
 }
 
+export function hasAllOAuthScopes(
+  grantedScopes: readonly string[],
+  requiredScopes: readonly string[],
+): boolean {
+  return requiredScopes.every((scope) => grantedScopes.includes(scope));
+}
+
+export function requiredOAuthScopesForToolCall(
+  isWriteToolCall: boolean,
+): readonly string[] {
+  return isWriteToolCall
+    ? ["mcp:read", "mcp:write"]
+    : ["mcp:read"];
+}
+
 export function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (character) => {
     const code = character.charCodeAt(0);
@@ -132,11 +147,6 @@ export async function requestUsesWriteTool(
   writeToolNames: readonly string[],
 ): Promise<boolean> {
   if (request.method !== "POST") return false;
-
-  const contentType = request.headers.get("content-type") ?? "";
-  if (contentType.split(";")[0]?.trim().toLowerCase() !== "application/json") {
-    return false;
-  }
 
   const body = await request.clone().json().catch(() => undefined);
   const messages = Array.isArray(body) ? body : [body];

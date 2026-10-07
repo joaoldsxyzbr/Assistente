@@ -10,11 +10,13 @@ import { createMcpHandler, type StatelessMcpHandler } from "agents/mcp/server";
 import type { McpServer } from "@modelcontextprotocol/server";
 import {
   ASSISTENTE_OAUTH_SCOPES,
+  hasAllOAuthScopes,
   hasValidOAuthPassword,
   isOAuthPasswordConfigured,
   renderConsentPage,
   renderPasswordRetryPage,
   requestUsesWriteTool,
+  requiredOAuthScopesForToolCall,
 } from "./oauth-helpers.ts";
 
 export type OAuthMcpEnvironment = Readonly<Record<string, unknown>> & {
@@ -100,7 +102,6 @@ async function issueAuthorization(
 async function authorizeGet(
   request: Request,
   oauth: OAuthHelpers,
-  password: string,
 ): Promise<Response> {
   try {
     const authorizationRequest = await oauth.parseAuthRequest(request);
@@ -203,7 +204,7 @@ async function handleAuthorizeRequest(
   }
 
   if (request.method === "GET") {
-    return authorizeGet(request, oauth, password);
+    return authorizeGet(request, oauth);
   }
   return authorizePost(request, oauth, password);
 }
@@ -223,14 +224,15 @@ export function createOAuthMcpWorker<Environment extends OAuthMcpEnvironment>(
         });
       }
 
-      if (
-        await requestUsesWriteTool(request, [...writeToolNames]) &&
-        !["mcp:read", "mcp:write"].every((scope) => auth.scope.includes(scope))
-      ) {
+      const isWriteCall = await requestUsesWriteTool(request, [...writeToolNames]);
+      const requiredScopes = requiredOAuthScopesForToolCall(isWriteCall);
+      if (!hasAllOAuthScopes(auth.scope, requiredScopes)) {
         return insufficientScope(
           auth,
-          ["mcp:read", "mcp:write"],
-          "This operation can modify Cloudflare resources.",
+          [...requiredScopes],
+          isWriteCall
+            ? "This operation can modify Cloudflare resources."
+            : "This operation requires read access.",
         );
       }
 

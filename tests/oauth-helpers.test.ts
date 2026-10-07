@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  hasAllOAuthScopes,
   hasValidOAuthPassword,
   isOAuthPasswordConfigured,
   renderConsentPage,
   requestUsesWriteTool,
+  requiredOAuthScopesForToolCall,
 } from "../src/shared/oauth-helpers.ts";
 
 const strongPassword = "0123456789abcdef0123456789abcdef";
@@ -17,6 +19,15 @@ test("requires a high-entropy OAuth password and compares it exactly", () => {
   assert.equal(hasValidOAuthPassword(strongPassword, strongPassword + "x"), false);
   assert.equal(hasValidOAuthPassword(strongPassword, null), false);
   assert.equal(hasValidOAuthPassword(undefined, strongPassword), false);
+});
+
+test("requires read scope for all calls and write scope for execute", () => {
+  assert.deepEqual(requiredOAuthScopesForToolCall(false), ["mcp:read"]);
+  assert.deepEqual(requiredOAuthScopesForToolCall(true), ["mcp:read", "mcp:write"]);
+  assert.equal(hasAllOAuthScopes(["mcp:read"], ["mcp:read"]), true);
+  assert.equal(hasAllOAuthScopes(["mcp:write"], ["mcp:read"]), false);
+  assert.equal(hasAllOAuthScopes(["mcp:read"], ["mcp:read", "mcp:write"]), false);
+  assert.equal(hasAllOAuthScopes(["mcp:read", "mcp:write"], ["mcp:read", "mcp:write"]), true);
 });
 
 test("requires write scope for the Cloudflare execute tool without consuming the request", async () => {
@@ -36,10 +47,10 @@ test("requires write scope for the Cloudflare execute tool without consuming the
   assert.deepEqual(await request.json(), body);
 });
 
-test("detects write calls in JSON-RPC batches and ignores read calls", async () => {
+test("detects write calls in JSON-RPC batches even if Content-Type is misleading", async () => {
   const batch = new Request("https://assistente.example.test/mcp", {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "text/plain" },
     body: JSON.stringify([
       { jsonrpc: "2.0", id: 1, method: "tools/list", params: {} },
       {
