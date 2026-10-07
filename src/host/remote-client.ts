@@ -13,7 +13,12 @@ function asInputSchema(value: unknown): Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new Error("MCP tool returned an invalid input schema");
   }
-  return value;
+
+  const schema: Record<string, unknown> = {};
+  for (const key of Object.keys(value)) {
+    schema[key] = Reflect.get(value, key);
+  }
+  return schema;
 }
 
 export class RemoteMcpClient implements McpClient {
