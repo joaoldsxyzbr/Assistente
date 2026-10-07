@@ -71,5 +71,6 @@ O comando npm run build:workers valida o bundle em dry-run sem publicar.
 | src/mcps/contracts.ts | Contrato comum dos módulos MCP |
 | src/mcps/catalog.ts | Catálogo agregado que o host expõe |
 | src/mcps/cloudflare/ | Schemas e ferramentas do Cloudflare MCP |
-| src/shared/oauth-mcp-worker.ts | OAuth, consentimento e proteção das chamadas MCP |
+| src/shared/oauth-authorization.ts | Fluxo HTTP de autorização, consentimento, diagnóstico seguro e conclusão OAuth |
+| src/shared/oauth-mcp-worker.ts | Montagem do OAuthProvider e proteção/autorização das chamadas MCP |
 | tests/ | Testes sintéticos do host e dos contratos |
