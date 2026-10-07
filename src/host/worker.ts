@@ -106,7 +106,9 @@ export function createAssistenteMcpServer(
         properties: {},
         additionalProperties: false,
       }),
-      securitySchemes: oauthSecuritySchemesForTool(false),
+      _meta: {
+        securitySchemes: oauthSecuritySchemesForTool(false),
+      },
     },
     async () => ({
       content: [{ type: "text", text: JSON.stringify(configurationSummary(configurations)) }],
@@ -128,7 +130,9 @@ export function createAssistenteMcpServer(
         {
           description: configuration.label + ": " + definition.description,
           inputSchema: fromJsonSchema<Record<string, unknown>>(definition.inputSchema),
-          securitySchemes: oauthSecuritySchemesForTool(definition.isWrite),
+          _meta: {
+            securitySchemes: oauthSecuritySchemesForTool(definition.isWrite),
+          },
         },
         async (args) =>
           callRemoteTool(
