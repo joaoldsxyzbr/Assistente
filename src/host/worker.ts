@@ -170,7 +170,7 @@ export default {
   async fetch(
     request: Request,
     environment: AssistenteWorkerEnvironment,
-    context: ExecutionContext,
+    context: Parameters<typeof oauthWorker.fetch>[2],
   ): Promise<Response> {
     const key = consentRequestKey(request);
     if (key === undefined) {
