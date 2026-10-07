@@ -6,11 +6,12 @@ O **Assistente** é o hub MCP do plugin **Assistente Geral**. O plugin cuida das
 
 - **1 Worker:** `assistente`.
 - **1 endpoint MCP:** `https://assistente.joaolds.xyz.br/mcp`.
-- **1 módulo por MCP:** `src/mcps/<nome>`.
+- **1 módulo por MCP/domínio:** `src/mcps/<nome>`.
 - **Allowlist local:** configurar um MCP não publica ferramentas automaticamente.
 - **Assistente Geral:** usa o app **Assistente MCPs** como sua conexão MCP; não depende diretamente do app Cloudflare.
-- **Cloudflare MCP:** primeira integração atrás do hub, com `docs`, `search` e `execute`.
-- **Ponto e Gastos:** ficam fora deste repositório e continuam sob as regras do plugin Assistente Geral.
+- **Cloudflare MCP:** integração genérica atrás do hub, com `docs`, `search` e `execute`.
+- **Controle de ponto:** ferramentas locais `ponto_registrar`, `ponto_hoje` e `ponto_resumo` usam somente o Cloudflare MCP para consultar/escrever no D1; o Worker não possui binding D1.
+- **Controle de gastos:** continua fora deste repositório e sob as regras do plugin Assistente Geral.
 
 Detalhes e decisões duráveis ficam em [docs/ARQUITETURA.md](docs/ARQUITETURA.md). Trabalho pendente fica em Issues.
 
@@ -19,8 +20,8 @@ Detalhes e decisões duráveis ficam em [docs/ARQUITETURA.md](docs/ARQUITETURA.m
 ChatGPT → Worker usa OAuth 2.1 com authorization code, PKCE, descoberta e Client ID Metadata Documents. A autorização exige a senha do proprietário em `ASSISTENTE_OAUTH_PASSWORD`.
 
 O Worker publica:
-- `mcp:read` para chamadas básicas;
-- `mcp:write` para `mcp_cloudflare__execute`;
+- `mcp:read` para chamadas básicas e consultas de ponto;
+- `mcp:write` para `mcp_cloudflare__execute` e `ponto_registrar`;
 - `offline_access` para renovação da conexão.
 
 Worker → Cloudflare MCP usa um token separado em `MCP_CLOUDFLARE_TOKEN`. O token Cloudflare nunca autentica o ChatGPT.
@@ -33,7 +34,8 @@ A configuração declarativa está em `wrangler.assistente.jsonc`:
 - `workers.dev` e previews desativados;
 - KV OAuth: `OAUTH_KV`;
 - endpoint remoto: `https://mcp.cloudflare.com/mcp`;
-- conta Cloudflare padrão: `MCP_CLOUDFLARE_ACCOUNT_ID`, usada automaticamente pelo `execute`.
+- conta Cloudflare padrão: `MCP_CLOUDFLARE_ACCOUNT_ID`, usada automaticamente pelo `execute`;
+- banco canônico do ponto: `PONTO_D1_DATABASE_ID`, usado apenas para montar chamadas fixas ao Cloudflare MCP.
 
 Secrets necessários, configurados fora do Git:
 - `ASSISTENTE_OAUTH_PASSWORD`;
