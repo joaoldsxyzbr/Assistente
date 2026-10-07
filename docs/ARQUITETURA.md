@@ -4,18 +4,18 @@
 
 Este repositório implementa o hub MCP do plugin Assistente Geral. O plugin mantém skills e regras conversacionais; o Worker `assistente` autentica o ChatGPT, publica uma allowlist de ferramentas e encaminha cada chamada ao MCP de destino.
 
-A regra estrutural é simples: **um Worker, um endpoint MCP e um módulo local por integração**.
+A regra estrutural é simples: **um Worker, um endpoint MCP e um módulo local por integração ou domínio**.
 
 ## Responsabilidades
 
 | Camada | Responsabilidade |
 |---|---|
 | Assistente Geral | Skills, regras de domínio, interpretação da intenção e apresentação dos resultados |
-| Worker `assistente` | OAuth, catálogo allowlist, escopos e roteamento MCP |
-| `src/mcps/<nome>/` | Contratos das ferramentas aprovadas de cada integração |
+| Worker `assistente` | OAuth, catálogo allowlist, escopos, ferramentas locais e roteamento MCP |
+| `src/mcps/<nome>/` | Contratos e lógica fixa das ferramentas aprovadas |
 | MCP de destino | Execução técnica e aplicação das permissões do token de serviço |
 
-Ponto e Gastos ficam fora deste repositório. Nenhum Worker daqui acessa ou altera seus bancos.
+O controle de ponto possui três ferramentas locais no hub, mas **não acessa D1 diretamente**. Elas compõem chamadas fixas ao Cloudflare MCP, que então usa a API Cloudflare para consultar ou escrever no D1. Gastos continua fora deste repositório.
 
 ## Fluxo MCP
 
@@ -23,12 +23,21 @@ O catálogo local é a fonte de verdade das ferramentas publicadas. O Worker nã
 
 Cada ferramenta declara seu contrato OAuth no descriptor MCP: leitura usa `mcp:read`; ferramentas classificadas como escrita usam `mcp:read` + `mcp:write`. Isso permite ao ChatGPT fazer reautorização de escopo (*step-up*) sem pedir permissões fora do contrato da ferramenta.
 
-Para cada chamada:
+Para ferramentas remotas genéricas:
 1. o token OAuth do ChatGPT é validado;
 2. o Worker verifica o escopo necessário;
 3. abre uma conexão com o MCP remoto;
 4. executa uma vez;
 5. fecha a conexão.
+
+Para ponto:
+1. `ponto_registrar`, `ponto_hoje` ou `ponto_resumo` recebe somente os dados mínimos do comando;
+2. o Worker resolve a data atual em `America/Sao_Paulo` quando necessário;
+3. monta código fixo para `mcp_cloudflare__execute`;
+4. o Cloudflare MCP chama o endpoint D1 da API Cloudflare;
+5. o resultado pequeno e estruturado volta ao ChatGPT.
+
+`ponto_registrar` usa escrita atômica no D1: segunda a sexta preenche `entrada → ida_intervalo → volta_intervalo → saida`; sábado preenche somente `entrada → saida`. `ponto_hoje` consulta a view `banco_horas`; `ponto_resumo` consulta a view `resumo`.
 
 Operações que podem escrever não recebem retry automático. Se a chamada já começou e falha, o resultado é tratado como potencialmente incerto.
 
@@ -72,11 +81,12 @@ A configuração continua com `redact_query_string: true`, `invocation_logs: fal
 
 - endpoints MCP remotos precisam ser HTTPS e não podem conter credenciais, query string ou fragmento;
 - a allowlist local impede exposição automática de ferramentas remotas;
+- ferramentas de ponto usam SQL e endpoint fixos gerados no código do hub, sem aceitar SQL livre do ChatGPT;
 - secrets não entram no Git nem em respostas de status;
 - erros remotos não revelam endpoint, token ou exceção interna;
 - query strings são redigidas na observabilidade;
 - invocation logs permanecem desativados;
-- não há binding D1 neste Worker.
+- **não há binding D1 neste Worker**.
 
 ## Configuração e deploy
 
@@ -85,7 +95,8 @@ A configuração continua com `redact_query_string: true`, `invocation_logs: fal
 - `workers.dev` e previews desativados;
 - binding `OAUTH_KV`;
 - endpoint do Cloudflare MCP;
-- conta Cloudflare padrão injetada automaticamente no `execute` quando a chamada não informa `account_id`.
+- conta Cloudflare padrão injetada automaticamente no `execute` quando a chamada não informa `account_id`;
+- `PONTO_D1_DATABASE_ID` identifica o D1 de ponto usado pelas chamadas via Cloudflare MCP.
 
 `npm run build:workers` faz build dry-run. O pipeline conectado ao Cloudflare usa `wrangler versions upload`; promoção de versão é uma etapa separada.
 
@@ -96,7 +107,8 @@ A configuração continua com `redact_query_string: true`, `invocation_logs: fal
 | `src/host/config.ts` | valida a configuração dos MCPs |
 | `src/host/remote-client.ts` | cliente MCP remoto |
 | `src/host/worker.ts` | Worker real: servidor MCP, roteamento e catálogo |
-| `src/mcps/` | contratos allowlist por integração |
+| `src/mcps/cloudflare/` | contratos da integração Cloudflare |
+| `src/mcps/ponto/` | ferramentas dedicadas de ponto que usam Cloudflare MCP |
 | `src/shared/oauth-authorization.ts` | página e fluxo HTTP de autorização |
 | `src/shared/oauth-mcp-worker.ts` | OAuthProvider, escopos e proteção do endpoint MCP |
 | `tests/` | testes das regras puras e contratos |
