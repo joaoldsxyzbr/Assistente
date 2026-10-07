@@ -1,27 +1,9 @@
 export const MCP_SERVER_CATALOG = [
   {
-    id: "ponto",
-    label: "Controle de ponto",
-    endpointVariable: "MCP_PONTO_URL",
-    tokenVariable: "MCP_PONTO_TOKEN",
-  },
-  {
-    id: "gastos",
-    label: "Controle de gastos",
-    endpointVariable: "MCP_GASTOS_URL",
-    tokenVariable: "MCP_GASTOS_TOKEN",
-  },
-  {
     id: "cloudflare",
-    label: "Cloudflare",
+    label: "Cloudflare MCP",
     endpointVariable: "MCP_CLOUDFLARE_URL",
     tokenVariable: "MCP_CLOUDFLARE_TOKEN",
-  },
-  {
-    id: "deskpilot",
-    label: "DeskPilot",
-    endpointVariable: "MCP_DESKPILOT_URL",
-    tokenVariable: "MCP_DESKPILOT_TOKEN",
   },
 ] as const;
 

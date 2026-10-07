@@ -1,33 +1,24 @@
 # Plano de implementação
 
-A fundação inicial foi integrada à `main` pelo [PR #2](https://github.com/joaoldsxyzbr/Assistente/pull/2). O plano segue acompanhado na [GitHub Issue #1](https://github.com/joaoldsxyzbr/Assistente/issues/1).
+O repositório acompanha o hub MCP Assistente. O plugin `Assistente Geral` permanece como entrada no ChatGPT e fonte canônica das skills/regras de domínio. A fundação anterior foi integrada à `main`; este plano realinha o código para um hub de integrações MCP, com Cloudflare como primeiro conector.
 
 ## Etapas
 
-- [x] Definir responsabilidades: plugin `Assistente Geral` mantém as regras conversacionais e skills; o Worker Assistente agrega e roteia contratos aprovados; MCPs especialistas validam operações e acessam seus próprios dados.
-- [x] Registrar decisões: Assistente como host, MCPs separados por domínio e bancos existentes preservados.
-- [x] Criar catálogo, configuração e roteamento do host com nomes de ferramentas qualificados.
-- [x] Inspecionar schemas e índices dos D1s e bindings do Worker atual, sem ler registros pessoais.
-- [x] Implementar Ponto e Gastos como Workers independentes, cada um com um binding ao seu D1 existente.
-- [x] Validar operações de domínio, confirmar duplicatas prováveis e tratar respostas incertas sem repetir escritas automaticamente.
-- [x] Criar schemas locais allowlist para o host; não publicar ferramentas genéricas de execução.
-- [x] Adicionar testes com D1 em memória e dados sintéticos.
-- [x] Validar typecheck, testes e builds dry-run dos três Workers na CI do PR.
-- [x] Corrigir Workers Builds do host para usar o arquivo Wrangler explícito e enviar versões sem ativá-las em produção.
-- [ ] Implementar OAuth 2.1 entre ChatGPT, pelo plugin `Assistente Geral`, e o host, com authorization code + PKCE e renovação de sessão.
-- [ ] Conectar o endpoint do host ao plugin `Assistente Geral` e validar o fluxo OAuth no ChatGPT.
-- [ ] Atualizar as skills de Ponto e Gastos no `Assistente Geral` para usar as ferramentas do host, preservando as regras conversacionais e removendo acessos diretos anteriores somente depois da validação ponta a ponta.
-- [ ] Configurar `assistente.joaolds.xyz.br` como domínio customizado do Worker host e validar DNS/TLS.
-- [ ] Configurar credenciais de API distintas do host para os MCPs de Ponto e Gastos.
-- [ ] Publicar os três Workers com secrets distintos e validar as conexões via MCP Inspector, começando por leituras.
-- [ ] Criar o API Token dedicado `Assistente Cloudflare` com permissões mínimas e guardá-lo no runtime do componente MCP Cloudflare que chama a API; definir separadamente a credencial host→MCP.
-- [ ] Especificar contratos e permissões antes de adicionar Cloudflare MCP e DeskPilot ao catálogo do host.
-- [ ] Adicionar consultas compostas que leiam domínios em paralelo quando o fluxo do host estiver conectado.
+- [x] Definir o plugin como camada de skills/regras e o Worker Assistente como gateway técnico.
+- [x] Definir uma pasta por MCP em `src/mcps/<nome>`, com um único Worker host no deploy.
+- [x] Remover do escopo os MCPs de Ponto/Gastos e os bindings D1; preservar os bancos existentes sem alteração.
+- [x] Implementar o contrato allowlist inicial do Cloudflare MCP: `docs`, `search` e `execute`.
+- [x] Ajustar CI/build para validar somente o Worker host.
+- [ ] Implementar OAuth 2.1 entre o plugin Assistente Geral e o Worker host, com authorization code + PKCE e renovação de sessão.
+- [ ] Configurar o domínio `assistente.joaolds.xyz.br` e validar DNS/TLS.
+- [ ] Configurar endpoint e credencial de serviço host→Cloudflare MCP como secrets do Worker Assistente.
+- [ ] Garantir que o API Token `Assistente Cloudflare` esteja no runtime do MCP que chama a Cloudflare API e tenha apenas os escopos necessários.
+- [ ] Conectar o endpoint do host ao plugin `Assistente Geral` e validar a descoberta e o uso das ferramentas via ChatGPT/MCP Inspector.
+- [ ] Validar `docs` e `search` primeiro; depois testar operações Cloudflare de leitura e escrita, com permissões mínimas e verificação de estado.
+- [ ] Adicionar cada novo MCP em uma pasta própria, com contrato allowlist, autenticação e testes correspondentes.
 
-## Critério para operações reais
+## Critério para publicação
 
-Antes de conectar o host ao plugin, configurar URLs HTTPS e secrets no runtime e testar a autenticação. A primeira verificação operacional deve começar por chamadas de leitura; as escritas já têm validações e confirmação para duplicatas e exclusões, mas ainda precisam de validação no MCP Inspector antes da publicação.
+O host só deve ser ativado depois de configurar OAuth, domínio e secrets. A primeira validação integrada deve começar por ferramentas de leitura. `execute` pode alterar recursos conforme as permissões do API Token Cloudflare; valide cada operação em ambiente e escopo autorizados.
 
-Até esta etapa, não houve deploy, leitura de registros pessoais nem alteração de dados/schema nos D1s.
-
-CI aprovada no commit de integração `51eaee965f9541b842a034cebca04ffc050bf66d` e também após o merge na `main` (typecheck, testes e Wrangler dry-run dos três Workers).
+Este realinhamento não apaga nem altera os bancos D1 de Ponto e Gastos. Nenhum Worker deve acessar esses bancos como parte deste projeto.

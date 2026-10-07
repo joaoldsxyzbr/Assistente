@@ -2,67 +2,66 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readMcpConfigurations } from "../src/host/config.ts";
 
-test("keeps unconfigured MCPs isolated and reports them without credentials", () => {
+test("starts with only the Cloudflare MCP as an unconfigured connection", () => {
   const configurations = readMcpConfigurations({});
 
-  assert.deepEqual(
-    configurations.map(({ id, status }) => ({ id, status })),
-    [
-      { id: "ponto", status: "unconfigured" },
-      { id: "gastos", status: "unconfigured" },
-      { id: "cloudflare", status: "unconfigured" },
-      { id: "deskpilot", status: "unconfigured" },
-    ],
-  );
+  assert.deepEqual(configurations.map(({ id, status }) => ({ id, status })), [
+    { id: "cloudflare", status: "unconfigured" },
+  ]);
 });
 
-test("loads an MCP endpoint and token from that domain's variables", () => {
+test("loads the Cloudflare MCP endpoint and service credential", () => {
+  const configurations = readMcpConfigurations({
+    MCP_CLOUDFLARE_URL: "https://cloudflare.example.test/mcp",
+    MCP_CLOUDFLARE_TOKEN: "cloudflare-service-secret",
+  });
+
+  assert.deepEqual(configurations[0], {
+    id: "cloudflare",
+    label: "Cloudflare MCP",
+    status: "configured",
+    endpoint: "https://cloudflare.example.test/mcp",
+    bearerToken: "cloudflare-service-secret",
+  });
+});
+
+test("ignores point and expense variables because they are not hub integrations", () => {
   const configurations = readMcpConfigurations({
     MCP_PONTO_URL: "https://ponto.example.test/mcp",
-    MCP_PONTO_TOKEN: "ponto-secret",
+    MCP_PONTO_TOKEN: "point-secret",
+    MCP_GASTOS_URL: "https://gastos.example.test/mcp",
+    MCP_GASTOS_TOKEN: "expense-secret",
   });
 
-  assert.deepEqual(configurations[0], {
-    id: "ponto",
-    label: "Controle de ponto",
-    status: "configured",
-    endpoint: "https://ponto.example.test/mcp",
-    bearerToken: "ponto-secret",
-  });
-  assert.equal(configurations[1]?.status, "unconfigured");
+  assert.deepEqual(configurations.map(({ id, status }) => ({ id, status })), [
+    { id: "cloudflare", status: "unconfigured" },
+  ]);
 });
 
-test("marks incomplete or unsafe server configuration without echoing values", () => {
+test("marks incomplete or unsafe Cloudflare configuration without exposing values", () => {
   const configurations = readMcpConfigurations({
-    MCP_PONTO_URL: "http://ponto.example.test/mcp",
-    MCP_PONTO_TOKEN: "secret-that-must-not-appear-in-status",
-    MCP_GASTOS_TOKEN: "orphan-token",
+    MCP_CLOUDFLARE_URL: "http://cloudflare.example.test/mcp",
+    MCP_CLOUDFLARE_TOKEN: "secret-that-must-not-appear-in-status",
   });
 
   assert.deepEqual(configurations[0], {
-    id: "ponto",
-    label: "Controle de ponto",
+    id: "cloudflare",
+    label: "Cloudflare MCP",
     status: "misconfigured",
     errorCode: "INVALID_ENDPOINT",
-  });
-  assert.deepEqual(configurations[1], {
-    id: "gastos",
-    label: "Controle de gastos",
-    status: "misconfigured",
-    errorCode: "INCOMPLETE_CONFIGURATION",
   });
   assert.equal(JSON.stringify(configurations).includes("secret"), false);
 });
 
-test("rejects endpoints with credentials, query strings, or fragments", () => {
+test("rejects Cloudflare endpoint credentials, query strings, and fragments", () => {
   for (const endpoint of [
-    "https://user:password@ponto.example.test/mcp",
-    "https://ponto.example.test/mcp?token=secret",
-    "https://ponto.example.test/mcp#fragment",
+    "https://user:password@cloudflare.example.test/mcp",
+    "https://cloudflare.example.test/mcp?token=secret",
+    "https://cloudflare.example.test/mcp#fragment",
   ]) {
     const [configuration] = readMcpConfigurations({
-      MCP_PONTO_URL: endpoint,
-      MCP_PONTO_TOKEN: "secret",
+      MCP_CLOUDFLARE_URL: endpoint,
+      MCP_CLOUDFLARE_TOKEN: "service-secret",
     });
     assert.equal(configuration?.status, "misconfigured");
   }

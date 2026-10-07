@@ -1,35 +1,38 @@
 # Assistente
 
-Hub técnico para agregar e encaminhar chamadas a MCPs especializados. No ChatGPT, o plugin **Assistente Geral** é a entrada única do usuário e mantém as skills e regras conversacionais. Este repositório contém o Worker host e os serviços MCP; as skills são mantidas no plugin, fora deste repositório.
+O Assistente é o hub técnico que conecta o plugin **Assistente Geral** a vários MCPs. O plugin continua sendo a entrada do usuário no ChatGPT e a fonte das skills e regras conversacionais. Este repositório mantém o Worker host e um módulo por MCP conectado.
 
 ## Responsabilidades
 
-- **Assistente Geral (plugin):** regras de domínio, interpretação da intenção, seleção do fluxo e apresentação da resposta.
-- **Assistente (host):** catálogo de contratos aprovados, autenticação das conexões e roteamento para MCPs; sem acesso direto aos bancos.
-- **MCPs especializados:** validação técnica das operações e acesso apenas aos dados do seu domínio.
+- **Assistente Geral (plugin):** skills, regras de domínio, interpretação da intenção e orientação sobre o fluxo de conversa.
+- **Assistente (host):** autentica a entrada, publica apenas ferramentas aprovadas e encaminha chamadas a MCPs de destino.
+- **Módulo em `src/mcps/<nome>`:** mantém o contrato e a integração específica de um MCP, isolados dos demais.
+- **MCP de destino:** valida suas operações e acessa os recursos autorizados pelo token próprio.
+
+Ponto e Gastos não fazem parte deste repositório. Suas regras continuam no plugin `Assistente Geral`; este projeto não hospeda Workers de Ponto/Gastos nem se conecta aos seus D1s.
+
+## Estrutura atual
+
+| Parte | Responsabilidade |
+|---|---|
+| Worker `assistente` | Endpoint MCP único para o ChatGPT e roteador dos MCPs conectados |
+| `src/mcps/cloudflare/` | Contratos das ferramentas do Cloudflare MCP |
+| Cloudflare MCP | Integração inicial; ferramentas aprovadas: documentação, busca OpenAPI e execução Cloudflare API |
+| Futuras pastas em `src/mcps/` | Um módulo isolado por MCP adicional, depois de definir ferramentas e permissões |
+
+As pastas são módulos do hub, não Workers implantados individualmente. A primeira etapa tem apenas o Worker host `assistente`. A integração Cloudflare não ganha acesso por estar configurada: o host só expõe os contratos locais.
 
 ## Estado
 
-- Ponto e Gastos têm servidores MCP próprios, ligados aos D1 existentes. Os arquivos Wrangler não criam tabelas nem executam migrações.
-- O esquema dos dois D1s foi inspecionado; nenhum registro pessoal foi lido e nenhum dado ou schema foi alterado.
-- O Worker genérico `cloudflare-mcp` existente não tinha binding para esses D1s nem ferramentas de domínio detectadas. O código do Assistente não o usa como atalho para executar código remoto.
-- Os três Workers deste repositório estão implementados, mas ainda não foram publicados. Endpoints, secrets e conexão do plugin ao host ainda precisam ser configurados.
-- O domínio planejado para o host é `assistente.joaolds.xyz.br`, com endpoint MCP em `https://assistente.joaolds.xyz.br/mcp`; DNS e domínio customizado ainda não foram configurados.
-- A fundação foi integrada à `main` pelo [PR #2](https://github.com/joaoldsxyzbr/Assistente/pull/2). O plano e as próximas etapas estão em [docs/PLANO.md](docs/PLANO.md) e na [Issue #1](https://github.com/joaoldsxyzbr/Assistente/issues/1).
-
-## Estrutura
-
-| Worker | Responsabilidade | Acesso a dados |
-|---|---|---|
-| `assistente` | Catálogo e roteamento para ferramentas aprovadas | Sem binding D1 |
-| `assistente-ponto-mcp` | Registros de ponto e banco de horas | Somente `PONTO_DB` |
-| `assistente-gastos-mcp` | Movimentações e resumos financeiros | Somente `GASTOS_DB` |
-
-Cloudflare MCP e DeskPilot poderão ser adicionados como conexões especializadas. Cada novo servidor precisa de contratos de ferramentas aprovados; uma conexão configurada não publica ferramentas automaticamente.
+- O host e o contrato do Cloudflare MCP estão implementados no repositório; ainda não foram publicados.
+- O host não tem binding D1 e não acessa dados de Ponto ou Gastos.
+- O domínio planejado é `assistente.joaolds.xyz.br`, com endpoint `https://assistente.joaolds.xyz.br/mcp`; DNS e domínio customizado ainda não foram configurados.
+- OAuth 2.1 entre ChatGPT e host, secrets de runtime e conexão com o plugin ainda precisam ser configurados.
+- O plano está em [docs/PLANO.md](docs/PLANO.md) e na [Issue #1](https://github.com/joaoldsxyzbr/Assistente/issues/1).
 
 ## Cloudflare Workers Builds
 
-O Worker host conectado ao GitHub se chama `assistente`. Configure o diretório raiz como `/`, deixe o build command vazio e use `npx wrangler versions upload --config wrangler.assistente.jsonc` como deploy command. Isso valida e envia uma versão sem ativá-la em produção. Para ativar o Worker, use `npx wrangler deploy --config wrangler.assistente.jsonc` somente depois de configurar OAuth, secrets e conexões de runtime. O preview command é `npx wrangler preview --config wrangler.assistente.jsonc`.
+O Worker conectado ao GitHub se chama `assistente`. Configure o diretório raiz como `/`, deixe o build command vazio e use `npx wrangler versions upload --config wrangler.assistente.jsonc` como deploy command. Isso envia uma versão sem ativá-la em produção. Para ativar, use `npx wrangler deploy --config wrangler.assistente.jsonc` somente depois de configurar OAuth, secrets e conexões de runtime. O preview command é `npx wrangler preview --config wrangler.assistente.jsonc`.
 
 ## Requisitos e verificações
 
@@ -41,12 +44,12 @@ npm install
 npm run check
 ```
 
-O comando `check` executa TypeScript, testes dos serviços e do roteador, e builds de validação dos três Workers com Wrangler em modo dry-run.
+O comando `check` executa typecheck, testes e build dry-run do Worker host.
 
-## Publicação
+## Credenciais
 
-Configure `MCP_TOKEN` como secret em cada Worker de domínio e `ASSISTENTE_MCP_TOKEN` no Worker host. Use tokens diferentes, com pelo menos 32 caracteres. No host, configure `MCP_PONTO_URL`, `MCP_PONTO_TOKEN`, `MCP_GASTOS_URL` e `MCP_GASTOS_TOKEN`; os tokens do host devem corresponder aos secrets dos Workers de domínio.
+- `ASSISTENTE_MCP_TOKEN`: protege o endpoint do host enquanto OAuth ainda não foi implementado.
+- `MCP_CLOUDFLARE_URL` e `MCP_CLOUDFLARE_TOKEN`: endereço HTTPS e credencial de serviço do host para o Cloudflare MCP.
+- O API Token `Assistente Cloudflare` usado para chamar a API Cloudflare fica como secret no runtime do componente MCP que executa essas chamadas. Ele não é o token host→MCP nem o OAuth do ChatGPT.
 
-O acesso do ChatGPT ao host usará OAuth 2.1; esse fluxo ainda não foi implementado. O API Token da Cloudflare chamado `Assistente Cloudflare`, quando a integração existir, ficará como secret no componente MCP que chama a API da Cloudflare. Ele é diferente da credencial usada pelo host para chamar esse MCP.
-
-Os endpoints devem apontar para o caminho `/mcp` usando HTTPS. As credenciais entram como secrets/variáveis do runtime, nunca em arquivos versionados. Os nomes dos Workers, bindings existentes e passos restantes estão descritos em [docs/ARQUITETURA.md](docs/ARQUITETURA.md).
+Credenciais são secrets do runtime, nunca valores versionados. Mantenha o API Token Cloudflare com o menor conjunto de permissões necessário; a ferramenta `execute` pode ler ou escrever conforme as permissões desse token.

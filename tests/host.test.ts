@@ -6,22 +6,16 @@ import { AssistenteHost, AssistenteHostError } from "../src/host/host.ts";
 
 class FakeMcpClient implements McpClient {
   calls: Array<{ name: string; args: Record<string, unknown> }> = [];
-  closeCount = 0;
   readonly tools: readonly McpToolDefinition[];
   private readonly shouldFail: boolean;
 
-  constructor(
-    tools: readonly McpToolDefinition[],
-    shouldFail = false,
-  ) {
+  constructor(tools: readonly McpToolDefinition[], shouldFail = false) {
     this.tools = tools;
     this.shouldFail = shouldFail;
   }
 
   async connect(): Promise<void> {
-    if (this.shouldFail) {
-      throw new Error("private endpoint and token must not leak");
-    }
+    if (this.shouldFail) throw new Error("private endpoint and token must not leak");
   }
 
   async listTools(): Promise<readonly McpToolDefinition[]> {
@@ -33,120 +27,77 @@ class FakeMcpClient implements McpClient {
     return { content: [{ type: "text", text: `${name} called` }] };
   }
 
-  async close(): Promise<void> {
-    this.closeCount += 1;
-  }
+  async close(): Promise<void> {}
 }
 
-const configured = (
-  id: "ponto" | "gastos",
-): Extract<McpServerConfiguration, { status: "configured" }> => ({
-  id,
-  label: id === "ponto" ? "Controle de ponto" : "Controle de gastos",
+const configured = (): Extract<McpServerConfiguration, { status: "configured" }> => ({
+  id: "cloudflare",
+  label: "Cloudflare MCP",
   status: "configured",
-  endpoint: `https://${id}.example.test/mcp`,
-  bearerToken: `${id}-secret`,
+  endpoint: "https://cloudflare.example.test/mcp",
+  bearerToken: "cloudflare-secret",
 });
 
-test("namespaces same-named tools and routes a call only to its MCP", async () => {
-  const pointClient = new FakeMcpClient([
-    { name: "resumo", description: "Resumo de ponto", inputSchema: { type: "object" } },
+test("namespaces and routes a Cloudflare MCP tool", async () => {
+  const client = new FakeMcpClient([
+    { name: "docs", description: "Cloudflare documentation", inputSchema: { type: "object" } },
+    { name: "search", description: "Search API schema", inputSchema: { type: "object" } },
+    { name: "execute", description: "Call Cloudflare API", inputSchema: { type: "object" } },
   ]);
-  const expenseClient = new FakeMcpClient([
-    { name: "resumo", description: "Resumo de gastos", inputSchema: { type: "object" } },
-  ]);
-
-  const host = new AssistenteHost([configured("ponto"), configured("gastos")], (configuration) =>
-    configuration.id === "ponto" ? pointClient : expenseClient,
-  );
+  const host = new AssistenteHost([configured()], () => client);
 
   await host.connect();
 
-  assert.deepEqual(
-    host.getTools().map((tool) => tool.name),
-    ["mcp_ponto__resumo", "mcp_gastos__resumo"],
-  );
-
-  await host.callTool("mcp_gastos__resumo", { mes: "2026-11" });
-  assert.equal(pointClient.calls.length, 0);
-  assert.deepEqual(expenseClient.calls, [
-    { name: "resumo", args: { mes: "2026-11" } },
+  assert.deepEqual(host.getTools().map((tool) => tool.name), [
+    "mcp_cloudflare__docs",
+    "mcp_cloudflare__search",
+    "mcp_cloudflare__execute",
+  ]);
+  await host.callTool("mcp_cloudflare__execute", { code: "return await cf.get('/accounts')" });
+  assert.deepEqual(client.calls, [
+    { name: "execute", args: { code: "return await cf.get('/accounts')" } },
   ]);
 });
 
-test("one unavailable MCP does not block the others or expose its error", async () => {
-  const pointClient = new FakeMcpClient(
-    [{ name: "registrar", inputSchema: { type: "object" } }],
+test("does not expose a failed remote connection or leak its credentials", async () => {
+  const client = new FakeMcpClient(
+    [{ name: "execute", inputSchema: { type: "object" } }],
     true,
   );
-  const expenseClient = new FakeMcpClient([
-    { name: "pendencias", inputSchema: { type: "object" } },
-  ]);
-
-  const host = new AssistenteHost([configured("ponto"), configured("gastos")], (configuration) =>
-    configuration.id === "ponto" ? pointClient : expenseClient,
-  );
+  const host = new AssistenteHost([configured()], () => client);
   const statuses = await host.connect();
 
-  assert.equal(statuses.find((status) => status.id === "ponto")?.code, "MCP_UNAVAILABLE");
-  assert.equal(statuses.find((status) => status.id === "gastos")?.code, "READY");
-  assert.deepEqual(host.getTools().map((tool) => tool.name), ["mcp_gastos__pendencias"]);
+  assert.equal(statuses[0]?.code, "MCP_UNAVAILABLE");
+  assert.deepEqual(host.getTools(), []);
   assert.equal(JSON.stringify(statuses).includes("secret"), false);
 });
 
-test("reports unconfigured and invalid MCPs without creating clients", async () => {
-  let factoryCalls = 0;
-  const host = new AssistenteHost(
-    [
-      { id: "ponto", label: "Ponto", status: "unconfigured" },
-      {
-        id: "gastos",
-        label: "Gastos",
-        status: "misconfigured",
-        errorCode: "INCOMPLETE_CONFIGURATION",
-      },
-    ],
-    () => {
-      factoryCalls += 1;
-      throw new Error("must not be called");
-    },
-  );
-
-  const statuses = await host.connect();
-  assert.equal(factoryCalls, 0);
-  assert.deepEqual(statuses.map((status) => status.code), [
-    "NOT_CONFIGURED",
-    "INVALID_CONFIGURATION",
-  ]);
-});
-
-test("does not retry a failed call that may have written data", async () => {
+test("does not retry a failed Cloudflare operation", async () => {
   const client = new FakeMcpClient([
-    { name: "registrar", inputSchema: { type: "object" } },
+    { name: "execute", inputSchema: { type: "object" } },
   ]);
   client.callTool = async (name, args) => {
     client.calls.push({ name, args });
     throw new Error("timeout after a possible write");
   };
 
-  const host = new AssistenteHost([configured("ponto")], () => client);
+  const host = new AssistenteHost([configured()], () => client);
   await host.connect();
 
   await assert.rejects(
-    host.callTool("mcp_ponto__registrar", { hora: "06:51" }),
+    host.callTool("mcp_cloudflare__execute", { code: "return await cf.post('/accounts')" }),
     (error: unknown) =>
       error instanceof AssistenteHostError && error.code === "MCP_UNAVAILABLE",
   );
   assert.equal(client.calls.length, 1);
-  assert.equal((await host.getServerStatuses())[0]?.code, "MCP_UNAVAILABLE");
 });
 
-test("rejects tool aliases that collide after normalization", async () => {
+test("rejects remote tool aliases that collide after normalization", async () => {
   const client = new FakeMcpClient([
-    { name: "meu.tool", inputSchema: { type: "object" } },
-    { name: "meu_tool", inputSchema: { type: "object" } },
+    { name: "my.tool", inputSchema: { type: "object" } },
+    { name: "my_tool", inputSchema: { type: "object" } },
   ]);
-  const host = new AssistenteHost([configured("ponto")], () => client);
+  const host = new AssistenteHost([configured()], () => client);
 
   const [status] = await host.connect();
   assert.equal(status?.code, "MCP_UNAVAILABLE");

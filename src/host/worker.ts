@@ -1,5 +1,6 @@
 import { fromJsonSchema, McpServer } from "@modelcontextprotocol/server";
-import { DOMAIN_TOOL_CATALOG } from "../contracts/domain-tools.ts";
+import { MCP_TOOL_CATALOG } from "../mcps/catalog.ts";
+import type { McpToolContract } from "../mcps/contracts.ts";
 import type { McpServerId, McpToolDefinition } from "./contracts.ts";
 import { readMcpConfigurations, type Environment, type McpServerConfiguration } from "./config.ts";
 import { RemoteMcpClient } from "./remote-client.ts";
@@ -10,8 +11,8 @@ export interface AssistenteWorkerEnvironment extends Environment {
   ASSISTENTE_MCP_TOKEN?: string;
 }
 
-function toolManifest(serverId: McpServerId) {
-  return DOMAIN_TOOL_CATALOG.filter((tool) => tool.serverId === serverId);
+function toolManifest(serverId: McpServerId): McpToolContract[] {
+  return MCP_TOOL_CATALOG.filter((tool) => tool.serverId === serverId);
 }
 
 function textContent(result: { content: readonly unknown[] }): Array<{
@@ -35,7 +36,7 @@ async function callRemoteTool(
   configuration: Extract<McpServerConfiguration, { status: "configured" }>,
   remoteName: string,
   args: Record<string, unknown>,
-  isWrite: boolean | undefined,
+  isWrite: boolean,
 ) {
   const client = new RemoteMcpClient(configuration);
   let callStarted = false;
@@ -48,10 +49,9 @@ async function callRemoteTool(
       isError: result.isError ?? false,
     };
   } catch {
-    const message =
-      isWrite === true && callStarted
-        ? "O resultado da escrita pode ser incerto. Consulte o MCP de origem antes de tentar novamente."
-        : "O MCP de origem está indisponível ou rejeitou a chamada.";
+    const message = isWrite && callStarted
+      ? "O resultado da operação pode ser incerto. Consulte o MCP de origem antes de tentar novamente."
+      : "O MCP de origem está indisponível ou rejeitou a chamada.";
     return { isError: true, content: [{ type: "text" as const, text: message }] };
   } finally {
     await client.close().catch(() => undefined);
@@ -79,7 +79,7 @@ export function createAssistenteMcpServer(
   environment: AssistenteWorkerEnvironment,
 ): McpServer {
   const configurations = readMcpConfigurations(environment);
-  const server = new McpServer({ name: "assistente", version: "0.2.0" });
+  const server = new McpServer({ name: "assistente", version: "0.3.0" });
 
   server.registerTool(
     "assistente_status",
