@@ -3,6 +3,14 @@ import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
 import { MCP_TOOL_CATALOG } from "../mcps/catalog.ts";
 import { withDefaultCloudflareAccount } from "../mcps/cloudflare/tools.ts";
 import type { McpToolContract } from "../mcps/contracts.ts";
+import {
+  buildPontoHojeCode,
+  buildPontoRegistrarCode,
+  buildPontoResumoCode,
+  currentPontoLocalDate,
+  normalizePontoHorario,
+  PONTO_TOOL_CATALOG,
+} from "../mcps/ponto/tools.ts";
 import type { McpServerId } from "./contracts.ts";
 import {
   readMcpConfigurations,
@@ -17,6 +25,7 @@ import { audit } from "../shared/audit.ts";
 export interface AssistenteWorkerEnvironment extends Environment {
   ASSISTENTE_OAUTH_PASSWORD?: string;
   MCP_CLOUDFLARE_ACCOUNT_ID?: string;
+  PONTO_D1_DATABASE_ID?: string;
   OAUTH_PROVIDER?: OAuthHelpers;
 }
 
@@ -111,6 +120,13 @@ function configurationSummary(
   });
 }
 
+function pontoConfigurationError(message: string) {
+  return {
+    isError: true,
+    content: [{ type: "text" as const, text: message }],
+  };
+}
+
 export function createAssistenteMcpServer(
   environment: AssistenteWorkerEnvironment,
 ): McpServer {
@@ -135,6 +151,88 @@ export function createAssistenteMcpServer(
       content: [{ type: "text", text: JSON.stringify(configurationSummary(configurations)) }],
     }),
   );
+
+  const cloudflareConfiguration = configurations.find(
+    (configuration) =>
+      configuration.id === "cloudflare" && configuration.status === "configured",
+  );
+  const pontoDatabaseId = environment.PONTO_D1_DATABASE_ID?.trim() ?? "";
+
+  for (const definition of PONTO_TOOL_CATALOG) {
+    server.registerTool(
+      definition.name,
+      {
+        description: definition.description,
+        inputSchema: fromJsonSchema<Record<string, unknown>>(definition.inputSchema),
+        _meta: {
+          securitySchemes: oauthSecuritySchemesForTool(definition.isWrite),
+        },
+      },
+      async (args) => {
+        if (
+          cloudflareConfiguration === undefined ||
+          cloudflareConfiguration.status !== "configured"
+        ) {
+          return pontoConfigurationError(
+            "O Cloudflare MCP necessário para o controle de ponto não está configurado.",
+          );
+        }
+        if (pontoDatabaseId.length === 0) {
+          return pontoConfigurationError(
+            "O banco de ponto não está configurado no Assistente MCP.",
+          );
+        }
+
+        if (definition.name === "ponto_registrar") {
+          const horario = normalizePontoHorario(args.horario);
+          if (horario === undefined) {
+            return pontoConfigurationError("Horário inválido. Use HHMM ou HH:MM.");
+          }
+
+          const local = currentPontoLocalDate();
+          if (local.weekday === "Sun") {
+            return pontoConfigurationError(
+              `Domingo (${local.data}) não tem jornada padrão configurada.`,
+            );
+          }
+
+          return callRemoteTool(
+            cloudflareConfiguration,
+            "execute",
+            {
+              code: buildPontoRegistrarCode(
+                pontoDatabaseId,
+                local.data,
+                horario,
+                local.weekday === "Sat",
+              ),
+            },
+            true,
+            environment.MCP_CLOUDFLARE_ACCOUNT_ID,
+          );
+        }
+
+        if (definition.name === "ponto_hoje") {
+          const local = currentPontoLocalDate();
+          return callRemoteTool(
+            cloudflareConfiguration,
+            "execute",
+            { code: buildPontoHojeCode(pontoDatabaseId, local.data) },
+            false,
+            environment.MCP_CLOUDFLARE_ACCOUNT_ID,
+          );
+        }
+
+        return callRemoteTool(
+          cloudflareConfiguration,
+          "execute",
+          { code: buildPontoResumoCode(pontoDatabaseId) },
+          false,
+          environment.MCP_CLOUDFLARE_ACCOUNT_ID,
+        );
+      },
+    );
+  }
 
   const routes = new Set<string>();
 
@@ -170,9 +268,14 @@ export function createAssistenteMcpServer(
   return server;
 }
 
-const writeToolNames = MCP_TOOL_CATALOG
-  .filter((tool) => tool.isWrite)
-  .map((tool) => toolNameForServer(tool.serverId, tool.name));
+const writeToolNames = [
+  ...MCP_TOOL_CATALOG
+    .filter((tool) => tool.isWrite)
+    .map((tool) => toolNameForServer(tool.serverId, tool.name)),
+  ...PONTO_TOOL_CATALOG
+    .filter((tool) => tool.isWrite)
+    .map((tool) => tool.name),
+];
 
 export default createOAuthMcpWorker<AssistenteWorkerEnvironment>({
   createServer: (environment) => createAssistenteMcpServer(environment),
