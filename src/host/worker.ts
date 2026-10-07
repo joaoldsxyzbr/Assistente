@@ -72,10 +72,46 @@ async function callRemoteTool(
   }
 }
 
-function configurationSummary(
+async function probeRemoteMcp(
+  configuration: Extract<McpServerConfiguration, { status: "configured" }>,
+): Promise<"READY" | "AUTH_REJECTED" | "UNREACHABLE" | `HTTP_${number}`> {
+  try {
+    const response = await fetch(configuration.endpoint, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${configuration.bearerToken}`,
+        Accept: "application/json, text/event-stream",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: {
+          protocolVersion: "2026-07-28",
+          capabilities: {},
+          clientInfo: {
+            name: "assistente-diagnostic",
+            version: "0.1.0",
+          },
+        },
+      }),
+    });
+
+    await response.body?.cancel().catch(() => undefined);
+
+    if (response.ok) return "READY";
+    if (response.status === 401 || response.status === 403) return "AUTH_REJECTED";
+    return `HTTP_${response.status}`;
+  } catch {
+    return "UNREACHABLE";
+  }
+}
+
+async function configurationSummary(
   configurations: readonly McpServerConfiguration[],
 ) {
-  return configurations.map((configuration) => {
+  return Promise.all(configurations.map(async (configuration) => {
     const declaredTools = toolManifest(configuration.id).length;
     return {
       id: configuration.id,
@@ -85,8 +121,12 @@ function configurationSummary(
           ? "NO_LOCAL_TOOL_CONTRACT"
           : configuration.status.toUpperCase(),
       declaredToolCount: declaredTools,
+      remoteHandshake:
+        configuration.status === "configured"
+          ? await probeRemoteMcp(configuration)
+          : null,
     };
-  });
+  }));
 }
 
 export function createAssistenteMcpServer(
@@ -99,7 +139,7 @@ export function createAssistenteMcpServer(
     "assistente_status",
     {
       description:
-        "Mostra quais conexões MCP estão configuradas e quantas ferramentas o Assistente declara. Não revela URLs nem credenciais e não testa disponibilidade remota.",
+        "Mostra quais conexões MCP estão configuradas, quantas ferramentas o Assistente declara e uma categoria segura do handshake remoto. Não revela URLs nem credenciais.",
       inputSchema: fromJsonSchema<Record<string, never>>({
         type: "object",
         properties: {},
@@ -107,7 +147,7 @@ export function createAssistenteMcpServer(
       }),
     },
     async () => ({
-      content: [{ type: "text", text: JSON.stringify(configurationSummary(configurations)) }],
+      content: [{ type: "text", text: JSON.stringify(await configurationSummary(configurations)) }],
     }),
   );
 
