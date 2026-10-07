@@ -101,6 +101,28 @@ async function remoteAuthStatus(
   }
 }
 
+async function cloudflareUserTokenProbe(
+  configuration: Extract<McpServerConfiguration, { status: "configured" }>,
+): Promise<{ user: number | "NETWORK_ERROR"; accounts: number | "NETWORK_ERROR" }> {
+  const requestStatus = async (url: string): Promise<number | "NETWORK_ERROR"> => {
+    try {
+      const response = await fetch(url, {
+        headers: { Authorization: `Bearer ${configuration.bearerToken}` },
+      });
+      await response.body?.cancel().catch(() => undefined);
+      return response.status;
+    } catch {
+      return "NETWORK_ERROR";
+    }
+  };
+
+  const [user, accounts] = await Promise.all([
+    requestStatus("https://api.cloudflare.com/client/v4/user"),
+    requestStatus("https://api.cloudflare.com/client/v4/accounts?per_page=5"),
+  ]);
+  return { user, accounts };
+}
+
 async function configurationSummary(
   configurations: readonly McpServerConfiguration[],
 ) {
@@ -117,6 +139,10 @@ async function configurationSummary(
       remoteAuthHttpStatus:
         configuration.status === "configured"
           ? await remoteAuthStatus(configuration)
+          : null,
+      userTokenProbe:
+        configuration.status === "configured"
+          ? await cloudflareUserTokenProbe(configuration)
           : null,
     };
   }));
