@@ -12,6 +12,7 @@ import {
 import { RemoteMcpClient } from "./remote-client.ts";
 import { createOAuthMcpWorker } from "../shared/oauth-mcp-worker.ts";
 import { oauthSecuritySchemesForTool } from "../shared/oauth-helpers.ts";
+import { audit } from "../shared/audit.ts";
 
 export interface AssistenteWorkerEnvironment extends Environment {
   ASSISTENTE_OAUTH_PASSWORD?: string;
@@ -65,11 +66,25 @@ async function callRemoteTool(
       ? withDefaultCloudflareAccount(remoteName, args, defaultCloudflareAccountId)
       : args;
     const result = await client.callTool(remoteName, remoteArgs);
+    const isError = result.isError ?? false;
+    audit(isError ? "warn" : "info", "upstream_tool_call", {
+      server: configuration.id,
+      tool: remoteName,
+      write: isWrite,
+      outcome: isError ? "remote_error" : "success",
+    });
     return {
       content: textContent(result),
-      isError: result.isError ?? false,
+      isError,
     };
   } catch {
+    audit("warn", "upstream_tool_call", {
+      server: configuration.id,
+      tool: remoteName,
+      write: isWrite,
+      outcome: isWrite && callStarted ? "uncertain" : "failed",
+      uncertain: isWrite && callStarted,
+    });
     const message = isWrite && callStarted
       ? "O resultado da operação pode ser incerto. Consulte o MCP de origem antes de tentar novamente."
       : "O MCP de origem está indisponível ou rejeitou a chamada.";

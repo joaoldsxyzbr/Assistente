@@ -51,7 +51,22 @@ No `POST /authorize`, a senha é conferida e a mesma requisição OAuth é valid
 
 A página mantém CSP mínima: `default-src 'none'`, `base-uri 'none'` e `frame-ancestors 'none'`. Não usa `form-action`, pois essa diretiva bloquearia a cadeia de redirect até o callback do ChatGPT.
 
-O `OAUTH_KV` guarda o estado exigido pela biblioteca OAuth. Marcadores `diagnostic:oauth:*` continuam temporariamente ativos até a confirmação do primeiro fluxo E2E pós-correção de CSP; eles armazenam somente etapa, horário, status e código OAuth seguro.
+O `OAUTH_KV` guarda o estado exigido pela biblioteca OAuth. Marcadores `diagnostic:oauth:*` mantêm por 1 hora o último estado seguro das fronteiras OAuth.
+
+### Auditoria
+
+O Worker mantém logs estruturados permanentes na observabilidade da Cloudflare para permitir auditoria e depuração sem expor conteúdo sensível.
+
+Os eventos registram apenas metadados operacionais: etapa, status, resultado, servidor, ferramenta, classificação leitura/escrita, resultado incerto e scopes exigidos. Não entram nos logs senha, bearer token, authorization code, query string OAuth, argumentos de ferramenta, código executado nem conteúdo de banco.
+
+Eventos principais:
+- autorização OAuth concluída, negada ou rejeitada;
+- requisição/resposta do endpoint de token;
+- falha de autenticação ou escopo MCP;
+- resultado da requisição MCP;
+- resultado de chamada ao MCP remoto, incluindo escrita potencialmente incerta.
+
+A configuração continua com `redact_query_string: true`, `invocation_logs: false` e persistência dos logs explícitos do Assistente.
 
 ## Segurança
 

@@ -11,6 +11,7 @@ import {
   requestUsesWriteTool,
   requiredOAuthScopesForToolCall,
 } from "./oauth-helpers.ts";
+import { audit } from "./audit.ts";
 import {
   readSafeOAuthErrorCode,
   recordOAuthBoundary,
@@ -44,6 +45,7 @@ export function createOAuthMcpWorker<Environment extends OAuthMcpEnvironment>(
     async fetch(request: Request, environment: Environment, context: McpWorkerContext) {
       const auth = (context as OAuthExecutionContext).auth;
       if (auth === undefined) {
+        audit("warn", "mcp_authentication_denied", { status: 401 });
         return new Response("Unauthorized", {
           status: 401,
           headers: { "WWW-Authenticate": "Bearer" },
@@ -53,6 +55,11 @@ export function createOAuthMcpWorker<Environment extends OAuthMcpEnvironment>(
       const isWriteCall = await requestUsesWriteTool(request, [...writeToolNames]);
       const requiredScopes = requiredOAuthScopesForToolCall(isWriteCall);
       if (!hasAllOAuthScopes(auth.scope, requiredScopes)) {
+        audit("warn", "mcp_scope_denied", {
+          status: 403,
+          write: isWriteCall,
+          scopes: requiredScopes,
+        });
         return insufficientScope(
           auth,
           [...requiredScopes],
@@ -66,7 +73,13 @@ export function createOAuthMcpWorker<Environment extends OAuthMcpEnvironment>(
         () => options.createServer(environment),
         { route: "/mcp" },
       );
-      return handler(request, environment, context);
+      const response = await handler(request, environment, context);
+      audit(response.ok ? "info" : "warn", "mcp_request", {
+        status: response.status,
+        write: isWriteCall,
+        outcome: response.ok ? "accepted" : "rejected",
+      });
+      return response;
     },
   };
 
@@ -116,6 +129,7 @@ export function createOAuthMcpWorker<Environment extends OAuthMcpEnvironment>(
     const isAuthorizeRequest = pathname === "/authorize";
 
     if (isTokenRequest) {
+      audit("info", "oauth_boundary", { stage: "token_request_seen" });
       await recordOAuthBoundary(environment.OAUTH_KV, "token_request_seen");
     }
 
@@ -123,6 +137,10 @@ export function createOAuthMcpWorker<Environment extends OAuthMcpEnvironment>(
       const response = await originalFetch(...args);
 
       if (isTokenRequest) {
+        audit(response.ok ? "info" : "warn", "oauth_boundary", {
+          stage: "token_response",
+          status: response.status,
+        });
         await recordOAuthBoundary(
           environment.OAUTH_KV,
           "token_response",
@@ -130,12 +148,20 @@ export function createOAuthMcpWorker<Environment extends OAuthMcpEnvironment>(
           await readSafeOAuthErrorCode(response),
         );
       } else if (isAuthorizeRequest && request.method === "POST") {
+        audit(response.status < 400 ? "info" : "warn", "oauth_boundary", {
+          stage: "authorize_post_response",
+          status: response.status,
+        });
         await recordOAuthBoundary(
           environment.OAUTH_KV,
           "authorize_post_response",
           response.status,
         );
       } else if (isAuthorizeRequest && request.method === "GET") {
+        audit(response.status < 400 ? "info" : "warn", "oauth_boundary", {
+          stage: "authorize_get_response",
+          status: response.status,
+        });
         await recordOAuthBoundary(
           environment.OAUTH_KV,
           "authorize_get_response",

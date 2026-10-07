@@ -3,6 +3,7 @@ import type {
   OAuthHelpers,
 } from "@cloudflare/workers-oauth-provider";
 import type { OAuthDiagnosticStore } from "./oauth-boundary-diagnostics.ts";
+import { audit } from "./audit.ts";
 import {
   ASSISTENTE_OAUTH_SCOPES,
   hasValidOAuthPassword,
@@ -124,6 +125,10 @@ async function issueAuthorization(
     props: { userId: OWNER_USER_ID },
   });
 
+  audit("info", "oauth_authorization_completed", {
+    status: 302,
+    scopes: scope,
+  });
   return Response.redirect(completed.redirectTo, 302);
 }
 
@@ -165,6 +170,10 @@ async function authorizePost(
     decision === "approve" &&
     !hasValidOAuthPassword(password, form.get("password"))
   ) {
+    audit("warn", "oauth_password_rejected", {
+      stage: "authorize_post",
+      status: 401,
+    });
     return htmlResponse(
       renderPasswordRetryPage(formActionFor(request)),
       401,
@@ -178,6 +187,7 @@ async function authorizePost(
     const authorizationRequest = await oauth.parseAuthRequest(request);
 
     if (decision === "deny") {
+      audit("info", "oauth_authorization_denied", { status: 302 });
       return Response.redirect(accessDeniedRedirect(authorizationRequest), 302);
     }
 
