@@ -58,8 +58,30 @@ function htmlResponse(
   return new Response(html, { status, headers });
 }
 
-function authorizationErrorResponse(error: unknown): Response | undefined {
+type OAuthFailureStage =
+  | "authorize_get"
+  | "authorize_post_deny"
+  | "authorize_post_approve";
+
+function logOAuthFailure(
+  stage: OAuthFailureStage,
+  category: string,
+  status: number,
+): void {
+  console.warn(JSON.stringify({
+    event: "oauth_authorization_failure",
+    stage,
+    category,
+    status,
+  }));
+}
+
+function authorizationErrorResponse(
+  error: unknown,
+  stage: OAuthFailureStage,
+): Response | undefined {
   if (error instanceof AuthorizationError) {
+    logOAuthFailure(stage, error.code, 400);
     if (error.redirectTo) return Response.redirect(error.redirectTo, 302);
     return htmlResponse(
       "<!doctype html><html lang=\"pt-BR\"><meta charset=\"utf-8\"><title>Autorização inválida</title><h1>Solicitação OAuth inválida ou expirada</h1><p>Inicie a conexão novamente no ChatGPT.</p>",
@@ -68,6 +90,7 @@ function authorizationErrorResponse(error: unknown): Response | undefined {
   }
 
   if (error instanceof Error && error.name === "CimdFetchError") {
+    logOAuthFailure(stage, "cimd_fetch_error", 400);
     return htmlResponse(
       "<!doctype html><html lang=\"pt-BR\"><meta charset=\"utf-8\"><title>Cliente não verificado</title><h1>Não foi possível verificar o cliente OAuth</h1><p>Inicie a conexão novamente depois de conferir a URL do servidor.</p>",
       400,
@@ -113,7 +136,7 @@ async function authorizeGet(
       transaction.headers,
     );
   } catch (error) {
-    const response = authorizationErrorResponse(error);
+    const response = authorizationErrorResponse(error, "authorize_get");
     if (response !== undefined) return response;
     throw error;
   }
@@ -142,7 +165,7 @@ async function authorizePost(
       const denied = await oauth.denyConsent(request, handleValue);
       return new Response(null, { status: 302, headers: denied.headers });
     } catch (error) {
-      const response = authorizationErrorResponse(error);
+      const response = authorizationErrorResponse(error, "authorize_post_deny");
       if (response !== undefined) return response;
       throw error;
     }
@@ -157,25 +180,29 @@ async function authorizePost(
   }
 
   try {
-    const authorizationRequest = await oauth.parseAuthRequest(request);
-    const scope = authorizationRequest.scope.filter((item) =>
+    // The complete OAuth request was validated on GET and stored by
+    // beginConsent. On POST, approveConsent re-opens that transaction using
+    // the opaque handle plus the browser-bound cookie. Re-parsing the POST URL
+    // would incorrectly require the original OAuth query string to survive the
+    // form submission.
+    const approved = await oauth.approveConsent(request, handleValue);
+    const scope = approved.request.scope.filter((item) =>
       SUPPORTED_SCOPES.has(item)
     );
-    const approved = await oauth.approveConsent(request, handleValue, { scope });
     return issueAuthorization(
       oauth,
       approved.request,
-      approved.request.scope,
+      scope,
       approved.headers,
     );
   } catch (error) {
-    const response = authorizationErrorResponse(error);
+    const response = authorizationErrorResponse(error, "authorize_post_approve");
     if (response !== undefined) return response;
     throw error;
   }
 }
 
-async function handleAuthorizeRequest(
+export async function handleAuthorizeRequest(
   request: Request,
   environment: OAuthMcpEnvironment,
 ): Promise<Response> {
