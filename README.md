@@ -31,7 +31,8 @@ A configuração declarativa está em `wrangler.assistente.jsonc`:
 - custom domain: `assistente.joaolds.xyz.br`;
 - `workers.dev` e previews desativados;
 - KV OAuth: `OAUTH_KV`;
-- endpoint remoto: `https://mcp.cloudflare.com/mcp`.
+- endpoint remoto: `https://mcp.cloudflare.com/mcp`;
+- conta Cloudflare padrão: `MCP_CLOUDFLARE_ACCOUNT_ID`, usada automaticamente pelo `execute`.
 
 Secrets necessários, configurados fora do Git:
 - `ASSISTENTE_OAUTH_PASSWORD`;
