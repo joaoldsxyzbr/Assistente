@@ -72,61 +72,10 @@ async function callRemoteTool(
   }
 }
 
-async function remoteAuthStatus(
-  configuration: Extract<McpServerConfiguration, { status: "configured" }>,
-): Promise<number | "NETWORK_ERROR"> {
-  try {
-    const response = await fetch(configuration.endpoint, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${configuration.bearerToken}`,
-        Accept: "application/json, text/event-stream",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        jsonrpc: "2.0",
-        id: 1,
-        method: "initialize",
-        params: {
-          protocolVersion: "2025-06-18",
-          capabilities: {},
-          clientInfo: { name: "assistente-auth-check", version: "0.1.0" },
-        },
-      }),
-    });
-    await response.body?.cancel().catch(() => undefined);
-    return response.status;
-  } catch {
-    return "NETWORK_ERROR";
-  }
-}
-
-async function cloudflareUserTokenProbe(
-  configuration: Extract<McpServerConfiguration, { status: "configured" }>,
-): Promise<{ user: number | "NETWORK_ERROR"; accounts: number | "NETWORK_ERROR" }> {
-  const requestStatus = async (url: string): Promise<number | "NETWORK_ERROR"> => {
-    try {
-      const response = await fetch(url, {
-        headers: { Authorization: `Bearer ${configuration.bearerToken}` },
-      });
-      await response.body?.cancel().catch(() => undefined);
-      return response.status;
-    } catch {
-      return "NETWORK_ERROR";
-    }
-  };
-
-  const [user, accounts] = await Promise.all([
-    requestStatus("https://api.cloudflare.com/client/v4/user"),
-    requestStatus("https://api.cloudflare.com/client/v4/accounts?per_page=5"),
-  ]);
-  return { user, accounts };
-}
-
-async function configurationSummary(
+function configurationSummary(
   configurations: readonly McpServerConfiguration[],
 ) {
-  return Promise.all(configurations.map(async (configuration) => {
+  return configurations.map((configuration) => {
     const declaredTools = toolManifest(configuration.id).length;
     return {
       id: configuration.id,
@@ -136,16 +85,8 @@ async function configurationSummary(
           ? "NO_LOCAL_TOOL_CONTRACT"
           : configuration.status.toUpperCase(),
       declaredToolCount: declaredTools,
-      remoteAuthHttpStatus:
-        configuration.status === "configured"
-          ? await remoteAuthStatus(configuration)
-          : null,
-      userTokenProbe:
-        configuration.status === "configured"
-          ? await cloudflareUserTokenProbe(configuration)
-          : null,
     };
-  }));
+  });
 }
 
 export function createAssistenteMcpServer(
@@ -158,7 +99,7 @@ export function createAssistenteMcpServer(
     "assistente_status",
     {
       description:
-        "Mostra as conexões MCP e, temporariamente, o status HTTP seguro do handshake remoto. Não revela URLs nem credenciais.",
+        "Mostra quais conexões MCP estão configuradas e quantas ferramentas o Assistente declara. Não revela URLs nem credenciais e não testa disponibilidade remota.",
       inputSchema: fromJsonSchema<Record<string, never>>({
         type: "object",
         properties: {},
@@ -166,7 +107,7 @@ export function createAssistenteMcpServer(
       }),
     },
     async () => ({
-      content: [{ type: "text", text: JSON.stringify(await configurationSummary(configurations)) }],
+      content: [{ type: "text", text: JSON.stringify(configurationSummary(configurations)) }],
     }),
   );
 
