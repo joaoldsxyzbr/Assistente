@@ -12,7 +12,7 @@ O **Assistente** é o hub MCP do plugin **Assistente Geral**. O plugin cuida das
 - **Cloudflare MCP:** integração genérica atrás do hub, com `docs`, `search` e `execute`.
 - **GitHub MCP oficial:** integração remota via PAT separado, com ferramentas de repositório, branches, arquivos, issues, PRs e Actions; **sem restringir o MCP a um repositório fixo**.
 - **Controle de ponto:** ferramentas locais `ponto_registrar`, `ponto_hoje` e `ponto_resumo` usam somente o Cloudflare MCP para consultar/escrever no D1; o Worker não possui binding D1.
-- **Controle de gastos:** continua fora deste repositório e sob as regras do plugin Assistente Geral.
+- **Controle de gastos:** cinco ferramentas locais (`gastos_resumo`, `gastos_listar`, `gastos_registrar`, `gastos_atualizar`, `gastos_excluir`) usam o Cloudflare MCP para o D1 canônico, sem binding D1 no Worker.
 
 Detalhes e decisões duráveis ficam em [docs/ARQUITETURA.md](docs/ARQUITETURA.md). Trabalho pendente fica em Issues.
 
@@ -104,3 +104,11 @@ O **Assistente Geral** usa cinco ferramentas do **Assistente MCPs**: `gastos_res
 - `GASTOS_D1_DATABASE_ID` está no Wrangler; testes de escrita usam **somente SQLite em memória**, não valores pessoais.
 
 A skill `assistente-controle-de-gastos` deve chamar diretamente essas ferramentas para pedidos rotineiros, mantendo o executor genérico reservado às exceções.
+
+## Checks de PR e Deploy
+
+O **CI do GitHub** valida `npm run check`. **Workers Builds** é um check externo independente e requer seu próprio token de build válido. O deploy da branch `main` faz upload de uma versão, mas **não promove automaticamente** o tráfego; valide a versão ativa e faça a promoção separadamente quando solicitada.
+
+Se um check de PR da Cloudflare falhar com `Authentication error [10000]` ou `Invalid access token [9109]` ao executar `wrangler preview`, revise **Settings → Builds → API token** no painel do Worker e a permissão da credencial associada ao trigger de preview. Não desabilite o check nem force uma dependência apenas para ocultar o erro. Registre o incidente em Issues e reexecute o check após corrigir a credencial.
+
+Os SDKs MCP devem permanecer alinhados com os `peerDependencies` de `agents`; não usar `--force` ou `--legacy-peer-deps` para atualizar client/server isoladamente.

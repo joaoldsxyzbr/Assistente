@@ -15,7 +15,7 @@ A regra estrutural é simples: **um Worker, um endpoint MCP e um módulo local p
 | `src/mcps/<nome>/` | Contratos e lógica fixa das ferramentas aprovadas |
 | MCP de destino | Execução técnica e aplicação das permissões do token de serviço |
 
-O controle de ponto possui três ferramentas locais no hub, mas **não acessa D1 diretamente**. Elas compõem chamadas fixas ao Cloudflare MCP, que então usa a API Cloudflare para consultar ou escrever no D1. Gastos continua fora deste repositório.
+O controle de ponto possui três ferramentas locais no hub, mas **não acessa D1 diretamente**. Elas compõem chamadas fixas ao Cloudflare MCP, que então usa a API Cloudflare para consultar ou escrever no D1. Gastos utiliza cinco ferramentas locais em `src/mcps/gastos/`, encaminhadas exclusivamente ao Cloudflare MCP e ao D1 canônico, sem acesso direto do Worker ao D1.
 
 O **GitHub MCP** também é um destino remoto oficial, separado do Cloudflare, com autenticação própria por PAT. Sua allowlist cobre operações usuais de repositórios, commits, arquivos, issues, PRs e Actions, sem fixar `owner` ou `repo`. A capacidade de acessar um repositório depende do token GitHub e da autorização da tarefa.
 
@@ -50,7 +50,7 @@ Na versão 1.5.10 do plugin, o roteamento rotineiro de ponto ficou explícito e 
 
 Esses três pedidos não usam planilha, memória nem o executor genérico antes da ferramenta dedicada. Em resultado incerto de escrita, a skill reconcilia com `ponto_hoje` e não repete `ponto_registrar` cegamente. Correções, exclusões e consultas de datas específicas continuam podendo usar `mcp_cloudflare__execute`, mas somente através do Assistente MCPs e sempre contra o D1 canônico de ponto.
 
-Gastos continua sem ferramentas dedicadas no hub. A skill financeira usa o D1 canônico somente através do Assistente MCPs e, enquanto não houver ferramentas próprias, usa `mcp_cloudflare__execute` do hub sem recorrer a um app Cloudflare separado.
+Gastos dispõe de `gastos_resumo`, `gastos_listar`, `gastos_registrar`, `gastos_atualizar` e `gastos_excluir`. A skill financeira usa essas operações dedicadas para o fluxo comum. Todas chamam o D1 canônico via Assistente MCPs → Cloudflare MCP; o executor genérico fica restrito a exceções autorizadas. O período padrão é o próximo mês em `America/Sao_Paulo`.
 
 Operações que podem escrever não recebem retry automático. Se a chamada já começou e falha, o resultado é tratado como potencialmente incerto.
 
@@ -136,6 +136,7 @@ A configuração continua com `redact_query_string: true`, `invocation_logs: fal
 | `src/mcps/cloudflare/` | contratos da integração Cloudflare |
 | `src/mcps/github/` | allowlist de ferramentas da integração GitHub oficial |
 | `src/mcps/ponto/` | ferramentas dedicadas de ponto que usam Cloudflare MCP |
+| `src/mcps/gastos/` | cinco ferramentas de gastos que usam Cloudflare MCP |
 | `src/shared/oauth-authorization.ts` | página e fluxo HTTP de autorização |
 | `src/shared/oauth-mcp-worker.ts` | OAuthProvider, escopos e proteção do endpoint MCP |
 | `tests/` | testes das regras puras e contratos |
