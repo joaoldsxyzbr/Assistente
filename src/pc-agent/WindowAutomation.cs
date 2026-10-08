@@ -33,7 +33,7 @@ internal static class WindowAutomation
         var result = new List<AutomationElement>();
         int visited = 0;
         bool truncated = false;
-        using var cache = new CacheRequest
+        var cache = new CacheRequest
         {
             TreeScope = TreeScope.Element,
             AutomationElementMode = AutomationElementMode.Full
