@@ -1,9 +1,11 @@
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Net.WebSockets;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using System.Windows.Forms;
+using System.Windows.Automation;
 
 namespace AssistentePc;
 
@@ -84,9 +86,19 @@ internal static class Program
                 string name = root.GetProperty("name").GetString() ?? "";
                 response = await ExecuteAsync(name, root.GetProperty("args"), id);
             }
-            catch (Exception ex) when (ex is JsonException or KeyNotFoundException or ArgumentException or InvalidOperationException or ExternalException or System.ComponentModel.Win32Exception)
+            catch (PcAutomationException ex)
             {
-                response = new { id, ok = false, error = "Operação inválida ou não disponível nesta sessão." };
+                response = new { id, ok = false, code = ex.Code, error = ex.Message };
+            }
+            catch (ElementNotAvailableException)
+            {
+                response = new { id, ok = false, code = "stale", error = "O controle desapareceu. Inspecione novamente." };
+            }
+            catch (Exception ex) when (ex is JsonException or KeyNotFoundException or ArgumentException
+                or InvalidOperationException or ExternalException or System.ComponentModel.Win32Exception
+                or UnauthorizedAccessException)
+            {
+                response = new { id, ok = false, code = "unavailable", error = "Operação inválida ou indisponível nesta sessão." };
             }
             byte[] serialized = JsonSerializer.SerializeToUtf8Bytes(response);
             if (serialized.Length > 1_350_000)
@@ -119,7 +131,9 @@ internal static class Program
                 string alvo = args.GetProperty("alvo").GetString() ?? "";
                 string acao = args.GetProperty("acao").GetString() ?? "";
                 string? valor = args.TryGetProperty("texto", out var inputText) ? inputText.GetString() : null;
-                return new { id, ok = true, data = WindowAutomation.Act(alvo, acao, valor) };
+                string? janelaId = args.TryGetProperty("janelaId", out var windowTarget) ? windowTarget.GetString() : null;
+                string? tipo = args.TryGetProperty("tipo", out var typeTarget) ? typeTarget.GetString() : null;
+                return new { id, ok = true, data = WindowAutomation.Act(alvo, acao, valor, janelaId, tipo) };
             case "pc_abrir":
                 string app = args.GetProperty("aplicativo").GetString() ?? "";
                 string executable = app switch {
@@ -130,15 +144,23 @@ internal static class Program
                 };
                 Process.Start(new ProcessStartInfo(executable) { UseShellExecute = true });
                 return new { id, ok = true, data = new { aplicativo = app } };
+            case "pc_pasta_listar":
+                string listFolder = args.GetProperty("pasta").GetString() ?? "";
+                string directory = KnownFolder(listFolder);
+                if (!Directory.Exists(directory))
+                    throw new PcAutomationException("not_found", "Pasta indisponível.");
+                var items = Directory.EnumerateFileSystemEntries(directory).Take(51).ToArray();
+                return new { id, ok = true, data = new {
+                    pasta = listFolder,
+                    entradas = items.Take(50).Select(p => new {
+                        nome = Path.GetFileName(p),
+                        tipo = Directory.Exists(p) ? "pasta" : "arquivo"
+                    }).ToArray(),
+                    truncado = items.Length > 50
+                }};
             case "pc_pasta":
                 string pasta = args.GetProperty("pasta").GetString() ?? "";
-                string path = pasta switch {
-                    "downloads" => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads"),
-                    "documentos" => Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
-                    "imagens" => Environment.GetFolderPath(Environment.SpecialFolder.MyPictures),
-                    "area_de_trabalho" => Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
-                    _ => throw new ArgumentException("Pasta não permitida.")
-                };
+                string path = KnownFolder(pasta);
                 if (!Directory.Exists(path)) throw new InvalidOperationException("Pasta não encontrada.");
                 var explorer = new ProcessStartInfo("explorer.exe") { UseShellExecute = false };
                 explorer.ArgumentList.Add(path);
@@ -147,6 +169,15 @@ internal static class Program
             default: throw new ArgumentException("Ferramenta não permitida.");
         }
     }
+
+    private static string KnownFolder(string folder) => folder switch
+    {
+        "downloads" => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads"),
+        "documentos" => Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+        "imagens" => Environment.GetFolderPath(Environment.SpecialFolder.MyPictures),
+        "area_de_trabalho" => Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
+        _ => throw new PcAutomationException("invalid_folder", "Pasta não permitida.")
+    };
 
     private static object ListProcesses()
     {
