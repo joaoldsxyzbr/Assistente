@@ -51,10 +51,6 @@ export class PcRelay extends DurableObject {
 
     const socket = this.activeSocket();
     if (!socket) return reply({ ok: false, error: "Computador desconectado." }, 503);
-    // Evita que duas chamadas mudem o foco do teclado/mouse simultaneamente.
-    if (this.pending.size !== 0)
-      return reply({ ok: false, error: "Computador ocupado. Consulte o estado antes de repetir." }, 409);
-
     let body: unknown;
     try {
       const contentLength = Number(request.headers.get("Content-Length") ?? 0);
@@ -67,6 +63,10 @@ export class PcRelay extends DurableObject {
     }
     if (!validCommand(body)) return reply({ ok: false, error: "Comando não permitido." }, 400);
     const command = body;
+    // Conferir e reservar sem await intermediário: duas requisições concorrentes
+    // não podem avançar juntas durante a leitura assíncrona de seus corpos.
+    if (this.pending.size !== 0)
+      return reply({ ok: false, error: "Computador ocupado. Consulte o estado antes de repetir." }, 409);
     const result = await new Promise<PcAnswer>((resolve) => {
       const timer = setTimeout(() => {
         this.pending.delete(command.id);

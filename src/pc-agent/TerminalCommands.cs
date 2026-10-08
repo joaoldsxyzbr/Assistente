@@ -1,11 +1,15 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Text;
 
 namespace AssistentePc;
 
-/// <summary>Terminal mínimo sem shell, argumentos livres, scripts ou redirecionamento.</summary>
+/// <summary>Diagnósticos fixos, sem shell nem parâmetros livres.</summary>
 internal static class TerminalCommands
 {
+    [DllImport("kernel32.dll")]
+    private static extern uint GetOEMCP();
+
     private static readonly IReadOnlyDictionary<string, string> Allowed =
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
@@ -22,14 +26,18 @@ internal static class TerminalCommands
         if (!Allowed.TryGetValue(command, out string? executable))
             throw new ArgumentException("Comando de terminal não permitido.");
 
+        // Utilitários legados do Windows escrevem frequentemente no code page OEM,
+        // e decodificá-los como UTF-8 corrompe caracteres acentuados.
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+        var systemEncoding = Encoding.GetEncoding((int)GetOEMCP());
         var start = new ProcessStartInfo(Path.Combine(Environment.SystemDirectory, executable))
         {
             UseShellExecute = false,
             CreateNoWindow = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
-            StandardOutputEncoding = Encoding.UTF8,
-            StandardErrorEncoding = Encoding.UTF8,
+            StandardOutputEncoding = systemEncoding,
+            StandardErrorEncoding = systemEncoding,
             WorkingDirectory = Environment.SystemDirectory
         };
         using var process = new Process { StartInfo = start };
@@ -43,7 +51,8 @@ internal static class TerminalCommands
             await process.WaitForExitAsync(timeout.Token);
             string stdout = await output;
             string stderr = await error;
-            return new {
+            return new
+            {
                 comando = command,
                 codigoSaida = process.ExitCode,
                 saida = stdout.Length > 6000 ? stdout[..6000] : stdout,
