@@ -19,7 +19,7 @@
     "agents": "^0.20.0"
   },
   "devDependencies": {
-    "@types/node": "^24.0.0",
+    "@types/node": "^26.6.4",
     "typescript": "^6.0.0",
     "wrangler": "^4.0.0"
   }
