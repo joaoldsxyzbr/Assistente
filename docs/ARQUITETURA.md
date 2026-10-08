@@ -17,6 +17,8 @@ A regra estrutural é simples: **um Worker, um endpoint MCP e um módulo local p
 
 O controle de ponto possui três ferramentas locais no hub, mas **não acessa D1 diretamente**. Elas compõem chamadas fixas ao Cloudflare MCP, que então usa a API Cloudflare para consultar ou escrever no D1. Gastos continua fora deste repositório.
 
+O **GitHub MCP** também é um destino remoto oficial, separado do Cloudflare, com autenticação própria por PAT. Sua allowlist cobre operações usuais de repositórios, commits, arquivos, issues, PRs e Actions, sem fixar `owner` ou `repo`. A capacidade de acessar um repositório depende do token GitHub e da autorização da tarefa.
+
 ## Fluxo MCP
 
 O catálogo local é a fonte de verdade das ferramentas publicadas. O Worker não descobre nem publica ferramentas remotas dinamicamente.
@@ -52,6 +54,17 @@ Gastos continua sem ferramentas dedicadas no hub. A skill financeira usa o D1 ca
 
 Operações que podem escrever não recebem retry automático. Se a chamada já começou e falha, o resultado é tratado como potencialmente incerto.
 
+
+### Integração GitHub
+
+O Worker usa o **mesmo cliente MCP remoto**, passando `Authorization: Bearer <MCP_GITHUB_TOKEN>` somente ao GitHub e `X-MCP-Toolsets: context,repos,issues,pull_requests,actions`. O tráfego GitHub não passa pelo Cloudflare MCP. O endpoint GitHub não recebe o token Cloudflare nem o token OAuth do usuário.
+
+As ferramentas são declaradas localmente em `src/mcps/github/tools.ts` (não são descobertas automaticamente). Nomes publicados recebem prefixo `mcp_github__`; leitura exige `mcp:read` e escrita exige também `mcp:write`. A conexão só é publicada quando URL e secret estão configurados. Nenhuma ferramenta aceita token, endpoint arbitrário ou SQL em seus parâmetros.
+
+O GitHub MCP **não tem filtro hardcoded por repositório**. Os parâmetros `owner` e `repo` são fornecidos no pedido, e os direitos efetivos são os da credencial GitHub. A regra de trabalhar exclusivamente no repositório `joaoldsxyzbr/Assistente` aplica-se a este projeto, não ao MCP multi-projetos.
+
+Para conectar, crie PAT com escopo por repositórios conforme sua necessidade e permissões mínimas para as operações que efetivamente serão feitas; armazene-o somente como **secret `MCP_GITHUB_TOKEN`** do Worker. Testar primeiro com `mcp_github__get_me`, sem operações de escrita. Consulte [documentação oficial GitHub MCP](https://github.com/github/github-mcp-server/blob/main/docs/server-configuration.md).
+
 ## Autenticação e autorização
 
 | Origem → destino | Credencial | Regra |
@@ -59,6 +72,7 @@ Operações que podem escrever não recebem retry automático. Se a chamada já 
 | ChatGPT → Worker | OAuth 2.1 + PKCE | `mcp:read` é básico; `mcp:write` é exigido para escrita |
 | Navegador → autorização | `ASSISTENTE_OAUTH_PASSWORD` | senha conferida antes de concluir a autorização |
 | Worker → Cloudflare MCP | `MCP_CLOUDFLARE_TOKEN` | bearer separado do OAuth do ChatGPT; `MCP_CLOUDFLARE_ACCOUNT_ID` seleciona a conta padrão |
+| Worker → GitHub MCP oficial | `MCP_GITHUB_TOKEN` | PAT separado, com permissões do GitHub para os repositórios escolhidos; sem owner/repo fixado pelo Worker |
 | Cloudflare MCP → API Cloudflare | API Token Cloudflare | permissões do token limitam os recursos acessíveis |
 
 O token do ChatGPT nunca é encaminhado ao MCP remoto.
@@ -107,7 +121,8 @@ A configuração continua com `redact_query_string: true`, `invocation_logs: fal
 - binding `OAUTH_KV`;
 - endpoint do Cloudflare MCP;
 - conta Cloudflare padrão injetada automaticamente no `execute` quando a chamada não informa `account_id`;
-- `PONTO_D1_DATABASE_ID` identifica o D1 de ponto usado pelas chamadas via Cloudflare MCP.
+- `PONTO_D1_DATABASE_ID` identifica o D1 de ponto usado pelas chamadas via Cloudflare MCP;
+- `MCP_GITHUB_URL` aponta para `https://api.githubcopilot.com/mcp/`; o token `MCP_GITHUB_TOKEN` é sempre secret independente.
 
 `npm run build:workers` faz build dry-run. O pipeline conectado ao Cloudflare usa `wrangler versions upload`; promoção de versão é uma etapa separada.
 
@@ -119,6 +134,7 @@ A configuração continua com `redact_query_string: true`, `invocation_logs: fal
 | `src/host/remote-client.ts` | cliente MCP remoto |
 | `src/host/worker.ts` | Worker real: servidor MCP, roteamento e catálogo |
 | `src/mcps/cloudflare/` | contratos da integração Cloudflare |
+| `src/mcps/github/` | allowlist de ferramentas da integração GitHub oficial |
 | `src/mcps/ponto/` | ferramentas dedicadas de ponto que usam Cloudflare MCP |
 | `src/shared/oauth-authorization.ts` | página e fluxo HTTP de autorização |
 | `src/shared/oauth-mcp-worker.ts` | OAuthProvider, escopos e proteção do endpoint MCP |

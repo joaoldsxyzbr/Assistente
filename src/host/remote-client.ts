@@ -4,6 +4,18 @@ import {
 } from "@modelcontextprotocol/client";
 import type { ConfiguredMcpServer } from "./config.ts";
 
+// Seleção por domínio; o controle de acesso a repositórios é do GitHub token.
+export const GITHUB_REMOTE_TOOLSETS = "context,repos,issues,pull_requests,actions";
+
+export function remoteMcpHeaders(configuration: ConfiguredMcpServer): Record<string, string> {
+  return {
+    Authorization: `Bearer ${configuration.bearerToken}`,
+    ...(configuration.id === "github"
+      ? { "X-MCP-Toolsets": GITHUB_REMOTE_TOOLSETS }
+      : {}),
+  };
+}
+
 export class RemoteMcpClient {
   readonly #client: Client;
   readonly #transport: StreamableHTTPClientTransport;
@@ -14,7 +26,7 @@ export class RemoteMcpClient {
       new URL(configuration.endpoint),
       {
         requestInit: {
-          headers: { Authorization: `Bearer ${configuration.bearerToken}` },
+          headers: remoteMcpHeaders(configuration),
         },
       },
     );
