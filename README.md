@@ -92,3 +92,15 @@ Sem secret, o GitHub permanece inativo e não interfere no Cloudflare nem nas fe
 - As integrações aceitam somente os dois endpoints HTTPS oficiais configurados. Se um fornecedor mudar o endereço, atualize a validação, os testes e a configuração juntos para não enviar secrets a hosts inesperados.
 - Dependabot verifica atualizações npm semanalmente; o CI existente continua o mesmo, enxuto.
 - Proteção de branch `main` foi **explicitamente excluída** desta rodada pelo proprietário.
+
+## Controle de gastos (ferramentas dedicadas)
+
+O **Assistente Geral** usa cinco ferramentas do **Assistente MCPs**: `gastos_resumo`, `gastos_listar`, `gastos_registrar`, `gastos_atualizar` e `gastos_excluir`. O período omitido é **o próximo mês** em `America/Sao_Paulo`; `periodo: "MM/AAAA"` prevalece. Não existe binding D1 no Worker: o caminho permanece `Assistente Geral → Assistente MCPs → Cloudflare MCP → D1`.
+
+- Consulta não cria tabelas. Somente registro autorizado de um novo mês copia um schema mensal existente, sem copiar dados.
+- Valores TEXT são interpretados em centavos inteiros com validação rigorosa, nunca somados via `SUM(valor)`. Registros com valor inválido impedem confirmação de totais.
+- Edição e exclusão exigem ID ou descrição inequívoca; escrita condicionada ao estado observado bloqueia sobrescrever alterações concorrentes. Lançamentos duplicados exigem confirmação de que são transações distintas.
+- O status de lançamento novo é `pendente`, salvo pedido explícito de pago. Não há recorrência automática nem migração de dados.
+- `GASTOS_D1_DATABASE_ID` está no Wrangler; testes de escrita usam **somente SQLite em memória**, não valores pessoais.
+
+A skill `assistente-controle-de-gastos` deve chamar diretamente essas ferramentas para pedidos rotineiros, mantendo o executor genérico reservado às exceções.

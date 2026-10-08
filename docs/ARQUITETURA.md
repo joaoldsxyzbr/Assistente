@@ -147,3 +147,9 @@ Não existe segunda implementação de host. Novas abstrações só entram quand
 Foi confirmado em produção o acesso de leitura aos MCPs GitHub e Cloudflare e conferido o schema canônico D1 de ponto. A rodada posterior à auditoria adiciona testes SQLite em memória para o registro de ponto e fixa o destino HTTPS dos tokens do GitHub e Cloudflare. Diagnósticos antigos de OAuth não são mais gravados no KV durante o atendimento normal; logs estruturados permanecem.
 
 O CI de PR continua validando typecheck, testes unitários/de banco sintético e build dry-run, **não substitui** o teste de OAuth fresco e smoke de escritas MCP em ambiente descartável. A proteção de `main` não foi alterada por exclusão explícita do usuário. Dependabot cuida de avisos semanais de atualização de npm sem ampliar o CI normal.
+
+### Gastos — cinco ferramentas dedicadas
+
+O Worker expõe `gastos_resumo` e `gastos_listar` (somente leitura), além de `gastos_registrar`, `gastos_atualizar` e `gastos_excluir` (escopo de escrita). A configuração `GASTOS_D1_DATABASE_ID` aponta para o D1 já usado pelo controle financeiro. O fluxo é `@Assistente Geral → Assistente MCPs → Cloudflare MCP → D1`, sem binding direto do D1 e sem banco paralelo.
+
+Sem período explícito, todas as ferramentas usam o **mês seguinte** (timezone America/Sao_Paulo). Os identificadores `movimentacoes_MM_AAAA` são validados e nunca aceitos como SQL livre. A coluna `valor` continua TEXT: o parse estrito converte para centavos inteiros; valores inválidos tornam os totais não confirmáveis. Leituras não criam tabelas; o primeiro registro autorizado de mês novo utiliza esquema verificado da referência persistida, sem copiar registros. Operações por descrição retornam candidatos se ambíguas, e atualizações/exclusões usam condições de estado antigo e `RETURNING` para impedir perda silenciosa de mudanças. Escritas incertas não são repetidas automaticamente. Dado de teste é sintético e não acessa o D1 real.

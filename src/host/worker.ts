@@ -11,6 +11,9 @@ import {
   normalizePontoHorario,
   PONTO_TOOL_CATALOG,
 } from "../mcps/ponto/tools.ts";
+import {
+  buildGastosCode, GASTOS_TOOL_CATALOG, prepareGastosAction,
+} from "../mcps/gastos/tools.ts";
 import type { McpServerId } from "./contracts.ts";
 import {
   readMcpConfigurations,
@@ -26,6 +29,7 @@ export interface AssistenteWorkerEnvironment extends Environment {
   ASSISTENTE_OAUTH_PASSWORD?: string;
   MCP_CLOUDFLARE_ACCOUNT_ID?: string;
   PONTO_D1_DATABASE_ID?: string;
+  GASTOS_D1_DATABASE_ID?: string;
   OAUTH_PROVIDER?: OAuthHelpers;
 }
 
@@ -234,6 +238,36 @@ export function createAssistenteMcpServer(
     );
   }
 
+
+  const gastosDatabaseId = environment.GASTOS_D1_DATABASE_ID?.trim() ?? "";
+  for (const definition of GASTOS_TOOL_CATALOG) {
+    server.registerTool(
+      definition.name,
+      {
+        description: definition.description,
+        inputSchema: fromJsonSchema<Record<string, unknown>>(definition.inputSchema),
+        _meta: { securitySchemes: oauthSecuritySchemesForTool(definition.isWrite) },
+      },
+      async (args) => {
+        if (!cloudflareConfiguration || cloudflareConfiguration.status !== "configured") {
+          return pontoConfigurationError("Cloudflare MCP não configurado para gastos.");
+        }
+        if (!gastosDatabaseId) {
+          return pontoConfigurationError("Banco D1 de gastos não configurado.");
+        }
+        const prepared = prepareGastosAction(definition.name, args);
+        if ("error" in prepared) return pontoConfigurationError(prepared.error);
+        return callRemoteTool(
+          cloudflareConfiguration,
+          "execute",
+          { code: buildGastosCode(gastosDatabaseId, prepared.action) },
+          definition.isWrite,
+          environment.MCP_CLOUDFLARE_ACCOUNT_ID,
+        );
+      },
+    );
+  }
+
   const routes = new Set<string>();
 
   for (const configuration of configurations) {
@@ -273,6 +307,9 @@ const writeToolNames = [
     .filter((tool) => tool.isWrite)
     .map((tool) => toolNameForServer(tool.serverId, tool.name)),
   ...PONTO_TOOL_CATALOG
+    .filter((tool) => tool.isWrite)
+    .map((tool) => tool.name),
+  ...GASTOS_TOOL_CATALOG
     .filter((tool) => tool.isWrite)
     .map((tool) => tool.name),
 ];
