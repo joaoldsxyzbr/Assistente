@@ -1,9 +1,6 @@
 declare const WebSocketPair: { new (): { 0: WebSocket; 1: WebSocket } };
 import { isPcTool } from "./tools.ts";
-interface SocketState {
-  acceptWebSocket(socket: WebSocket): void;
-  getWebSockets(): WebSocket[];
-}
+import { DurableObject } from "cloudflare:workers";
 interface PcCommand { id: string; name: string; args: Record<string, unknown> }
 interface PcAnswer { id: string; ok: boolean; data?: unknown; image?: string; error?: string }
 const jsonHeaders = { "Content-Type": "application/json; charset=utf-8" };
@@ -21,24 +18,23 @@ function parsedAnswer(value: unknown): value is PcAnswer {
   return !!value && typeof value === "object" && "id" in value && typeof value.id === "string"
     && "ok" in value && typeof value.ok === "boolean";
 }
-export class PcRelay {
+export class PcRelay extends DurableObject {
   private readonly pending = new Map<string, (answer: PcAnswer) => void>();
-  constructor(private readonly state: SocketState) {}
   async fetch(request: Request): Promise<Response> {
     const pathname = new URL(request.url).pathname;
     if (pathname === "/connect" && request.method === "GET") {
       if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket") return new Response("Upgrade required", { status: 426 });
-      for (const old of this.state.getWebSockets()) old.close(1000, "Reconnected");
+      for (const old of this.ctx.getWebSockets()) old.close(1000, "Reconnected");
       const pair = new WebSocketPair();
       const [client, server] = Object.values(pair);
-      this.state.acceptWebSocket(server);
+      this.ctx.acceptWebSocket(server);
       return new Response(null, { status: 101, webSocket: client } as ResponseInit);
     }
     if (pathname === "/status" && request.method === "GET") {
-      return reply({ ok: true, data: { online: this.state.getWebSockets().length > 0 } });
+      return reply({ ok: true, data: { online: this.ctx.getWebSockets().length > 0 } });
     }
     if (pathname !== "/command" || request.method !== "POST") return new Response("Not found", { status: 404 });
-    const socket = this.state.getWebSockets()[0];
+    const socket = this.ctx.getWebSockets()[0];
     if (!socket) return reply({ ok: false, error: "Computador desconectado." }, 503);
     let body: unknown;
     try { body = await request.json(); } catch { return reply({ ok: false, error: "Comando inválido." }, 400); }
@@ -61,7 +57,7 @@ export class PcRelay {
     return reply(response);
   }
   async webSocketMessage(socket: WebSocket, message: string | ArrayBuffer): Promise<void> {
-    if (socket !== this.state.getWebSockets()[0] || typeof message !== "string" || message.length > 1_400_000) return;
+    if (socket !== this.ctx.getWebSockets()[0] || typeof message !== "string" || message.length > 1_400_000) return;
     let answer: unknown;
     try { answer = JSON.parse(message); } catch { return; }
     if (!parsedAnswer(answer)) return;

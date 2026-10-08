@@ -24,7 +24,7 @@ Não há shell irrestrito, escrita em arquivos, elevação, instalação de soft
 
 ## Segurança e comportamento
 
-A conexão Windows sai do computador para wss://assistente.joaolds.xyz.br/pc/connect e requer um bearer separado da autorização OAuth do ChatGPT. Os comandos são validados pelo Worker e novamente no aplicativo. A comunicação WebSocket é mantida pelo Durable Object PcRelay do mesmo Worker; não cria outro MCP externo. O Worker limita a uma sessão conectada. Ações de escrita precisam do escopo mcp:write do OAuth.
+A conexão Windows sai do computador para wss://assistente.joaolds.xyz.br/pc/connect e requer um bearer separado da autorização OAuth do ChatGPT. Os comandos são validados pelo Worker e novamente no aplicativo. A comunicação WebSocket é mantida pelo Durable Object PcRelay do mesmo Worker; não cria outro MCP externo. O Worker limita a uma sessão conectada. A ponte usa `ctx.exports.PcRelay` (loopback local), sem binding de Durable Object no Wrangler; isso permite gerar versões antes de provisionar o namespace na promoção inicial. Ações de escrita precisam do escopo mcp:write do OAuth.
 
 O segredo não é versionado nem armazenado em logs. JPEGs e conteúdo digitado transitam nas respostas MCP e não são gravados no banco. Uma tentativa que caiu após enviar comando pode ter sido aplicada; consulte a tela/estado antes de repetir.
 

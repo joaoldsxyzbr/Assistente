@@ -35,3 +35,11 @@ test("WebSocket exige token correto antes do acesso ao Durable Object", async ()
   assert.equal((await pcAgentRequest(absentUpgrade, environment)).status, 426);
   assert.equal(calls, 0);
 });
+
+test("contrato de loopback deve evitar namespace provisionado no upload inicial", async () => {
+  const fs = await import("node:fs/promises");
+  const config = JSON.parse(await fs.readFile(new URL("../wrangler.assistente.jsonc", import.meta.url), "utf8"));
+  assert.equal(config.durable_objects?.bindings?.some((entry: { name: string }) => entry.name === "PC_RELAY") ?? false, false);
+  assert.equal(config.exports?.PcRelay?.storage, "sqlite");
+  assert.equal(config.compatibility_flags.includes("enable_ctx_exports"), true);
+});

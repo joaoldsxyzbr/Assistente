@@ -21,7 +21,7 @@ import {
   type McpServerConfiguration,
 } from "./config.ts";
 import { RemoteMcpClient } from "./remote-client.ts";
-import { PC_TOOL_CATALOG, pcCall, pcAgentRequest, pcIsConfigured, type PcEnvironment } from "../mcps/pc/gateway.ts";
+import { PC_TOOL_CATALOG, pcCall, pcAgentRequest, pcIsConfigured, type PcEnvironment, type PcNamespace } from "../mcps/pc/gateway.ts";
 export { PcRelay } from "../mcps/pc/relay.ts";
 import { classifyRemoteCallFailure } from "./remote-failure.ts";
 import { createOAuthMcpWorker } from "../shared/oauth-mcp-worker.ts";
@@ -336,7 +336,12 @@ const oauthWorker = createOAuthMcpWorker<AssistenteWorkerEnvironment>({
 
 export default {
   fetch(request: Request, environment: AssistenteWorkerEnvironment, context: Parameters<typeof oauthWorker.fetch>[2]) {
-    if (new URL(request.url).pathname === "/pc/connect") return pcAgentRequest(request, environment);
-    return oauthWorker.fetch(request, environment, context);
+    // Loopback: dispensa binding de namespace ainda não provisionado no versions upload.
+    const exportedNamespace = (context as typeof context & {
+      exports?: { PcRelay?: PcNamespace };
+    }).exports?.PcRelay;
+    const effectiveEnvironment = { ...environment, PC_RELAY: exportedNamespace };
+    if (new URL(request.url).pathname === "/pc/connect") return pcAgentRequest(request, effectiveEnvironment);
+    return oauthWorker.fetch(request, effectiveEnvironment, context);
   },
 };
