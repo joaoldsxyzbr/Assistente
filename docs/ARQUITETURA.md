@@ -39,6 +39,17 @@ Para ponto:
 
 `ponto_registrar` usa escrita atômica no D1: segunda a sexta preenche `entrada → ida_intervalo → volta_intervalo → saida`; sábado preenche somente `entrada → saida`. `ponto_hoje` consulta a view `banco_horas`; `ponto_resumo` consulta a view `resumo`.
 
+### Contrato com o Assistente Geral
+
+Na versão 1.5.10 do plugin, o roteamento rotineiro de ponto ficou explícito e direto:
+- `ponto HHMM` ou `ponto HH:MM` → `ponto_registrar`;
+- `ponto hoje` → `ponto_hoje`;
+- `ponto resumo` → `ponto_resumo`.
+
+Esses três pedidos não usam planilha, memória nem o executor genérico antes da ferramenta dedicada. Em resultado incerto de escrita, a skill reconcilia com `ponto_hoje` e não repete `ponto_registrar` cegamente. Correções, exclusões e consultas de datas específicas continuam podendo usar `mcp_cloudflare__execute`, mas somente através do Assistente MCPs e sempre contra o D1 canônico de ponto.
+
+Gastos continua sem ferramentas dedicadas no hub. A skill financeira usa o D1 canônico somente através do Assistente MCPs e, enquanto não houver ferramentas próprias, usa `mcp_cloudflare__execute` do hub sem recorrer a um app Cloudflare separado.
+
 Operações que podem escrever não recebem retry automático. Se a chamada já começou e falha, o resultado é tratado como potencialmente incerto.
 
 ## Autenticação e autorização
