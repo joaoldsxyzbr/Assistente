@@ -7,7 +7,7 @@ export interface PcTool {
 }
 const empty = { type: "object", properties: {}, additionalProperties: false };
 const terminals = ["identidade", "computador", "rede", "processos"] as const;
-const actions = ["acionar", "preencher"] as const;
+const actions = ["acionar", "preencher", "selecionar", "marcar", "desmarcar", "expandir", "recolher"] as const;
 
 export const PC_TOOL_CATALOG: readonly PcTool[] = [
   { name: "pc_status", description: "Consulta se o Windows está conectado.", isWrite: false, inputSchema: empty },
@@ -17,10 +17,12 @@ export const PC_TOOL_CATALOG: readonly PcTool[] = [
   { name: "pc_terminal", description: "Executa apenas diagnósticos permitidos no terminal, sem shell livre: identidade, computador, rede e processos.", isWrite: false,
     inputSchema: { type: "object", properties: { comando: { type: "string", enum: [...terminals] } }, required: ["comando"], additionalProperties: false } },
   { name: "pc_ui_elementos", description: "Inspeciona os controles acessíveis da janela ativa por Windows UI Automation, sem imagem.", isWrite: false, inputSchema: empty },
-  { name: "pc_ui_acao", description: "Aciona um controle acessível por nome/identificador ou preenche campo não sensível na janela ativa.", isWrite: true,
-    inputSchema: { type: "object", properties: { alvo: { type: "string", minLength: 1, maxLength: 100 }, acao: { type: "string", enum: [...actions] }, texto: { type: "string", minLength: 1, maxLength: 500 } }, required: ["alvo", "acao"], additionalProperties: false } },
+  { name: "pc_ui_acao", description: "Aciona, preenche, seleciona, marca ou expande um controle acessível da janela ativa. Opcionalmente confere janelaId e tipo retornados na inspeção.", isWrite: true,
+    inputSchema: { type: "object", properties: { alvo: { type: "string", minLength: 1, maxLength: 100 }, acao: { type: "string", enum: [...actions] }, texto: { type: "string", minLength: 1, maxLength: 500 }, janelaId: { type: "string", pattern: "^\\d+:[0-9A-F]+$" }, tipo: { type: "string", minLength: 1, maxLength: 80 } }, required: ["alvo", "acao"], additionalProperties: false } },
   { name: "pc_abrir", description: "Abre Bloco de Notas, Calculadora ou Explorador.", isWrite: true,
     inputSchema: { type: "object", properties: { aplicativo: { type: "string", enum: ["bloco_de_notas", "calculadora", "explorador"] } }, required: ["aplicativo"], additionalProperties: false } },
+  { name: "pc_pasta_listar", description: "Lista até 50 nomes de arquivos ou pastas de um diretório conhecido, sem ler conteúdos.", isWrite: false,
+    inputSchema: { type: "object", properties: { pasta: { type: "string", enum: ["downloads", "documentos", "imagens", "area_de_trabalho"] } }, required: ["pasta"], additionalProperties: false } },
   { name: "pc_pasta", description: "Abre pasta conhecida: downloads, documentos, imagens ou area_de_trabalho.", isWrite: true,
     inputSchema: { type: "object", properties: { pasta: { type: "string", enum: ["downloads", "documentos", "imagens", "area_de_trabalho"] } }, required: ["pasta"], additionalProperties: false } },
 ];
@@ -40,13 +42,18 @@ export function validPcArguments(name: string, args: unknown): args is Record<st
     case "pc_janelas":
     case "pc_ui_elementos": return only();
     case "pc_terminal": return only("comando") && terminals.some(x => x === v.comando);
-    case "pc_ui_acao": return (only("alvo", "acao") || only("alvo", "acao", "texto"))
+    case "pc_ui_acao": return (
+      ["alvo", "acao"].every(f => Object.hasOwn(v, f))
+      && keys.every(k => ["alvo", "acao", "texto", "janelaId", "tipo"].includes(k))
       && typeof v.alvo === "string" && v.alvo.trim().length > 0 && v.alvo.length <= 100
       && actions.some(x => x === v.acao)
+      && (!Object.hasOwn(v, "janelaId") || (typeof v.janelaId === "string" && /^\d+:[0-9A-F]+$/.test(v.janelaId)))
+      && (!Object.hasOwn(v, "tipo") || (typeof v.tipo === "string" && v.tipo.length > 0 && v.tipo.length <= 80))
       && (v.acao === "preencher"
         ? typeof v.texto === "string" && v.texto.length > 0 && v.texto.length <= 500
-        : !Object.hasOwn(v, "texto"));
+        : !Object.hasOwn(v, "texto")));
     case "pc_abrir": return only("aplicativo") && ["bloco_de_notas", "calculadora", "explorador"].includes(v.aplicativo as string);
+    case "pc_pasta_listar":
     case "pc_pasta": return only("pasta") && ["downloads", "documentos", "imagens", "area_de_trabalho"].includes(v.pasta as string);
     default: return false;
   }
@@ -56,8 +63,11 @@ export function pcResultToMcp(raw: unknown): { isError: boolean; content: Array<
   const fail = (message: string) => ({ isError: true, content: [{ type: "text" as const, text: message }] });
   if (!raw || typeof raw !== "object" || !("ok" in raw) || typeof raw.ok !== "boolean")
     return fail("Resposta inválida do computador.");
-  const result = raw as { ok: boolean; data?: unknown; image?: unknown; error?: unknown };
-  if (!result.ok) return fail(typeof result.error === "string" ? result.error.slice(0, 120) : "Falha no computador.");
+  const result = raw as { ok: boolean; data?: unknown; image?: unknown; error?: unknown; code?: unknown };
+  if (!result.ok) {
+    const code = typeof result.code === "string" && /^[a-z_]{2,40}$/.test(result.code) ? result.code + ": " : "";
+    return fail(code + (typeof result.error === "string" ? result.error.slice(0, 120) : "Falha no computador."));
+  }
   if (result.image !== undefined) return fail("Captura de tela não é permitida.");
   if (result.data === undefined) return fail("Resposta vazia do computador.");
   let text: string;

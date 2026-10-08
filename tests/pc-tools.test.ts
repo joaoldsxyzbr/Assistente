@@ -107,3 +107,24 @@ test("token inválido não consulta o Durable Object", async () => {
   assert.equal((await pcAgentRequest(request, environment)).status, 401);
   assert.equal(accessed, 0);
 });
+
+test("ações UIA explicitam padrões, janela e tipo sem aceitar campos extras", () => {
+  for (const acao of ["selecionar", "marcar", "desmarcar", "expandir", "recolher"]) {
+    assert.equal(validPcArguments("pc_ui_acao", {
+      alvo: "Item", acao, janelaId: "918:1A0B", tipo: "ControlType.Button",
+    }), true);
+  }
+  assert.equal(validPcArguments("pc_ui_acao", { alvo: "Item", acao: "marcar", texto: "sim" }), false);
+  assert.equal(validPcArguments("pc_ui_acao", { alvo: "Item", acao: "acionar", janelaId: "invalido" }), false);
+  assert.equal(validPcArguments("pc_ui_acao", { alvo: "Item", acao: "clicar" }), false);
+  assert.equal(validPcArguments("pc_ui_acao", { alvo: "Item", acao: "acionar", extra: "x" }), false);
+  assert.equal(validPcArguments("pc_pasta_listar", { pasta: "downloads" }), true);
+  assert.equal(validPcArguments("pc_pasta_listar", { pasta: "C:\\\\Windows" }), false);
+  assert.equal(isPcWrite("pc_pasta_listar"), false);
+});
+test("erro tipado preserva categoria validada sem aceitar metadados arbitrários", () => {
+  assert.equal(pcResultToMcp({ ok: false, code: "unsupported_pattern", error: "Controle incompatível." }).content[0]?.text,
+    "unsupported_pattern: Controle incompatível.");
+  assert.equal(pcResultToMcp({ ok: false, code: "<secret>", error: "Indisponível" }).content[0]?.text,
+    "Indisponível");
+});
