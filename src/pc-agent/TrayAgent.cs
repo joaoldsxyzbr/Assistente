@@ -84,8 +84,8 @@ internal sealed class TrayAgent : ApplicationContext
         {
             _dispatcher.BeginInvoke((Action)(() => SetStatus(status)));
         }
-        catch (InvalidOperationException) { /* Janela de mensagens já encerrada. */ }
         catch (ObjectDisposedException) { /* Encerramento em andamento. */ }
+        catch (InvalidOperationException) { /* Janela de mensagens já encerrada. */ }
     }
 
     private static bool TryReadToken(out string token)
