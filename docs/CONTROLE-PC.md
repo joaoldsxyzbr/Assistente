@@ -47,3 +47,11 @@ O código do aplicativo fica em `src/pc-agent/` (`.NET 8`, Windows Forms, `WinEx
 - A conexão real do agente anterior foi confirmada no Windows em 08/10/2026 com `pc_status`, `pc_janelas` e abertura da Calculadora. **O usuário confirmou o funcionamento da bandeja no Windows. As novas ferramentas desta atualização ainda exigem testes reais após instalar a versão atualizada.**
 - O Worker e as credenciais existentes não precisam ser modificados para esta mudança visual.
 - Referência oficial: [Microsoft — NotifyIcon no Windows Forms](https://learn.microsoft.com/en-us/dotnet/desktop/winforms/controls/notifyicon-component-windows-forms).
+
+## Correção de teclado (0.3.1)
+
+Os testes reais da versão 0.3.0 confirmaram mouse, duplo clique e captura de tela, mas `pc_digitar` e `pc_tecla` falharam. A causa identificada foi o tamanho incompatível da estrutura Win32 `INPUT`: a união era modelada somente com `KEYBDINPUT`, mas precisa incluir o maior membro `MOUSEINPUT`. `SendInput` exige o tamanho exato dessa estrutura.
+
+A versão 0.3.1 corrige o layout e o CI Windows executa `AssistentePc.exe --check-input-layout` para impedir regressão no tamanho da estrutura. Esse teste é estrutural, **não injeta teclas** e não substitui a verificação real de `pc_tecla` e `pc_digitar` após a atualização no Windows.
+
+Referências: https://learn.microsoft.com/pt-br/windows/win32/api/winuser/ns-winuser-input e https://learn.microsoft.com/pt-br/windows/win32/api/winuser/nf-winuser-sendinput.

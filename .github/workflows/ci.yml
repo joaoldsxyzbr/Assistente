@@ -26,6 +26,11 @@ jobs:
         with:
           dotnet-version: '8.0.x'
       - run: dotnet publish src/pc-agent/AssistentePc.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o dist/AssistentePc
+      - name: Validar layout nativo INPUT (Win32)
+        shell: pwsh
+        run: |
+          & "./dist/AssistentePc/AssistentePc.exe" --check-input-layout
+          if ($LASTEXITCODE -ne 0) { throw "Layout INPUT incorreto para a arquitetura do Windows." }
       - uses: actions/upload-artifact@v6
         with:
           name: AssistentePc-win-x64
