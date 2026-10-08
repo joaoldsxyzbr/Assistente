@@ -44,3 +44,9 @@ Referências oficiais:
 - https://developers.cloudflare.com/durable-objects/reference/durable-objects-migrations/
 - https://ts.sdk.modelcontextprotocol.io/server
 - https://learn.microsoft.com/en-us/dotnet/api/system.security.cryptography.protecteddata
+
+## Builds e versões
+
+O gatilho Cloudflare para a branch de desenvolvimento usa `npx wrangler versions upload --config wrangler.assistente.jsonc`. Esse comando cria uma **versão inativa**, não promove o tráfego e evita criar um KV de Preview. O mesmo comando é usado no fluxo de upload da branch `main`; a promoção para produção é uma etapa separada.
+
+O gatilho de branch (preview) também precisa usar um **Build API token válido**, configurado fora do Git. O token do gatilho de produção não altera necessariamente o token de outras branches. O CI GitHub continua validando código TypeScript, testes e compilação Windows.
