@@ -85,7 +85,7 @@ No `POST /authorize`, a senha é conferida e a mesma requisição OAuth é valid
 
 A página mantém CSP mínima: `default-src 'none'`, `base-uri 'none'` e `frame-ancestors 'none'`. Não usa `form-action`, pois essa diretiva bloquearia a cadeia de redirect até o callback do ChatGPT.
 
-O `OAUTH_KV` guarda o estado exigido pela biblioteca OAuth. Marcadores `diagnostic:oauth:*` mantêm por 1 hora o último estado seguro das fronteiras OAuth.
+O `OAUTH_KV` guarda exclusivamente o estado exigido pela biblioteca OAuth. O rastreamento provisório de fronteiras com marcadores `diagnostic:oauth:*` foi retirado do caminho de requisição após validação do MCP em produção; a observabilidade permanente continua nos logs estruturados.
 
 ### Auditoria
 
@@ -95,7 +95,7 @@ Os eventos registram apenas metadados operacionais: etapa, status, resultado, se
 
 Eventos principais:
 - autorização OAuth concluída, negada ou rejeitada;
-- requisição/resposta do endpoint de token;
+- falhas de token/OAuth reportadas pelo provider, sem persistir o corpo da resposta;
 - falha de autenticação ou escopo MCP;
 - resultado da requisição MCP;
 - resultado de chamada ao MCP remoto, incluindo escrita potencialmente incerta.
@@ -104,7 +104,7 @@ A configuração continua com `redact_query_string: true`, `invocation_logs: fal
 
 ## Segurança
 
-- endpoints MCP remotos precisam ser HTTPS e não podem conter credenciais, query string ou fragmento;
+- endpoints MCP remotos precisam coincidir com os endpoints HTTPS oficiais Cloudflare e GitHub; não podem conter credenciais, query string ou fragmento;
 - a allowlist local impede exposição automática de ferramentas remotas;
 - ferramentas de ponto usam SQL e endpoint fixos gerados no código do hub, sem aceitar SQL livre do ChatGPT;
 - secrets não entram no Git nem em respostas de status;
@@ -141,3 +141,9 @@ A configuração continua com `redact_query_string: true`, `invocation_logs: fal
 | `tests/` | testes das regras puras e contratos |
 
 Não existe segunda implementação de host. Novas abstrações só entram quando houver necessidade concreta.
+
+## Auditoria de confiabilidade (outubro de 2026)
+
+Foi confirmado em produção o acesso de leitura aos MCPs GitHub e Cloudflare e conferido o schema canônico D1 de ponto. A rodada posterior à auditoria adiciona testes SQLite em memória para o registro de ponto e fixa o destino HTTPS dos tokens do GitHub e Cloudflare. Diagnósticos antigos de OAuth não são mais gravados no KV durante o atendimento normal; logs estruturados permanecem.
+
+O CI de PR continua validando typecheck, testes unitários/de banco sintético e build dry-run, **não substitui** o teste de OAuth fresco e smoke de escritas MCP em ambiente descartável. A proteção de `main` não foi alterada por exclusão explícita do usuário. Dependabot cuida de avisos semanais de atualização de npm sem ampliar o CI normal.

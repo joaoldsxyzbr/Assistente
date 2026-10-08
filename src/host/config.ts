@@ -71,7 +71,10 @@ export function readMcpConfigurations(env: Environment): McpServerConfiguration[
     }
 
     const endpoint = validEndpoint(endpointValue);
-    if (endpoint === undefined) {
+    const expectedEndpoint = server.id === "cloudflare"
+      ? "https://mcp.cloudflare.com/mcp"
+      : "https://api.githubcopilot.com/mcp/";
+    if (endpoint === undefined || endpoint !== expectedEndpoint) {
       return {
         id: server.id,
         label: server.label,
