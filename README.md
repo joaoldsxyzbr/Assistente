@@ -112,3 +112,9 @@ O **CI do GitHub** valida `npm run check`. **Workers Builds** é um check extern
 Se um check de PR da Cloudflare falhar com `Authentication error [10000]` ou `Invalid access token [9109]` ao executar `wrangler preview`, revise **Settings → Builds → API token** no painel do Worker e a permissão da credencial associada ao trigger de preview. Não desabilite o check nem force uma dependência apenas para ocultar o erro. Registre o incidente em Issues e reexecute o check após corrigir a credencial.
 
 Os SDKs MCP devem permanecer alinhados com os `peerDependencies` de `agents`; não usar `--force` ou `--legacy-peer-deps` para atualizar client/server isoladamente.
+
+## Confiabilidade das chamadas MCP
+
+As conexões remotas têm limite de 15 segundos para conectar e 45 segundos por chamada de ferramenta. Erros e timeouts usam mensagens fixas, sem exibir respostas internas nem credenciais. Falhas após iniciar uma chamada de escrita são **resultado incerto**: consultar o serviço de origem antes de repetir, sem retry automático. Consultas de leitura podem ser tentadas novamente.
+
+Os testes automatizados cobrem timeouts, classificação de falhas e exigência de escopos em operações de leitura e escrita. Um login OAuth totalmente novo e sua renovação no ChatGPT continuam exigindo validação interativa; os testes de código não a substituem.
