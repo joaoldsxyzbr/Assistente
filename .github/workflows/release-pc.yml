@@ -1,0 +1,44 @@
+name: Release Assistente PC
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Versao Windows (ex: pc-v0.1.0-beta.1)"
+        type: string
+        required: true
+        default: "pc-v0.1.0-beta.1"
+
+permissions:
+  contents: write
+
+jobs:
+  release-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.0.x'
+      - name: Compilar aplicativo Windows x64
+        run: dotnet publish src/pc-agent/AssistentePc.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o dist/AssistentePc
+      - name: Empacotar e calcular SHA-256
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "dist/AssistentePc/AssistentePc.exe")) {
+            throw "Compilacao nao gerou AssistentePc.exe"
+          }
+          Compress-Archive -Path "dist/AssistentePc/*" -DestinationPath "dist/AssistentePc-win-x64.zip" -Force
+          $hash = (Get-FileHash "dist/AssistentePc-win-x64.zip" -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  AssistentePc-win-x64.zip" | Set-Content -Encoding utf8 "dist/SHA256SUMS.txt"
+      - name: Publicar no GitHub Releases
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          if ($env:RELEASE_TAG -notmatch '^pc-v[0-9]+\.[0-9]+\.[0-9]+(-beta\.[0-9]+)?$') {
+            throw "Tag de release invalida."
+          }
+          gh release create "$env:RELEASE_TAG" "dist/AssistentePc-win-x64.zip" "dist/SHA256SUMS.txt" --target "$env:GITHUB_SHA" --title "Assistente PC $env:RELEASE_TAG" --notes-file "docs/RELEASE-PC.md" --prerelease
+          if ($LASTEXITCODE -ne 0) { throw "Falha ao publicar o release." }
