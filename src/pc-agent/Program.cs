@@ -23,7 +23,9 @@ internal static class Program
         {
             // Verificação segura do ABI no runner Windows (não injeta teclas).
             int expectedSize = Environment.Is64BitProcess ? 40 : 28;
-            Environment.ExitCode = Marshal.SizeOf<Input>() == expectedSize ? 0 : 1;
+            int actualSize = Marshal.SizeOf<Input>();
+            // Retorna o tamanho observado se houver erro, para diagnosticar o CI.
+            Environment.ExitCode = actualSize == expectedSize ? 0 : actualSize;
             return;
         }
 
