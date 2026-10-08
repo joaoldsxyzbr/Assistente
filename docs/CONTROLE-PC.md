@@ -47,6 +47,6 @@ Referências oficiais:
 
 ## Builds e versões
 
-O gatilho Cloudflare para a branch de desenvolvimento usa `npx wrangler versions upload --config wrangler.assistente.jsonc`. Esse comando cria uma **versão inativa**, não promove o tráfego e evita criar um KV de Preview. O mesmo comando é usado no fluxo de upload da branch `main`; a promoção para produção é uma etapa separada.
+O gatilho Cloudflare de branches executa `npx wrangler deploy --dry-run --config wrangler.assistente.jsonc`: valida o bundle **sem publicar Preview, sem subir versão e sem tocar em produção**. Essa escolha evita criar um KV de Preview e evita o conflito de nome de Worker no gatilho de branches. Já o gatilho da `main` usa `npx wrangler versions upload --config wrangler.assistente.jsonc`, criando uma versão inativa; a promoção para produção continua separada.
 
-O gatilho de branch (preview) também precisa usar um **Build API token válido**, configurado fora do Git. O token do gatilho de produção não altera necessariamente o token de outras branches. O CI GitHub continua validando código TypeScript, testes e compilação Windows.
+Os gatilhos de branches e da `main` devem apontar para um **Build API token válido**, configurado fora do Git. São configurações distintas no Cloudflare Workers Builds. O CI GitHub também valida TypeScript, testes e compilação Windows; o dry-run não substitui um teste real do PC nem comprova deploy em produção.
