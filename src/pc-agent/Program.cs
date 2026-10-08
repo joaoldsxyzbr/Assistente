@@ -19,6 +19,16 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        if (args.Length == 1 && args[0] == "--check-input-layout")
+        {
+            // Verificação segura do ABI no runner Windows (não injeta teclas).
+            int expectedSize = Environment.Is64BitProcess ? 40 : 28;
+            int actualSize = Marshal.SizeOf<Input>();
+            // Retorna o tamanho observado se houver erro, para diagnosticar o CI.
+            Environment.ExitCode = actualSize == expectedSize ? 0 : actualSize;
+            return;
+        }
+
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
 
@@ -243,10 +253,18 @@ internal static class Program
         if (SendInput(1, new[] { input }, Marshal.SizeOf<Input>()) != 1) throw new InvalidOperationException("Digitação indisponível.");
     }
 
+    // A união nativa INPUT usa o tamanho do maior membro (MOUSEINPUT).
+    // Apenas KEYBDINPUT deixa cbSize menor que sizeof(INPUT) e SendInput falha (erro 87).
     [StructLayout(LayoutKind.Sequential)] private struct Input { public uint Type; public InputUnion U; }
-    [StructLayout(LayoutKind.Explicit)] private struct InputUnion { [FieldOffset(0)] public KeyboardInput Keyboard; }
+    [StructLayout(LayoutKind.Explicit)] private struct InputUnion {
+        [FieldOffset(0)] public KeyboardInput Keyboard;
+        [FieldOffset(0)] public MouseInput Mouse;
+    }
     [StructLayout(LayoutKind.Sequential)] private struct KeyboardInput {
         public ushort VirtualKey; public ushort Scan; public uint Flags; public uint Time; public IntPtr ExtraInfo;
+    }
+    [StructLayout(LayoutKind.Sequential)] private struct MouseInput {
+        public int X; public int Y; public uint MouseData; public uint Flags; public uint Time; public IntPtr ExtraInfo;
     }
     private delegate bool EnumWindowsProc(IntPtr window, IntPtr extra);
     [DllImport("user32.dll")] private static extern bool EnumWindows(EnumWindowsProc callback, IntPtr extra);

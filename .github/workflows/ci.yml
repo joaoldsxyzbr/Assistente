@@ -26,6 +26,15 @@ jobs:
         with:
           dotnet-version: '8.0.x'
       - run: dotnet publish src/pc-agent/AssistentePc.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o dist/AssistentePc
+      - name: Validar layout nativo INPUT (Win32)
+        shell: pwsh
+        run: |
+          # Aplicativos WinExe são iniciados de modo assíncrono pelo PowerShell.
+          # Espere explicitamente o processo e consulte seu ExitCode.
+          $process = Start-Process -FilePath "./dist/AssistentePc/AssistentePc.exe" -ArgumentList "--check-input-layout" -Wait -PassThru
+          if ($process.ExitCode -ne 0) {
+            throw "Layout INPUT incorreto: tamanho observado $($process.ExitCode) bytes (esperado 40 em x64)."
+          }
       - uses: actions/upload-artifact@v6
         with:
           name: AssistentePc-win-x64
