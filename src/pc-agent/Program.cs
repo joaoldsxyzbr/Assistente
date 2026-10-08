@@ -3,129 +3,54 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.Net.WebSockets;
 using System.Runtime.InteropServices;
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Windows.Forms;
 
 namespace AssistentePc;
 
 internal static class Program
 {
-    private static readonly Uri Address = new("wss://assistente.joaolds.xyz.br/pc/connect");
-    private static readonly string SecretPath = Path.Combine(
+    internal static readonly Uri Address = new("wss://assistente.joaolds.xyz.br/pc/connect");
+    internal static readonly string SecretPath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "Assistente", "pc-secret.dat");
 
     [STAThread]
-    private static async Task Main(string[] args)
+    private static void Main(string[] args)
     {
-        if (args.Length > 0 && args[0] == "configure")
+        Application.EnableVisualStyles();
+        Application.SetCompatibleTextRenderingDefault(false);
+
+        if (args.Length == 1 && args[0].Equals("configure", StringComparison.OrdinalIgnoreCase))
         {
-            ConfigureToken();
+            TrayAgent.ConfigureOnly();
             return;
         }
-        if (args.Length > 0 && args[0] == "reset")
+        if (args.Length == 1 && args[0].Equals("reset", StringComparison.OrdinalIgnoreCase))
         {
-            if (File.Exists(SecretPath)) File.Delete(SecretPath);
-            Console.WriteLine("Credencial local apagada. Revogue também o secret no Worker.");
+            TrayAgent.ResetOnly();
             return;
         }
-        if (!File.Exists(SecretPath))
+        if (args.Length != 0)
         {
-            Console.WriteLine("Assistente PC — primeira configuração");
-            Console.WriteLine("1. Cadastre PC_AGENT_TOKEN como Secret no Worker assistente da Cloudflare.");
-            Console.WriteLine("2. Cole aqui o MESMO token. Ele não será exibido nem enviado ao GitHub.");
-            Console.WriteLine("   Pressione ESC para cancelar a configuração.");
-            Console.WriteLine();
-            if (!ConfigureToken())
-            {
-                Console.WriteLine("Configuração não concluída. Pressione Enter para fechar.");
-                Console.ReadLine();
-                return;
-            }
-            Console.WriteLine("Iniciando a conexão...");
-        }
-        string bearer;
-        try
-        {
-            bearer = Encoding.UTF8.GetString(ProtectedData.Unprotect(File.ReadAllBytes(SecretPath), null, DataProtectionScope.CurrentUser));
-        }
-        catch (Exception e) when (e is CryptographicException or IOException or UnauthorizedAccessException)
-        {
-            Console.WriteLine("Não foi possível acessar a credencial. Execute AssistentePc.exe configure novamente.");
-            Console.WriteLine("Pressione Enter para fechar.");
-            Console.ReadLine();
+            MessageBox.Show("Comando inválido. Use configure ou reset.", "Assistente PC",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
 
-        using var cancellation = new CancellationTokenSource();
-        Console.CancelKeyPress += (_, e) => { e.Cancel = true; cancellation.Cancel(); };
-        Console.WriteLine("Assistente PC iniciado. Ctrl+C encerra o controle.");
-        while (!cancellation.IsCancellationRequested)
+        using var singleInstance = new Mutex(initiallyOwned: true,
+            name: @"Local\AssistentePcAgent", createdNew: out bool createdNew);
+        if (!createdNew)
         {
-            try
-            {
-                using var socket = new ClientWebSocket();
-                socket.Options.SetRequestHeader("Authorization", "Bearer " + bearer);
-                socket.Options.KeepAliveInterval = TimeSpan.FromSeconds(25);
-                await socket.ConnectAsync(Address, cancellation.Token);
-                Console.WriteLine("Conectado ao Assistente.");
-                await ReceiveCommands(socket, cancellation.Token);
-                Console.WriteLine("Conexão encerrada.");
-            }
-            catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { break; }
-            catch (Exception e) when (e is WebSocketException or HttpRequestException or IOException)
-            {
-                Console.WriteLine("Conexão indisponível; nova tentativa em 5 segundos.");
-            }
-            try { await Task.Delay(TimeSpan.FromSeconds(5), cancellation.Token); }
-            catch (OperationCanceledException) { break; }
+            MessageBox.Show("O Assistente PC já está aberto. Procure o ícone na bandeja, perto do relógio.",
+                "Assistente PC", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
         }
+        Application.Run(new TrayAgent());
     }
 
-    private static bool ConfigureToken()
-    {
-        while (true)
-        {
-            Console.Write("Cole PC_AGENT_TOKEN (oculto, ESC cancela): ");
-            string? token = ReadSecret();
-            if (token is null) return false;
-            if (token.Length < 32 || token.Length > 256)
-            {
-                Console.WriteLine("Token inválido: use entre 32 e 256 caracteres. Tente novamente.");
-                continue;
-            }
-            try
-            {
-                Directory.CreateDirectory(Path.GetDirectoryName(SecretPath)!);
-                byte[] encrypted = ProtectedData.Protect(
-                    Encoding.UTF8.GetBytes(token), null, DataProtectionScope.CurrentUser);
-                File.WriteAllBytes(SecretPath, encrypted);
-                Console.WriteLine("Credencial salva com proteção do Windows para o usuário atual.");
-                return true;
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException or CryptographicException)
-            {
-                Console.WriteLine("Não foi possível salvar a credencial. Confira o acesso à pasta do usuário.");
-                return false;
-            }
-        }
-    }
-
-    private static string? ReadSecret()
-    {
-        var buffer = new StringBuilder();
-        while (true)
-        {
-            ConsoleKeyInfo key = Console.ReadKey(intercept: true);
-            if (key.Key == ConsoleKey.Escape) { Console.WriteLine(); return null; }
-            if (key.Key == ConsoleKey.Enter) { Console.WriteLine(); return buffer.ToString(); }
-            if (key.Key == ConsoleKey.Backspace && buffer.Length > 0) { buffer.Length--; continue; }
-            if (!char.IsControl(key.KeyChar) && buffer.Length < 256) buffer.Append(key.KeyChar);
-        }
-    }
-
-    private static async Task ReceiveCommands(ClientWebSocket socket, CancellationToken cancellation)
+    internal static async Task ReceiveCommands(ClientWebSocket socket, CancellationToken cancellation)
     {
         byte[] buffer = new byte[8192];
         while (socket.State == WebSocketState.Open && !cancellation.IsCancellationRequested)
