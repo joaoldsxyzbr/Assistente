@@ -1,17 +1,15 @@
-# Assistente PC — primeira versão para testes
+# Assistente PC — versão com bandeja
 
-Aplicativo portátil Windows x64 para conectar seu PC ao Assistente MCP. **Versão beta:** compilação automatizada validada, mas controle real ainda precisa ser testado no seu computador.
+Aplicativo portátil para Windows x64. Abre na **bandeja do Windows**, sem CMD, e mantém o controle remoto via Assistente MCPs em segundo plano.
 
-## Como instalar
+## Como atualizar
 
-1. Baixe **AssistentePc-win-x64.zip** nos anexos (*Assets*) desta página.
-2. Extraia todo o conteúdo em uma pasta, como `C:\AssistentePc`.
-3. No Worker `assistente` da Cloudflare, configure um Secret chamado `PC_AGENT_TOKEN`, com o mesmo valor que será informado no aplicativo. Não envie o token por chat nem grave-o no GitHub.
-4. Dê **duplo clique** no `AssistentePc.exe`: na primeira abertura, ele orienta a configuração e pede a mesma chave, com digitação oculta. Pressione ESC para cancelar.
-5. Após salvar, o aplicativo inicia a conexão automaticamente. Mantenha a janela aberta durante o teste; use Ctrl+C para desconectar. Se preferir PowerShell, execute `.\AssistentePc.exe configure` e depois `.\AssistentePc.exe`.
+1. Se você estiver usando uma versão antiga com a janela preta, pressione **Ctrl+C** para encerrá-la.
+2. Baixe o anexo **AssistentePc-win-x64.zip** deste release e extraia os arquivos para uma pasta definitiva, como `C:\AssistentePc`.
+3. Dê duplo clique em **AssistentePc.exe**. O ícone aparecerá perto do relógio do Windows (talvez nos ícones ocultos). Nenhuma janela preta precisa ficar aberta.
+4. Clique com o botão direito no ícone para conferir **Status**, **Reconectar**, **Configurar token**, **Iniciar com Windows** (opcional) ou **Sair**.
+5. Se você já havia configurado o PC, o token salvo no Windows é reutilizado. Se for a primeira vez, a janela solicita o mesmo token do secret `PC_AGENT_TOKEN` no Worker Cloudflare.
 
-Se a versão atual do Worker ainda não tiver sido promovida, o app não conectará até a ativação do Worker. O aplicativo usa a conexão de saída, sem abrir portas do roteador. Não há instalador ou necessidade de instalar .NET.
+**Importante:** configure **Iniciar com Windows** somente depois de deixar o executável na pasta definitiva. Para desconectar, use **Sair** na bandeja. Para apagar a credencial, encerre o aplicativo e execute `AssistentePc.exe reset`.
 
-Verificação opcional: o anexo `SHA256SUMS.txt` traz o SHA-256 do ZIP. Veja também [o guia completo](https://github.com/joaoldsxyzbr/Assistente/blob/main/docs/CONTROLE-PC.md).
-
-**Segurança:** controle somente com consentimento. Não mantenha o Windows desbloqueado sem necessidade. Para apagar a credencial local: `.\AssistentePc.exe reset` e revogue o Secret na Cloudflare.
+O teste de compilação automático não substitui a confirmação visual no seu Windows. Veja [o guia completo](https://github.com/joaoldsxyzbr/Assistente/blob/main/docs/CONTROLE-PC.md). O anexo `SHA256SUMS.txt` permite verificar o ZIP.

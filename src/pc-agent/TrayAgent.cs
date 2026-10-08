@@ -2,6 +2,7 @@ using System.Drawing;
 using System.Net.WebSockets;
 using System.Security.Cryptography;
 using System.Text;
+using System.Windows.Forms;
 using Microsoft.Win32;
 
 namespace AssistentePc;
