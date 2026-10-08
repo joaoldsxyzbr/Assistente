@@ -21,17 +21,7 @@ internal static class Program
     {
         if (args.Length > 0 && args[0] == "configure")
         {
-            Console.Write("Cole o token PC_AGENT_TOKEN do Worker (entrada oculta): ");
-            string token = ReadSecret();
-            if (token.Length < 32 || token.Length > 256)
-            {
-                Console.WriteLine("Token inválido: use pelo menos 32 caracteres aleatórios.");
-                return;
-            }
-            Directory.CreateDirectory(Path.GetDirectoryName(SecretPath)!);
-            byte[] encrypted = ProtectedData.Protect(Encoding.UTF8.GetBytes(token), null, DataProtectionScope.CurrentUser);
-            File.WriteAllBytes(SecretPath, encrypted);
-            Console.WriteLine("Credencial protegida para o usuário atual do Windows.");
+            ConfigureToken();
             return;
         }
         if (args.Length > 0 && args[0] == "reset")
@@ -42,17 +32,29 @@ internal static class Program
         }
         if (!File.Exists(SecretPath))
         {
-            Console.WriteLine("Execute primeiro: AssistentePc.exe configure");
-            return;
+            Console.WriteLine("Assistente PC — primeira configuração");
+            Console.WriteLine("1. Cadastre PC_AGENT_TOKEN como Secret no Worker assistente da Cloudflare.");
+            Console.WriteLine("2. Cole aqui o MESMO token. Ele não será exibido nem enviado ao GitHub.");
+            Console.WriteLine("   Pressione ESC para cancelar a configuração.");
+            Console.WriteLine();
+            if (!ConfigureToken())
+            {
+                Console.WriteLine("Configuração não concluída. Pressione Enter para fechar.");
+                Console.ReadLine();
+                return;
+            }
+            Console.WriteLine("Iniciando a conexão...");
         }
         string bearer;
         try
         {
             bearer = Encoding.UTF8.GetString(ProtectedData.Unprotect(File.ReadAllBytes(SecretPath), null, DataProtectionScope.CurrentUser));
         }
-        catch (CryptographicException)
+        catch (Exception e) when (e is CryptographicException or IOException or UnauthorizedAccessException)
         {
-            Console.WriteLine("Não foi possível acessar a credencial. Reconfigure.");
+            Console.WriteLine("Não foi possível acessar a credencial. Execute AssistentePc.exe configure novamente.");
+            Console.WriteLine("Pressione Enter para fechar.");
+            Console.ReadLine();
             return;
         }
 
@@ -81,12 +83,42 @@ internal static class Program
         }
     }
 
-    private static string ReadSecret()
+    private static bool ConfigureToken()
+    {
+        while (true)
+        {
+            Console.Write("Cole PC_AGENT_TOKEN (oculto, ESC cancela): ");
+            string? token = ReadSecret();
+            if (token is null) return false;
+            if (token.Length < 32 || token.Length > 256)
+            {
+                Console.WriteLine("Token inválido: use entre 32 e 256 caracteres. Tente novamente.");
+                continue;
+            }
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(SecretPath)!);
+                byte[] encrypted = ProtectedData.Protect(
+                    Encoding.UTF8.GetBytes(token), null, DataProtectionScope.CurrentUser);
+                File.WriteAllBytes(SecretPath, encrypted);
+                Console.WriteLine("Credencial salva com proteção do Windows para o usuário atual.");
+                return true;
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException or CryptographicException)
+            {
+                Console.WriteLine("Não foi possível salvar a credencial. Confira o acesso à pasta do usuário.");
+                return false;
+            }
+        }
+    }
+
+    private static string? ReadSecret()
     {
         var buffer = new StringBuilder();
         while (true)
         {
             ConsoleKeyInfo key = Console.ReadKey(intercept: true);
+            if (key.Key == ConsoleKey.Escape) { Console.WriteLine(); return null; }
             if (key.Key == ConsoleKey.Enter) { Console.WriteLine(); return buffer.ToString(); }
             if (key.Key == ConsoleKey.Backspace && buffer.Length > 0) { buffer.Length--; continue; }
             if (!char.IsControl(key.KeyChar) && buffer.Length < 256) buffer.Append(key.KeyChar);

@@ -17,7 +17,7 @@ Não há shell irrestrito, escrita em arquivos, elevação, instalação de soft
 2. No painel da Cloudflare, Worker assistente, Settings → Variables and Secrets, cadastre o valor como **secret PC_AGENT_TOKEN**. Nunca envie ao chat nem faça commit do segredo.
 3. Publique/promova a nova versão do Worker após os testes. Enquanto o secret não estiver configurado, as ferramentas pc_* permanecem ocultas.
 4. Baixe o ZIP em [GitHub Releases](https://github.com/joaoldsxyzbr/Assistente/releases) (anexo `AssistentePc-win-x64.zip`) e extraia o conteúdo; alternativamente o CI gera o artefato `AssistentePc-win-x64`. Não precisa instalar .NET no Windows.
-5. No Windows, execute AssistentePc.exe configure, cole o token no prompt oculto. A credencial ficará protegida pela DPAPI em %LOCALAPPDATA%\Assistente\pc-secret.dat.
+5. No Windows, dê duplo clique em AssistentePc.exe: no primeiro uso, a janela orienta a configuração do token (entrada oculta, ESC cancela) e inicia a conexão automaticamente. Alternativamente, execute `AssistentePc.exe configure` no PowerShell. A credencial ficará protegida pela DPAPI em %LOCALAPPDATA%\Assistente\pc-secret.dat.
 6. Execute AssistentePc.exe com sua sessão do Windows aberta. O programa reconecta automaticamente ao domínio assistente.joaolds.xyz.br sem abrir portas no roteador.
 7. Atualize/recarregue o app Assistente MCPs no ChatGPT, se o catálogo estiver em cache, e teste pc_status.
 8. Depois de confirmado, crie um atalho para AssistentePc.exe na pasta Inicializar do usuário para conectá-lo automaticamente após logon.
