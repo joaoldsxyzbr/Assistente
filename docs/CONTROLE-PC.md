@@ -26,3 +26,44 @@ Sem execução livre de PowerShell, CMD ou scripts remotos. A lista fixa de coma
 - Testes de schema verificam que ferramentas antigas não existem e scripts/argumentos de terminal são recusados.
 - O build Windows não prova compatibilidade de cada app com UI Automation; executar testes reais após instalar a versão 0.4.
 - Fonte oficial: [Microsoft — MSBuild Windows Desktop](https://learn.microsoft.com/pt-br/dotnet/core/project-sdk/msbuild-props-desktop), [InvokePattern](https://learn.microsoft.com/en-us/dotnet/api/system.windows.automation.invokepattern.invoke), [ValuePattern](https://learn.microsoft.com/en-us/dotnet/api/system.windows.automation.valuepattern.setvalue).
+
+## Plano de compatibilidade e desempenho — pesquisa de 08/10/2026 (proposta, não implementada)
+
+**Decisão:** preservar C#/.NET + Worker TypeScript + Durable Object/WebSocket e priorizar a UI Automation nativa. Continuar **sem screenshots, clique por coordenadas ou shell arbitrário**. FlaUI é alternativa só se testes reais justificarem dependência; o `winapp CLI` oficial está em prévia pública, sendo referência de comportamento, não requisito de instalação.
+
+### Evidência observada e diagnóstico do código 0.4
+- Teste real no Brave: inspeção dos controles e abertura de uma nova guia funcionaram; acionar «Pesquisa em todas as guias» retornou erro genérico. **A causa exata não foi identificada**, porque `Program.ReceiveCommands` converte várias exceções em uma mesma mensagem.
+- `WindowAutomation.Act` suporta somente `InvokePattern` e `ValuePattern`, não padrões para seleção, alternância e expansão.
+- A busca atual usa janela em primeiro plano, nome/AutomationId exatos e até dois resultados; a inspeção alcança até 70 elementos, 250 nós e 6 níveis. O sinal `truncado` não identifica todas as formas de corte. IDs derivados da posição/árvore podem mudar.
+- A enumeração via `TreeWalker` chama propriedades individuais, que podem exigir viagens entre processos. A Microsoft recomenda escopo e cache de propriedades.
+- No `PcRelay`, o teste `pending.size` ocorre antes de operações assíncronas para ler o corpo; verificar exclusividade atômica sob duas requisições simultâneas. Não foi constatado conflito em produção.
+- `TerminalCommands` utiliza UTF-8 ao ler utilitários legados; `ipconfig` apresentou caracteres incorretos. Verificar code page/encoding real, sem impor UTF-8 a um executável que não emite UTF-8.
+
+### Ordem recomendada (pequenos PRs; uma integração e CI final por lote)
+1. **Diagnóstico e segurança (P0):** códigos estruturados `not_found`, `ambiguous`, `unsupported_pattern`, `disabled`, `offscreen`, `stale`, `target_changed`, `timeout`, `unknown`; mensagens sem valores sensíveis; correlation ID, duração local/Worker e versão; timeout controlado e nenhuma repetição cega de escrita.
+2. **Ações UIA (P1):** declarar capacidades por elemento; `Invoke`, `Value`, `SelectionItem`, `Toggle`, `ExpandCollapse` (e `ScrollItem` apenas se os casos reais exigirem); ações explícitas, estado-alvo idempotente quando possível, checagem antes e depois. Não simular clique quando faltarem padrões.
+3. **Alvo estável (P1):** inspeção e ação com identificação de janela/processo; filtros de tipo, identificador, pai/escopo, habilitado/visível. Resolver ambiguidade explicitamente, verificar se janela/foco mudou e se a referência do elemento expirou antes de editar. Sempre evitar confiar em nomes isolados de aplicações diferentes.
+4. **Eficiência e robustez (P2):** buscas locais e cache por consulta (com invalidação quando UI mudar); limitar resultados sem perder indicação de truncamento. Executar UIA longe da thread gráfica, serializar alterações de interface, isolar providers travados sem bloquear a conexão e revisar a janela crítica de concorrência no relay.
+5. **Terminal objetivo (P3):** manter comandos permitidos e adicionar somente operações estruturadas que resolvam fluxos reais, com diretórios/escopos autorizados. Corrigir encoding dos diagnósticos. Sem PowerShell/CMD arbitrário por padrão.
+
+### Segurança e limites
+- Ações em aplicativos podem modificar ou excluir dados: só executar no escopo do pedido do usuário e confirmar ações sensíveis. Metadados `isWrite`/anotações não são controle efetivo de permissão.
+- Nunca retornar senhas/credenciais nem valores de campos sensíveis; evitar logs com textos de controles e conteúdos da página. Segregar autenticação MCP e token do PC; aplicar autenticação e autorização reais no Worker.
+- UIA depende da acessibilidade fornecida pelos aplicativos. Não prometer acesso a canvas, jogos, UAC, janelas elevadas ou sessões indisponíveis; não enfraquecer o UAC nem usar `uiAccess` como atalho. Caracterizar o comportamento em sessão bloqueada por ação e aplicativo, sem suposições universais.
+- Em timeout ou desconexão depois de ação, resultado de escrita pode ser **incerto**: reconciliar estado antes de qualquer nova tentativa.
+
+### Critérios para considerar a próxima versão validada
+- Reproduzir e classificar o erro do botão de pesquisa do Brave; conseguir nova guia e controle de estado compatível sem imagem; relatar de forma específica quando um controle não oferecer padrão.
+- Exercitar Brave, Explorador e Bloco de Notas em Windows real; casos positivos e negativos: nome duplicado, elemento removido, janela trocada, controle desabilitado, campo de senha, duas solicitações simultâneas, perda da conexão e timeout.
+- Registrar tempos p50/p95 por tipo de ação antes e depois; somente depois definir metas numéricas de velocidade.
+- Rodar testes de contrato, compilação Windows e CI para o estado final; **CI verde não substitui teste real no PC**.
+
+### Fontes primárias consultadas
+- Microsoft, padrões UIA: https://learn.microsoft.com/en-us/windows/win32/winauto/uiauto-controlpatternsoverview
+- Microsoft, desempenho/cache: https://learn.microsoft.com/en-us/windows/win32/winauto/uiauto-cachingforclients
+- Microsoft, elementos e busca: https://learn.microsoft.com/en-us/windows/win32/winauto/uiauto-obtainingelements
+- Microsoft, threading COM: https://learn.microsoft.com/en-us/windows/win32/winauto/uiauto-threading
+- Microsoft, winapp CLI (prévia): https://learn.microsoft.com/en-us/windows/apps/dev-tools/winapp-cli/
+- MCP, boas práticas de segurança: https://modelcontextprotocol.io/docs/2025-11-25/tutorials/security/security_best_practices
+- Cloudflare, WebSockets em Durable Objects: https://developers.cloudflare.com/durable-objects/best-practices/websockets/
+- FlaUI (alternativa, não adotada): https://github.com/FlaUI/FlaUI
