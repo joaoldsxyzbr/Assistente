@@ -2,7 +2,6 @@ import type {
   AuthRequest,
   OAuthHelpers,
 } from "@cloudflare/workers-oauth-provider";
-import type { OAuthDiagnosticStore } from "./oauth-boundary-diagnostics.ts";
 import { audit } from "./audit.ts";
 import {
   ASSISTENTE_OAUTH_SCOPES,
@@ -15,7 +14,6 @@ import {
 export type OAuthAuthorizationEnvironment = Readonly<Record<string, unknown>> & {
   ASSISTENTE_OAUTH_PASSWORD?: string;
   OAUTH_PROVIDER?: OAuthHelpers;
-  OAUTH_KV?: OAuthDiagnosticStore;
 };
 
 type OAuthFailureStage = "authorize_get" | "authorize_post";
