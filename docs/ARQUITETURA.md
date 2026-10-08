@@ -158,3 +158,7 @@ Sem período explícito, todas as ferramentas usam o **mês seguinte** (timezone
 ## Recuperação de falhas de MCP
 
 O cliente remoto estabelece até 15 segundos para handshake e até 45 segundos para a chamada. Erros de timeout de leitura podem ser repetidos. Quando uma chamada de escrita já começou, qualquer falha de rede, timeout ou rejeição sem retorno confiável é marcada como resultado incerto e **não recebe retry automático**. A resposta solicita verificar o recurso de origem antes de outra tentativa. Logs registram metadados do resultado, não a exceção bruta.
+
+## Controle do PC (primeira versão)
+
+O módulo opcional src/mcps/pc/ declara ferramentas especializadas protegidas pelo OAuth existente. O agente Windows em src/pc-agent/ usa o WebSocket de saída para o mesmo Worker, com secret separado PC_AGENT_TOKEN protegido por DPAPI no PC. O Durable Object PcRelay hospeda a conexão WebSocket hibernável e permite encaminhar comandos a partir de chamadas independentes do Worker. Sem secret as ferramentas pc_* não são registradas; sem computador conectado elas retornam offline. Capturas JPEG são preservadas como conteúdo MCP do tipo imagem. Essa integração não utiliza D1 e não muda os domínios de ponto e gastos. Limites, regras, configuração e testes constam em [docs/CONTROLE-PC.md](CONTROLE-PC.md).
