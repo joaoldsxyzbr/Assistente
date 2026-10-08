@@ -86,6 +86,32 @@ test("detects write calls in JSON-RPC batches even if Content-Type is misleading
   assert.equal(await requestUsesWriteTool(read, writeTools), false);
 });
 
+test("read/write tool classification covers point, expenses and GitHub in a batch", async () => {
+  const writeTools = [
+    "mcp_cloudflare__execute",
+    "ponto_registrar",
+    "gastos_registrar",
+    "gastos_atualizar",
+    "gastos_excluir",
+    "mcp_github__merge_pull_request",
+  ];
+  for (const name of writeTools) {
+    const request = new Request("https://assistente.example.test/mcp", {
+      method: "POST",
+      body: JSON.stringify([
+        { jsonrpc: "2.0", id: 1, method: "tools/list" },
+        { jsonrpc: "2.0", id: 2, method: "tools/call", params: { name } },
+      ]),
+    });
+    assert.equal(await requestUsesWriteTool(request, writeTools), true, name);
+  }
+  const read = new Request("https://assistente.example.test/mcp", {
+    method: "POST",
+    body: JSON.stringify({ jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "ponto_hoje" } }),
+  });
+  assert.equal(await requestUsesWriteTool(read, writeTools), false);
+});
+
 test("escapes OAuth client-controlled content before rendering consent", () => {
   const html = renderConsentPage({
     clientId: "https://chatgpt.example/client.json",

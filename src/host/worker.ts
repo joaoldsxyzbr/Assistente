@@ -21,6 +21,7 @@ import {
   type McpServerConfiguration,
 } from "./config.ts";
 import { RemoteMcpClient } from "./remote-client.ts";
+import { classifyRemoteCallFailure } from "./remote-failure.ts";
 import { createOAuthMcpWorker } from "../shared/oauth-mcp-worker.ts";
 import { oauthSecuritySchemesForTool } from "../shared/oauth-helpers.ts";
 import { audit } from "../shared/audit.ts";
@@ -90,18 +91,16 @@ async function callRemoteTool(
       content: textContent(result),
       isError,
     };
-  } catch {
+  } catch (error) {
+    const failure = classifyRemoteCallFailure(error, isWrite, callStarted);
     audit("warn", "upstream_tool_call", {
       server: configuration.id,
       tool: remoteName,
       write: isWrite,
-      outcome: isWrite && callStarted ? "uncertain" : "failed",
-      uncertain: isWrite && callStarted,
+      outcome: failure.outcome,
+      uncertain: failure.uncertain,
     });
-    const message = isWrite && callStarted
-      ? "O resultado da operação pode ser incerto. Consulte o MCP de origem antes de tentar novamente."
-      : "O MCP de origem está indisponível ou rejeitou a chamada.";
-    return { isError: true, content: [{ type: "text" as const, text: message }] };
+    return { isError: true, content: [{ type: "text" as const, text: failure.message }] };
   } finally {
     await client.close().catch(() => undefined);
   }

@@ -203,3 +203,26 @@ test("repeated valid POSTs do not depend on one-time browser state", async () =>
   assert.equal(second.status, 302);
   assert.deepEqual(harness.state(), { parseCalls: 2, completeCalls: 2 });
 });
+
+test("fresh OAuth login rejects failed client metadata before issuing authorization", async () => {
+  let completeCalls = 0;
+  const oauth = {
+    async parseAuthRequest() {
+      const error = new Error("Remote client metadata is unavailable");
+      error.name = "CimdFetchError";
+      throw error;
+    },
+    async completeAuthorization() {
+      completeCalls += 1;
+      throw new Error("authorization must not be issued");
+    },
+  } as unknown as OAuthHelpers;
+  const response = await handleAuthorizeRequest(
+    authorizePostRequest(strongPassword), environment(oauth),
+  );
+  assert.equal(response.status, 400);
+  assert.equal(completeCalls, 0);
+  const body = await response.text();
+  assert.ok(body.includes("Não foi possível verificar o cliente OAuth"));
+  assert.equal(body.includes(strongPassword), false);
+});
