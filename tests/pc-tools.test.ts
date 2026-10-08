@@ -7,6 +7,10 @@ test("catálogo é limitado e classifica corretamente as ferramentas", () => {
   assert.equal(new Set(PC_TOOL_CATALOG.map((t) => t.name)).size, PC_TOOL_CATALOG.length);
   assert.equal(isPcWrite("pc_status"), false);
   assert.equal(isPcWrite("pc_tela"), false);
+  assert.equal(isPcWrite("pc_informacoes"), false);
+  assert.equal(isPcWrite("pc_processos"), false);
+  assert.equal(isPcWrite("pc_pasta"), true);
+  assert.equal(isPcWrite("pc_rolar"), true);
   assert.equal(isPcWrite("pc_digitar"), true);
   assert.equal(isPcTool("pc_exec_shell"), false);
   assert.ok(PC_TOOL_CATALOG.every((tool) => tool.inputSchema.additionalProperties === false));
@@ -54,6 +58,21 @@ test("validação adicional da fronteira de execução", () => {
   assert.equal(validPcArguments("pc_digitar", { texto: "x".repeat(501) }), false);
   assert.equal(validPcArguments("pc_tecla", { atalho: "WIN+R" }), false);
   assert.equal(validPcArguments("pc_status", {}), true);
+  assert.equal(validPcArguments("pc_informacoes", {}), true);
+  assert.equal(validPcArguments("pc_informacoes", { extra: 1 }), false);
+  assert.equal(validPcArguments("pc_processos", {}), true);
+  assert.equal(validPcArguments("pc_pasta", { pasta: "downloads" }), true);
+  assert.equal(validPcArguments("pc_pasta", { pasta: "sistema" }), false);
+  assert.equal(validPcArguments("pc_clicar", { x: 4, y: 20, botao: "direito" }), true);
+  assert.equal(validPcArguments("pc_clicar", { x: 4, y: 20, duplo: true }), true);
+  assert.equal(validPcArguments("pc_clicar", { x: 4, y: 20, botao: "direito", duplo: true }), false);
+  assert.equal(validPcArguments("pc_clicar", { x: 4, y: 20, botao: "meio" }), false);
+  assert.equal(validPcArguments("pc_rolar", { direcao: "baixo", passos: 3 }), true);
+  assert.equal(validPcArguments("pc_rolar", { direcao: "cima", passos: 12 }), true);
+  assert.equal(validPcArguments("pc_rolar", { direcao: "baixo", passos: 13 }), false);
+  assert.equal(validPcArguments("pc_rolar", { direcao: "baixo", passos: 1.5 }), false);
+  assert.equal(validPcArguments("pc_tecla", { atalho: "CTRL+F" }), true);
+  assert.equal(validPcArguments("pc_tecla", { atalho: "DELETE" }), true);
 });
 
 test("respostas malformadas e excessivas são erros", () => {
@@ -74,6 +93,8 @@ test("parâmetros inválidos não chegam ao Durable Object", async () => {
   };
   assert.equal((await pcCall(environment, "pc_abrir", { aplicativo: "terminal" })).isError, true);
   assert.equal((await pcCall(environment, "pc_tecla", { atalho: "WIN+R" })).isError, true);
+  assert.equal((await pcCall(environment, "pc_pasta", { pasta: "sistema" })).isError, true);
+  assert.equal((await pcCall(environment, "pc_rolar", { direcao: "baixo", passos: 100 })).isError, true);
   assert.equal(accesses, 0);
 });
 

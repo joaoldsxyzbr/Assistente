@@ -2,6 +2,10 @@
 
 Aplicativo portátil para Windows x64. Abre na **bandeja do Windows**, sem CMD, e mantém o controle remoto via Assistente MCPs em segundo plano.
 
+**Novas capacidades:** informações do Windows, lista dos processos, abertura de pastas conhecidas, rolagem, clique direito/duplo clique e teclas de navegação, busca e abas. Sem PowerShell, execução de comandos, acesso arbitrário ao disco ou tarefas administrativas.
+
+**Atenção:** as novas ferramentas aparecem no ChatGPT somente quando a nova versão do Worker for promovida para produção e o catálogo do Assistente MCPs for atualizado. O novo aplicativo Windows sozinho não publica ferramentas no ChatGPT.
+
 ## Como atualizar
 
 1. Se você estiver usando uma versão antiga com a janela preta, pressione **Ctrl+C** para encerrá-la.
