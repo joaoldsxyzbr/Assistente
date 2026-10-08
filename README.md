@@ -84,3 +84,11 @@ Para ativar:
 4. Recarregue/atualize o Assistente MCPs no ChatGPT se o catálogo de ferramentas ficar em cache.
 
 Sem secret, o GitHub permanece inativo e não interfere no Cloudflare nem nas ferramentas de ponto. Nenhuma chamada de escrita de teste é necessária.
+
+## Verificação e simplificação (auditoria de outubro de 2026)
+
+- Os testes de ponto incluem agora execução de SQL em SQLite em memória com datas e horários **sintéticos**, inclusive concorrência lógica, duplicação e sábado. Não há gravações de teste no D1 pessoal.
+- A autenticação OAuth usa os logs estruturados já existentes, sem gravação de marcadores temporários no KV por requisição; mantemos o fluxo de registro de cliente enquanto a compatibilidade não for reavaliada após um novo login completo.
+- As integrações aceitam somente os dois endpoints HTTPS oficiais configurados. Se um fornecedor mudar o endereço, atualize a validação, os testes e a configuração juntos para não enviar secrets a hosts inesperados.
+- Dependabot verifica atualizações npm semanalmente; o CI existente continua o mesmo, enxuto.
+- Proteção de branch `main` foi **explicitamente excluída** desta rodada pelo proprietário.

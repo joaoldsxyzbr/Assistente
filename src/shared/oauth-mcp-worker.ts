@@ -13,10 +13,6 @@ import {
 } from "./oauth-helpers.ts";
 import { audit } from "./audit.ts";
 import {
-  readSafeOAuthErrorCode,
-  recordOAuthBoundary,
-} from "./oauth-boundary-diagnostics.ts";
-import {
   handleAuthorizeRequest,
   type OAuthAuthorizationEnvironment,
 } from "./oauth-authorization.ts";
@@ -64,7 +60,7 @@ export function createOAuthMcpWorker<Environment extends OAuthMcpEnvironment>(
           auth,
           [...requiredScopes],
           isWriteCall
-            ? "This operation can modify Cloudflare resources."
+            ? "This operation can modify connected resources."
             : "This operation requires read access.",
         );
       }
@@ -117,82 +113,6 @@ export function createOAuthMcpWorker<Environment extends OAuthMcpEnvironment>(
         status,
       }));
     },
-  });
-
-  type ProviderFetch = OAuthProvider<Environment>["fetch"];
-  const originalFetch = provider.fetch.bind(provider) as ProviderFetch;
-
-  const instrumentedFetch: ProviderFetch = async (...args) => {
-    const [request, environment] = args;
-    const pathname = new URL(request.url).pathname;
-    const isTokenRequest = pathname === "/oauth/token";
-    const isAuthorizeRequest = pathname === "/authorize";
-
-    if (isTokenRequest) {
-      audit("info", "oauth_boundary", { stage: "token_request_seen" });
-      await recordOAuthBoundary(environment.OAUTH_KV, "token_request_seen");
-    }
-
-    try {
-      const response = await originalFetch(...args);
-
-      if (isTokenRequest) {
-        audit(response.ok ? "info" : "warn", "oauth_boundary", {
-          stage: "token_response",
-          status: response.status,
-        });
-        await recordOAuthBoundary(
-          environment.OAUTH_KV,
-          "token_response",
-          response.status,
-          await readSafeOAuthErrorCode(response),
-        );
-      } else if (isAuthorizeRequest && request.method === "POST") {
-        audit(response.status < 400 ? "info" : "warn", "oauth_boundary", {
-          stage: "authorize_post_response",
-          status: response.status,
-        });
-        await recordOAuthBoundary(
-          environment.OAUTH_KV,
-          "authorize_post_response",
-          response.status,
-        );
-      } else if (isAuthorizeRequest && request.method === "GET") {
-        audit(response.status < 400 ? "info" : "warn", "oauth_boundary", {
-          stage: "authorize_get_response",
-          status: response.status,
-        });
-        await recordOAuthBoundary(
-          environment.OAUTH_KV,
-          "authorize_get_response",
-          response.status,
-        );
-      }
-
-      return response;
-    } catch (error) {
-      if (isTokenRequest) {
-        await recordOAuthBoundary(
-          environment.OAUTH_KV,
-          "token_handler_exception",
-          500,
-          "internal_error",
-        );
-      } else if (isAuthorizeRequest) {
-        await recordOAuthBoundary(
-          environment.OAUTH_KV,
-          "authorize_handler_exception",
-          500,
-          "internal_error",
-        );
-      }
-      throw error;
-    }
-  };
-
-  Object.defineProperty(provider, "fetch", {
-    configurable: true,
-    value: instrumentedFetch,
   });
 
   return provider;
