@@ -14,7 +14,7 @@ O **Assistente** é o hub MCP do plugin **Assistente Geral**. O plugin cuida das
 - **Controle de ponto:** ferramentas locais `ponto_registrar`, `ponto_hoje` e `ponto_resumo` usam somente o Cloudflare MCP para consultar/escrever no D1; o Worker não possui binding D1.
 - **Controle de gastos:** cinco ferramentas locais (`gastos_resumo`, `gastos_listar`, `gastos_registrar`, `gastos_atualizar`, `gastos_excluir`) usam o Cloudflare MCP para o D1 canônico, sem binding D1 no Worker.
 
-- **Controle do PC (opcional):** ferramentas `pc_*` com aplicativo Windows em C# na **bandeja do sistema, sem console**, conexão WebSocket e reconexão automática ao Worker existente. O menu oferece status, reconectar, configurar token, iniciar com Windows (opcional) e sair. Consulte [docs/CONTROLE-PC.md](docs/CONTROLE-PC.md); exige `PC_AGENT_TOKEN` como secret, fora do Git.
+- **Controle do PC (opcional):** ferramentas `pc_*` com aplicativo Windows em C# na **bandeja do sistema, sem console**, conexão WebSocket e reconexão automática ao Worker existente. O menu oferece status, reconectar, configurar token, iniciar com Windows (opcional) e sair. O MCP também oferece informações do Windows e processos (leitura), abertura de pastas conhecidas, clique direito/duplo, rolagem e atalhos controlados. Consulte [docs/CONTROLE-PC.md](docs/CONTROLE-PC.md); exige `PC_AGENT_TOKEN` como secret, fora do Git.
 
 Detalhes e decisões duráveis ficam em [docs/ARQUITETURA.md](docs/ARQUITETURA.md). Trabalho pendente fica em Issues.
 

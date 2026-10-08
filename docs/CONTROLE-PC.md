@@ -30,7 +30,12 @@ O aplicativo deve permanecer ativo na bandeja para permitir controles. **Sair** 
 - `AssistentePc.exe configure` abre somente o diálogo para salvar o token; abra/reconecte o aplicativo depois.
 - O caminho da conexão é `wss://assistente.joaolds.xyz.br/pc/connect`. O token `PC_AGENT_TOKEN` é distinto do OAuth do ChatGPT.
 - Os comandos são validados no Worker e novamente no programa. Não existe shell irrestrito, elevação, escrita de arquivos nem suporte multi-monitor nesta versão.
-- `pc_status` consulta conexão; `pc_janelas`, `pc_tela`, `pc_abrir`, `pc_clicar`, `pc_digitar` e `pc_tecla` atuam apenas no escopo permitido.
+- `pc_status` consulta a conexão; `pc_informacoes` mostra versão do agente, nome da máquina, Windows, arquitetura, tempo ligado e tamanho da tela; `pc_processos` lista até 40 nomes de programas em execução (somente leitura).
+- `pc_janelas` lista janelas visíveis; `pc_tela` captura a tela ativa. `pc_abrir` continua restrito a Bloco de Notas, Calculadora e Explorador.
+- `pc_pasta` abre apenas Downloads, Documentos, Imagens ou Área de Trabalho no Explorador.
+- `pc_clicar` aceita clique simples esquerdo (padrão), clique direito e duplo clique esquerdo. `pc_rolar` rola a janela sob o mouse de 1 a 12 passos.
+- `pc_tecla` aceita teclas de navegação, atualizar (F5), edição e atalhos usuais do navegador. `pc_digitar` continua restrito a até 500 caracteres, sem credenciais.
+- Essas novas ferramentas exigem **ambos:** Worker atualizado/promovido e versão mais recente do aplicativo Windows. O MCP só anuncia as ferramentas do Worker ativo; um executável antigo não sabe executar os novos comandos.
 - Capturas de tela e conteúdo digitado podem ser sensíveis; não utilize em sessões compartilhadas ou com dados secretos expostos.
 
 ## Desenvolvimento e validação
@@ -39,6 +44,6 @@ O código do aplicativo fica em `src/pc-agent/` (`.NET 8`, Windows Forms, `WinEx
 
 - CI GitHub: `npm run check` e `dotnet publish src/pc-agent/AssistentePc.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true`.
 - O workflow `.github/workflows/release-pc.yml` gera o ZIP e checksum de cada release.
-- A conexão real do agente anterior foi confirmada no Windows em 08/10/2026 com `pc_status`, `pc_janelas` e abertura da Calculadora. **A nova experiência de bandeja requer validação manual no Windows após atualização.**
+- A conexão real do agente anterior foi confirmada no Windows em 08/10/2026 com `pc_status`, `pc_janelas` e abertura da Calculadora. **O usuário confirmou o funcionamento da bandeja no Windows. As novas ferramentas desta atualização ainda exigem testes reais após instalar a versão atualizada.**
 - O Worker e as credenciais existentes não precisam ser modificados para esta mudança visual.
 - Referência oficial: [Microsoft — NotifyIcon no Windows Forms](https://learn.microsoft.com/en-us/dotnet/desktop/winforms/controls/notifyicon-component-windows-forms).

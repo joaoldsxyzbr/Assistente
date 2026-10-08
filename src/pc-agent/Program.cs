@@ -91,6 +91,16 @@ internal static class Program
     {
         switch (name)
         {
+            case "pc_informacoes":
+                return new { id, ok = true, data = new {
+                    versao = typeof(Program).Assembly.GetName().Version?.ToString(3) ?? "desconhecida",
+                    computador = Environment.MachineName,
+                    windows = System.Runtime.InteropServices.RuntimeInformation.OSDescription,
+                    arquitetura = System.Runtime.InteropServices.RuntimeInformation.OSArchitecture.ToString(),
+                    ligadoMinutos = Environment.TickCount64 / 60000,
+                    tela = new { largura = GetSystemMetrics(0), altura = GetSystemMetrics(1) }
+                } };
+            case "pc_processos": return new { id, ok = true, data = ListProcesses() };
             case "pc_janelas": return new { id, ok = true, data = new { janelas = ListWindows() } };
             case "pc_tela": return new { id, ok = true, image = CaptureJpeg() };
             case "pc_abrir":
@@ -103,14 +113,45 @@ internal static class Program
                 };
                 Process.Start(new ProcessStartInfo(executable) { UseShellExecute = true });
                 return new { id, ok = true, data = new { aplicativo = app } };
+            case "pc_pasta":
+                string pasta = args.GetProperty("pasta").GetString() ?? "";
+                string path = pasta switch {
+                    "downloads" => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads"),
+                    "documentos" => Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+                    "imagens" => Environment.GetFolderPath(Environment.SpecialFolder.MyPictures),
+                    "area_de_trabalho" => Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
+                    _ => throw new ArgumentException("Pasta não permitida.")
+                };
+                if (!Directory.Exists(path)) throw new InvalidOperationException("Pasta não encontrada.");
+                var explorer = new ProcessStartInfo("explorer.exe") { UseShellExecute = false };
+                explorer.ArgumentList.Add(path);
+                Process.Start(explorer);
+                return new { id, ok = true, data = new { pasta } };
             case "pc_clicar":
                 int x = args.GetProperty("x").GetInt32(), y = args.GetProperty("y").GetInt32();
                 int w = GetSystemMetrics(0), h = GetSystemMetrics(1);
                 if (x < 0 || y < 0 || x >= w || y >= h) throw new ArgumentException("Coordenada fora da tela.");
+                string botao = args.TryGetProperty("botao", out var buttonArg) ? buttonArg.GetString() ?? "" : "esquerdo";
+                bool duplo = args.TryGetProperty("duplo", out var doubleArg) && doubleArg.GetBoolean();
+                if (botao != "esquerdo" && botao != "direito") throw new ArgumentException("Botão não permitido.");
+                if (duplo && botao != "esquerdo") throw new ArgumentException("Duplo clique direito não permitido.");
                 if (!SetCursorPos(x, y)) throw new InvalidOperationException("Clique indisponível.");
-                mouse_event(0x0002, 0, 0, 0, UIntPtr.Zero);
-                mouse_event(0x0004, 0, 0, 0, UIntPtr.Zero);
-                return new { id, ok = true, data = new { x, y } };
+                uint down = botao == "esquerdo" ? 0x0002u : 0x0008u;
+                uint up = botao == "esquerdo" ? 0x0004u : 0x0010u;
+                for (int i = 0; i < (duplo ? 2 : 1); i++)
+                {
+                    mouse_event(down, 0, 0, 0, UIntPtr.Zero);
+                    mouse_event(up, 0, 0, 0, UIntPtr.Zero);
+                }
+                return new { id, ok = true, data = new { x, y, botao, duplo } };
+            case "pc_rolar":
+                string direcao = args.GetProperty("direcao").GetString() ?? "";
+                int passos = args.GetProperty("passos").GetInt32();
+                if ((direcao != "cima" && direcao != "baixo") || passos < 1 || passos > 12)
+                    throw new ArgumentException("Rolagem não permitida.");
+                int delta = (direcao == "cima" ? 1 : -1) * passos * 120;
+                mouse_event(0x0800, 0, 0, unchecked((uint)delta), UIntPtr.Zero);
+                return new { id, ok = true, data = new { direcao, passos } };
             case "pc_digitar":
                 string text = args.GetProperty("texto").GetString() ?? "";
                 if (text.Length == 0 || text.Length > 500) throw new ArgumentException("Texto inválido.");
@@ -122,6 +163,21 @@ internal static class Program
                 return new { id, ok = true, data = new { atalho = shortcut } };
             default: throw new ArgumentException("Ferramenta não permitida.");
         }
+    }
+
+    private static object ListProcesses()
+    {
+        var names = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var process in Process.GetProcesses())
+        {
+            using (process)
+            {
+                try { if (!string.IsNullOrWhiteSpace(process.ProcessName)) names.Add(process.ProcessName); }
+                catch (InvalidOperationException) { /* Processo encerrou durante a leitura. */ }
+                catch (System.ComponentModel.Win32Exception) { /* Processo protegido. */ }
+            }
+        }
+        return new { processos = names.Take(40).ToArray(), truncado = names.Count > 40 };
     }
 
     private static List<string> ListWindows()
@@ -162,8 +218,14 @@ internal static class Program
                        : combo.StartsWith("ALT+", StringComparison.Ordinal) ? (byte)0x12 : null;
         byte key = combo switch {
             "ENTER" => 0x0D, "TAB" => 0x09, "ESC" => 0x1B,
+            "BACKSPACE" => 0x08, "DELETE" => 0x2E,
+            "UP" => 0x26, "DOWN" => 0x28, "LEFT" => 0x25, "RIGHT" => 0x27,
+            "PAGEUP" => 0x21, "PAGEDOWN" => 0x22, "HOME" => 0x24, "END" => 0x23,
+            "F5" => 0x74,
             "CTRL+S" => 0x53, "CTRL+C" => 0x43, "CTRL+V" => 0x56,
-            "CTRL+A" => 0x41, "ALT+TAB" => 0x09,
+            "CTRL+A" => 0x41, "CTRL+F" => 0x46, "CTRL+T" => 0x54,
+            "CTRL+W" => 0x57, "CTRL+L" => 0x4C,
+            "CTRL+Z" => 0x5A, "CTRL+Y" => 0x59, "ALT+TAB" => 0x09,
             _ => throw new ArgumentException("Atalho não autorizado.")
         };
         if (modifier is byte down) Key(down, false);
