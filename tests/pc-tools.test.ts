@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { PC_TOOL_CATALOG, pcResultToMcp, isPcWrite, isPcTool } from "../src/mcps/pc/tools.ts";
+import { PC_TOOL_CATALOG, pcResultToMcp, isPcWrite, isPcTool, validPcArguments } from "../src/mcps/pc/tools.ts";
 import { pcAgentRequest, pcCall, pcIsConfigured } from "../src/mcps/pc/gateway.ts";
 
 test("catálogo é limitado e classifica corretamente as ferramentas", () => {
@@ -15,7 +15,7 @@ test("catálogo é limitado e classifica corretamente as ferramentas", () => {
 test("imagem JPEG permanece imagem MCP e erros permanecem erros", () => {
   assert.deepEqual(pcResultToMcp({ ok: true, image: "AQID" }), { isError: false, content: [{ type: "image", data: "AQID", mimeType: "image/jpeg" }] });
   assert.equal(pcResultToMcp({ ok: false, error: "Offline" }).isError, true);
-  assert.equal(pcResultToMcp({ ok: true, image: "/".repeat(1_400_001) }).isError, false);
+  assert.equal(pcResultToMcp({ ok: true, image: "/".repeat(1_400_001) }).isError, true);
   assert.equal(pcResultToMcp({ unrelated: true }).isError, true);
 });
 
@@ -42,4 +42,49 @@ test("contrato de loopback deve evitar namespace provisionado no upload inicial"
   assert.equal(config.durable_objects?.bindings?.some((entry: { name: string }) => entry.name === "PC_RELAY") ?? false, false);
   assert.equal(config.exports?.PcRelay?.storage, "sqlite");
   assert.equal(config.compatibility_flags.includes("enable_ctx_exports"), true);
+});
+
+test("validação adicional da fronteira de execução", () => {
+  assert.equal(validPcArguments("pc_abrir", { aplicativo: "explorador" }), true);
+  assert.equal(validPcArguments("pc_abrir", { aplicativo: "powershell" }), false);
+  assert.equal(validPcArguments("pc_clicar", { x: 4, y: 20 }), true);
+  assert.equal(validPcArguments("pc_clicar", { x: -1, y: 20 }), false);
+  assert.equal(validPcArguments("pc_clicar", { x: 4, y: 20, extra: true }), false);
+  assert.equal(validPcArguments("pc_digitar", { texto: "ok" }), true);
+  assert.equal(validPcArguments("pc_digitar", { texto: "x".repeat(501) }), false);
+  assert.equal(validPcArguments("pc_tecla", { atalho: "WIN+R" }), false);
+  assert.equal(validPcArguments("pc_status", {}), true);
+});
+
+test("respostas malformadas e excessivas são erros", () => {
+  assert.equal(pcResultToMcp({ ok: "true", data: {} }).isError, true);
+  assert.equal(pcResultToMcp({ ok: true }).isError, true);
+  assert.equal(pcResultToMcp({ ok: true, image: "invalid!" }).isError, true);
+  assert.equal(pcResultToMcp({ ok: true, data: "x".repeat(70_000) }).isError, true);
+  assert.equal(pcResultToMcp({ ok: true, data: { online: false } }).isError, false);
+});
+
+test("parâmetros inválidos não chegam ao Durable Object", async () => {
+  let accesses = 0;
+  const environment = {
+    PC_AGENT_TOKEN: "a".repeat(64),
+    PC_RELAY: { idFromName: () => "pc", get: () => {
+      accesses++; return { fetch: async () => new Response("{}") };
+    } },
+  };
+  assert.equal((await pcCall(environment, "pc_abrir", { aplicativo: "terminal" })).isError, true);
+  assert.equal((await pcCall(environment, "pc_tecla", { atalho: "WIN+R" })).isError, true);
+  assert.equal(accesses, 0);
+});
+
+test("token inválido não consulta o Durable Object", async () => {
+  let accessed = 0;
+  const environment = { PC_AGENT_TOKEN: "a".repeat(64),
+    PC_RELAY: { idFromName: () => { accessed++; return "pc"; },
+      get: () => { accessed++; return { fetch: async () => new Response("{}") }; } } };
+  const request = new Request("https://assistente.test/pc/connect", {
+    headers: { Upgrade: "websocket", Authorization: "Bearer wrong" },
+  });
+  assert.equal((await pcAgentRequest(request, environment)).status, 401);
+  assert.equal(accessed, 0);
 });

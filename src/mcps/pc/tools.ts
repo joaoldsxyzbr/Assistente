@@ -22,14 +22,53 @@ export const PC_TOOL_CATALOG: readonly PcTool[] = [
 ];
 export const isPcWrite = (name: string): boolean => PC_TOOL_CATALOG.some((item) => item.name === name && item.isWrite);
 export const isPcTool = (name: string): boolean => PC_TOOL_CATALOG.some((item) => item.name === name);
-export function pcResultToMcp(raw: unknown): { isError: boolean; content: Array<{ type: "text"; text: string } | { type: "image"; data: string; mimeType: string }> } {
-  if (!raw || typeof raw !== "object" || !("ok" in raw)) {
-    return { isError: true, content: [{ type: "text", text: "Resposta inválida do computador." }] };
+
+/** Segurança na fronteira: validar mesmo quando o cliente MCP anuncia um schema. */
+export function validPcArguments(name: string, args: unknown): args is Record<string, unknown> {
+  if (!args || typeof args !== "object" || Array.isArray(args)) return false;
+  const data = args as Record<string, unknown>;
+  const keys = Object.keys(data);
+  const only = (...fields: string[]) => keys.length === fields.length && fields.every((field) => Object.hasOwn(data, field));
+  switch (name) {
+    case "pc_status":
+    case "pc_janelas":
+    case "pc_tela": return only();
+    case "pc_abrir": return only("aplicativo") && typeof data.aplicativo === "string"
+      && ["bloco_de_notas", "calculadora", "explorador"].includes(data.aplicativo);
+    case "pc_clicar": return only("x", "y")
+      && Number.isInteger(data.x) && Number.isInteger(data.y)
+      && (data.x as number) >= 0 && (data.x as number) <= 16384
+      && (data.y as number) >= 0 && (data.y as number) <= 16384;
+    case "pc_digitar": return only("texto") && typeof data.texto === "string"
+      && data.texto.length > 0 && data.texto.length <= 500;
+    case "pc_tecla": return only("atalho") && typeof data.atalho === "string"
+      && ["ENTER", "TAB", "ESC", "CTRL+S", "CTRL+C", "CTRL+V", "CTRL+A", "ALT+TAB"].includes(data.atalho);
+    default: return false;
   }
-  const result = raw as { ok: boolean; data?: unknown; image?: string; error?: string };
-  if (result.ok && typeof result.image === "string" && result.image.length <= 1_400_000 && /^[A-Za-z0-9+/=]+$/.test(result.image)) {
-    return { isError: false, content: [{ type: "image", data: result.image, mimeType: "image/jpeg" }] };
+}
+
+export function pcResultToMcp(raw: unknown): { isError: boolean; content: Array<
+  { type: "text"; text: string } | { type: "image"; data: string; mimeType: string }
+> } {
+  const error = (message: string) => ({ isError: true, content: [{ type: "text" as const, text: message }] });
+  if (!raw || typeof raw !== "object" || !("ok" in raw) || typeof raw.ok !== "boolean") {
+    return error("Resposta inválida do computador.");
   }
-  if (!result.ok) return { isError: true, content: [{ type: "text", text: typeof result.error === "string" ? result.error.slice(0, 120) : "Falha no computador." }] };
-  return { isError: false, content: [{ type: "text", text: JSON.stringify(result.data ?? {}) }] };
+  const result = raw as { ok: boolean; data?: unknown; image?: unknown; error?: unknown };
+  if (!result.ok) {
+    return error(typeof result.error === "string" ? result.error.slice(0, 120) : "Falha no computador.");
+  }
+  if (result.image !== undefined) {
+    const value = result.image;
+    if (typeof value !== "string" || value.length < 4 || value.length > 1_350_000
+      || value.length % 4 !== 0 || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value)) {
+      return error("Imagem inválida recebida do computador.");
+    }
+    return { isError: false, content: [{ type: "image", data: value, mimeType: "image/jpeg" }] };
+  }
+  if (result.data === undefined) return error("Resposta vazia do computador.");
+  let text: string;
+  try { text = JSON.stringify(result.data); } catch { return error("Resposta inválida do computador."); }
+  if (text === undefined || text.length > 65_536) return error("Resposta muito grande do computador.");
+  return { isError: false, content: [{ type: "text", text }] };
 }

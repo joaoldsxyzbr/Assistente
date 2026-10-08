@@ -1,4 +1,4 @@
-import { PC_TOOL_CATALOG, pcResultToMcp } from "./tools.ts";
+import { PC_TOOL_CATALOG, pcResultToMcp, validPcArguments } from "./tools.ts";
 export { PC_TOOL_CATALOG };
 export interface PcNamespace {
   idFromName(name: string): unknown;
@@ -15,17 +15,20 @@ function broker(environment: PcEnvironment) {
 export function pcIsConfigured(environment: PcEnvironment): boolean { return broker(environment) !== undefined; }
 export async function pcAgentRequest(request: Request, environment: PcEnvironment): Promise<Response> {
   if (request.method !== "GET" || request.headers.get("Upgrade")?.toLowerCase() !== "websocket") return new Response("Upgrade required", { status: 426 });
-  const configured = broker(environment);
-  if (!configured) return new Response("Unavailable", { status: 503 });
+  if (!environment.PC_AGENT_TOKEN || environment.PC_AGENT_TOKEN.length < 32) return new Response("Unavailable", { status: 503 });
   const value = request.headers.get("Authorization") ?? "";
+  if (value.length > 300) return new Response("Unauthorized", { status: 401 });
   const supplied = new TextEncoder().encode(value);
   const expected = new TextEncoder().encode("Bearer " + environment.PC_AGENT_TOKEN);
   let difference = supplied.length ^ expected.length;
   for (let i = 0; i < Math.max(supplied.length, expected.length); i++) difference |= (supplied[i] ?? 0) ^ (expected[i] ?? 0);
   if (difference !== 0) return new Response("Unauthorized", { status: 401 });
+  const configured = broker(environment);
+  if (!configured) return new Response("Unavailable", { status: 503 });
   return configured.fetch(new Request("https://relay.internal/connect", { headers: { Upgrade: "websocket" } }));
 }
 export async function pcCall(environment: PcEnvironment, name: string, args: Record<string, unknown>) {
+  if (!validPcArguments(name, args)) return pcResultToMcp({ ok: false, error: "Parâmetros inválidos." });
   const stub = broker(environment);
   if (!stub) return pcResultToMcp({ ok: false, error: "Controle do PC não configurado." });
   try {
@@ -36,7 +39,7 @@ export async function pcCall(environment: PcEnvironment, name: string, args: Rec
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: crypto.randomUUID(), name, args }),
       }));
-    if (!response.ok && response.status !== 503) return pcResultToMcp({ ok: false, error: "Erro de comunicação com o computador." });
+    if (!response.ok && response.status !== 503 && response.status !== 409) return pcResultToMcp({ ok: false, error: "Erro de comunicação com o computador." });
     return pcResultToMcp(await response.json());
   } catch {
     return pcResultToMcp({ ok: false, error: "Não foi possível confirmar a operação no computador." });
