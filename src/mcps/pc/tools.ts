@@ -47,7 +47,7 @@ export function validPcArguments(name: string, args: unknown): args is Record<st
       && keys.every(k => ["alvo", "acao", "texto", "janelaId", "tipo"].includes(k))
       && typeof v.alvo === "string" && v.alvo.trim().length > 0 && v.alvo.length <= 100
       && actions.some(x => x === v.acao)
-      && (!Object.hasOwn(v, "janelaId") || (typeof v.janelaId === "string" && /^\\d+:[0-9A-F]+$/.test(v.janelaId)))
+      && (!Object.hasOwn(v, "janelaId") || (typeof v.janelaId === "string" && /^\d+:[0-9A-F]+$/.test(v.janelaId)))
       && (!Object.hasOwn(v, "tipo") || (typeof v.tipo === "string" && v.tipo.length > 0 && v.tipo.length <= 80))
       && (v.acao === "preencher"
         ? typeof v.texto === "string" && v.texto.length > 0 && v.texto.length <= 500
