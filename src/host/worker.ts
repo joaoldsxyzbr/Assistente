@@ -21,12 +21,14 @@ import {
   type McpServerConfiguration,
 } from "./config.ts";
 import { RemoteMcpClient } from "./remote-client.ts";
+import { PC_TOOL_CATALOG, pcCall, pcAgentRequest, pcIsConfigured, type PcEnvironment, type PcNamespace } from "../mcps/pc/gateway.ts";
+export { PcRelay } from "../mcps/pc/relay.ts";
 import { classifyRemoteCallFailure } from "./remote-failure.ts";
 import { createOAuthMcpWorker } from "../shared/oauth-mcp-worker.ts";
 import { oauthSecuritySchemesForTool } from "../shared/oauth-helpers.ts";
 import { audit } from "../shared/audit.ts";
 
-export interface AssistenteWorkerEnvironment extends Environment {
+export interface AssistenteWorkerEnvironment extends Environment, PcEnvironment {
   ASSISTENTE_OAUTH_PASSWORD?: string;
   MCP_CLOUDFLARE_ACCOUNT_ID?: string;
   PONTO_D1_DATABASE_ID?: string;
@@ -267,6 +269,17 @@ export function createAssistenteMcpServer(
     );
   }
 
+  // Conexão Windows opcional: sem secret, nenhuma ferramenta extra é publicada.
+  if (pcIsConfigured(environment)) {
+    for (const definition of PC_TOOL_CATALOG) {
+      server.registerTool(definition.name, {
+        description: definition.description,
+        inputSchema: fromJsonSchema<Record<string, unknown>>(definition.inputSchema),
+        _meta: { securitySchemes: oauthSecuritySchemesForTool(definition.isWrite) },
+      }, async (args) => pcCall(environment, definition.name, args));
+    }
+  }
+
   const routes = new Set<string>();
 
   for (const configuration of configurations) {
@@ -311,11 +324,24 @@ const writeToolNames = [
   ...GASTOS_TOOL_CATALOG
     .filter((tool) => tool.isWrite)
     .map((tool) => tool.name),
+  ...PC_TOOL_CATALOG.filter((tool) => tool.isWrite).map((tool) => tool.name),
 ];
 
-export default createOAuthMcpWorker<AssistenteWorkerEnvironment>({
+const oauthWorker = createOAuthMcpWorker<AssistenteWorkerEnvironment>({
   createServer: (environment) => createAssistenteMcpServer(environment),
   resource: "https://assistente.joaolds.xyz.br/mcp",
   resourceName: "Assistente MCP",
   writeToolNames,
 });
+
+export default {
+  fetch(request: Request, environment: AssistenteWorkerEnvironment, context: Parameters<typeof oauthWorker.fetch>[2]) {
+    // Loopback: dispensa binding de namespace ainda não provisionado no versions upload.
+    const exportedNamespace = (context as typeof context & {
+      exports?: { PcRelay?: PcNamespace };
+    }).exports?.PcRelay;
+    const effectiveEnvironment = { ...environment, PC_RELAY: exportedNamespace };
+    if (new URL(request.url).pathname === "/pc/connect") return pcAgentRequest(request, effectiveEnvironment);
+    return oauthWorker.fetch(request, effectiveEnvironment, context);
+  },
+};

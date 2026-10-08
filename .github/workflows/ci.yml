@@ -18,3 +18,16 @@ jobs:
           node-version: 24
       - run: npm ci --no-audit --no-fund
       - run: npm run check
+  windows-agent:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.0.x'
+      - run: dotnet publish src/pc-agent/AssistentePc.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o dist/AssistentePc
+      - uses: actions/upload-artifact@v6
+        with:
+          name: AssistentePc-win-x64
+          path: dist/AssistentePc/
+          if-no-files-found: error

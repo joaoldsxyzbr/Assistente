@@ -3,7 +3,10 @@
   "name": "assistente",
   "main": "src/host/worker.ts",
   "compatibility_date": "2026-10-07",
-  "compatibility_flags": ["global_fetch_strictly_public"],
+  "compatibility_flags": [
+    "global_fetch_strictly_public",
+    "enable_ctx_exports"
+  ],
   "workers_dev": false,
   "preview_urls": false,
   "routes": [
@@ -34,5 +37,11 @@
     "MCP_GITHUB_URL": "https://api.githubcopilot.com/mcp/",
     "PONTO_D1_DATABASE_ID": "96b39cda-f037-4259-b406-09fea5431469",
     "GASTOS_D1_DATABASE_ID": "0c6c31c2-f2fd-4f60-9c75-b232019ae63f"
+  },
+  "exports": {
+    "PcRelay": {
+      "type": "durable-object",
+      "storage": "sqlite"
+    }
   }
 }
