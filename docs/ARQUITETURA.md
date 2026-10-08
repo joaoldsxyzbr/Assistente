@@ -95,7 +95,7 @@ Os eventos registram apenas metadados operacionais: etapa, status, resultado, se
 
 Eventos principais:
 - autorização OAuth concluída, negada ou rejeitada;
-- requisição/resposta do endpoint de token;
+- falhas de token/OAuth reportadas pelo provider, sem persistir o corpo da resposta;
 - falha de autenticação ou escopo MCP;
 - resultado da requisição MCP;
 - resultado de chamada ao MCP remoto, incluindo escrita potencialmente incerta.
