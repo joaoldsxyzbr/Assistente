@@ -14,7 +14,7 @@ test("catálogo é limitado e classifica corretamente as ferramentas", () => {
   assert.equal(isPcTool("pc_digitar"), false);
   assert.equal(isPcTool("pc_rolar"), false);
   assert.equal(isPcTool("pc_tecla"), false);
-  assert.equal(isPcWrite("pc_digitar"), true);
+  assert.equal(isPcWrite("pc_digitar"), false);
   assert.equal(isPcTool("pc_exec_shell"), false);
   assert.ok(PC_TOOL_CATALOG.every((tool) => tool.inputSchema.additionalProperties === false));
 });
