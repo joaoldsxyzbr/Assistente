@@ -42,7 +42,7 @@ export function validPcArguments(name: string, args: unknown): args is Record<st
     case "pc_janelas":
     case "pc_ui_elementos": return only();
     case "pc_terminal": return only("comando") && terminals.some(x => x === v.comando);
-    case "pc_ui_acao": return
+    case "pc_ui_acao": return (
       ["alvo", "acao"].every(f => Object.hasOwn(v, f))
       && keys.every(k => ["alvo", "acao", "texto", "janelaId", "tipo"].includes(k))
       && typeof v.alvo === "string" && v.alvo.trim().length > 0 && v.alvo.length <= 100
@@ -51,7 +51,7 @@ export function validPcArguments(name: string, args: unknown): args is Record<st
       && (!Object.hasOwn(v, "tipo") || (typeof v.tipo === "string" && v.tipo.length > 0 && v.tipo.length <= 80))
       && (v.acao === "preencher"
         ? typeof v.texto === "string" && v.texto.length > 0 && v.texto.length <= 500
-        : !Object.hasOwn(v, "texto"));
+        : !Object.hasOwn(v, "texto")));
     case "pc_abrir": return only("aplicativo") && ["bloco_de_notas", "calculadora", "explorador"].includes(v.aplicativo as string);
     case "pc_pasta_listar":
     case "pc_pasta": return only("pasta") && ["downloads", "documentos", "imagens", "area_de_trabalho"].includes(v.pasta as string);
