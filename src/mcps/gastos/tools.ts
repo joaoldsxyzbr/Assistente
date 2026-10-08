@@ -36,7 +36,7 @@ export function resolveGastosPeriodo(raw:unknown, now:Date=new Date()):{periodo:
     if(["proximo","próximo","próximo mês","proximo mes"].includes(p))m++;
     else if(["atual","este mês","este mes"].includes(p)){}
     else if(["anterior","mês passado","mes passado"].includes(p))m--;
-    else {const found=/^(\d{1,2})\/(\d{4})$/.exec(p);if(!found)return undefined;m=Number(found[1]);y=Number(found[2]);}
+    else {const found=/^(\d{1,2})\/(\d{4})$/.exec(p);if(!found)return undefined;m=Number(found[1]);y=Number(found[2]);if(m<1||m>12)return undefined;}
   } else if(raw===undefined||raw===null||raw==="") m++;
   else return undefined;
   if(m===13){m=1;y++} if(m===0){m=12;y--}
@@ -180,9 +180,14 @@ if(input.operacao==="registrar"){
   if(c===parse(input.valor))candidates.push(present(row));
  }
  if(candidates.length&&!input.permitir_duplicado)return {status:"duplicado",periodo:input.periodo,candidatos:candidates.slice(0,10)};
- const rows=await query("INSERT INTO "+table+" (descricao,tipo,categoria,valor,status,observacao) VALUES (?,?,?,?,?,?) RETURNING "+cols,
- [input.descricao,input.tipo,input.categoria,input.valor,input.status,input.observacao]);
- return rows.length===1?{status:"registrado",periodo:input.periodo,item:present(rows[0])}:{status:"nao_confirmado",periodo:input.periodo};
+ const uniqueSql="INSERT INTO "+table+" (descricao,tipo,categoria,valor,status,observacao) "+
+  "SELECT ?,?,?,?,?,? WHERE NOT EXISTS (SELECT 1 FROM "+table+" WHERE lower(trim(descricao))=? AND tipo=? AND valor=?) RETURNING "+cols;
+ const sql=input.permitir_duplicado?
+  "INSERT INTO "+table+" (descricao,tipo,categoria,valor,status,observacao) VALUES (?,?,?,?,?,?) RETURNING "+cols:uniqueSql;
+ const params=[input.descricao,input.tipo,input.categoria,input.valor,input.status,input.observacao];
+ if(!input.permitir_duplicado)params.push(normalize(input.descricao),input.tipo,input.valor);
+ const rows=await query(sql,params);
+ return rows.length===1?{status:"registrado",periodo:input.periodo,item:present(rows[0])}:{status:"duplicado",periodo:input.periodo};
 }
 const found=input.id!==undefined?await query("SELECT "+cols+" FROM "+table+" WHERE id=?",[input.id]):
  (await all()).filter(x=>normalize(x.descricao)===normalize(input.busca));
