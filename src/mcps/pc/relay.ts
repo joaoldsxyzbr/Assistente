@@ -1,3 +1,4 @@
+declare const WebSocketPair: { new (): { 0: WebSocket; 1: WebSocket } };
 import { isPcTool } from "./tools.ts";
 interface SocketState {
   acceptWebSocket(socket: WebSocket): void;
