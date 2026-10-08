@@ -67,3 +67,17 @@ Sem execução livre de PowerShell, CMD ou scripts remotos. A lista fixa de coma
 - MCP, boas práticas de segurança: https://modelcontextprotocol.io/docs/2025-11-25/tutorials/security/security_best_practices
 - Cloudflare, WebSockets em Durable Objects: https://developers.cloudflare.com/durable-objects/best-practices/websockets/
 - FlaUI (alternativa, não adotada): https://github.com/FlaUI/FlaUI
+
+## Implementação 0.5 (branch em validação)
+
+- Atualização para .NET 10 LTS, compilação WinExe em segundo plano, sem console e sem capturas.
+- `pc_ui_elementos` preserva os campos existentes e adiciona `janelaId`, `visitados`, `duracaoMs`; `truncado` inclui limites de nós e profundidade.
+- `pc_ui_acao` preserva `acionar`/`preencher`, adiciona `selecionar`, `marcar`, `desmarcar`, `expandir`, `recolher`, com `janelaId` e `tipo` opcionais. Marcar/desmarcar só muda o estado quando necessário; controle sem padrão retorna `unsupported_pattern` (sem clique por coordenadas).
+- Falhas previstas retornam códigos claros para controle ausente, ambíguo, oculto, desabilitado, janela alterada e estado não confirmado. Conteúdo de controles de senha nunca é exposto.
+- `pc_pasta_listar` só lista nomes e tipos de até 50 entradas nas quatro pastas predefinidas; não lê conteúdo nem permite caminhos arbitrários. O terminal continua limitado aos quatro diagnósticos existentes.
+- Exclusividade de comandos foi deslocada para depois da leitura/validação do corpo no Durable Object, evitando a janela de corrida.
+- Saída dos diagnósticos do Windows decodificada pela página de código OEM do sistema para preservar acentos.
+
+**Compatibilidade:** a versão 0.4 continua sendo a versão efetivamente instalada no PC até uma versão 0.5 ser gerada, instalada e verificada. Ações da UIA são dependentes do provedor de acessibilidade; operações sensíveis só quando explicitamente solicitadas. Não afirmar sucesso apenas pelo retorno de Invoke quando não for possível observar o estado final.
+
+**Validação necessária:** testes de catálogo/validação no Node, compilação e empacotamento win-x64 no GitHub Actions, testes de padrões UIA em Windows real, concorrência e reconexão; confirmar compatibilidade do Brave e do Explorador. Publicação de release só após CI verde.
