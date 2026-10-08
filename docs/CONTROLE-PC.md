@@ -1,57 +1,28 @@
-# Assistente PC — aplicativo Windows na bandeja
+# Assistente PC — terminal controlado + UI Automation (0.4)
 
-O **Assistente MCPs** controla um aplicativo Windows em C# por uma conexão de saída WebSocket ao Worker existente. Não é necessário abrir CMD nem criar outro MCP. Os controles remotos mantêm a mesma autenticação e as ferramentas atuais.
+O aplicativo Windows continua na bandeja, sem CMD aberto. A comunicação permanece ChatGPT → Assistente MCPs → Worker → WebSocket → agente Windows.
 
-## Recursos
+## Mudança de abordagem
+- **Removidos:** `pc_tela` e todo envio de imagens; cliques por coordenadas, rolagem, teclas e digitação simuladas (`pc_clicar`, `pc_rolar`, `pc_tecla`, `pc_digitar`). Não existe captura de tela ou vídeo no agente 0.4.
+- **Terminal controlado:** `pc_terminal` aceita exclusivamente `identidade` (whoami), `computador` (hostname), `rede` (ipconfig) e `processos` (tasklist), sem shell, scripts, argumentos adicionais ou execução de arquivos externos. O processo é oculto, tem limite de 9 segundos e trunca a saída.
+- **UI Automation:** `pc_ui_elementos` lê até 70 controles acessíveis na **janela ativa** por nome, identificador de automação e tipo. Não retorna valores atuais de campos e ignora controles de senha. `pc_ui_acao` encontra **um único** controle pela correspondência exata de nome/identificador e executa apenas `acionar` (InvokePattern) ou `preencher` (ValuePattern, até 500 caracteres), nunca em senha.
+- **Mantidos:** `pc_status`, `pc_informacoes`, `pc_processos`, `pc_janelas`, `pc_abrir` e `pc_pasta`.
 
-- Inicia discretamente na **bandeja do Windows**, perto do relógio, sem janela de console.
-- Mantém a conexão em segundo plano e tenta reconectar a cada 5 segundos se houver queda.
-- Botão direito no ícone: **Status**, **Reconectar**, **Configurar token**, **Iniciar com Windows** e **Sair**.
-- A inicialização com Windows é **opcional** e pode ser ligada/desligada no menu. É configurada apenas para o usuário atual, sem privilégios de administrador.
-- Não abre uma segunda instância ao clicar novamente no executável.
-- Na primeira execução pede o token por janela com campo oculto; caso cancele, permanece na bandeja sem conexão.
-- Salva o token protegido pela DPAPI em `%LOCALAPPDATA%\Assistente\pc-secret.dat`; não registra o valor em logs nem no repositório.
+### Limitações do UI Automation
+A interface precisa expor controles acessíveis; canvas, jogos, certos navegadores/sites e aplicações com provedor de acessibilidade incompleto podem não funcionar. A janela-alvo deve estar ativa e a sessão do Windows desbloqueada. Não contornamos controles de segurança/UAC. Recomendado inspecionar antes de acionar. Sem screenshot não há fallback visual.
 
-## Instalar ou atualizar
+## Atualização do Windows
+1. Saia do aplicativo antigo pelo ícone na bandeja.
+2. Baixe `AssistentePc-win-x64.zip` do [release](https://github.com/joaoldsxyzbr/Assistente/releases) e extraia na pasta definitiva, substituindo os arquivos anteriores.
+3. Abra `AssistentePc.exe`; o token DPAPI existente é reutilizado automaticamente.
+4. Confira **Status: Conectado** no menu da bandeja. A opção **Iniciar com Windows** é mantida.
+5. Reconecte/atualize o plugin Assistente MCPs no ChatGPT para renovar o catálogo de ferramentas. Antes de trocar o agente, o Worker novo já não anuncia as ferramentas antigas.
 
-1. Se estiver usando a versão antiga com janela preta, encerre-a com **Ctrl+C**.
-2. Baixe o ZIP da versão mais recente em [GitHub Releases](https://github.com/joaoldsxyzbr/Assistente/releases), extraia **todo** o conteúdo para uma pasta permanente, por exemplo `C:\AssistentePc`, e execute `AssistentePc.exe` por duplo clique. Não é necessário instalar .NET.
-3. No primeiro acesso, informe o **mesmo** `PC_AGENT_TOKEN` cadastrado como secret no Worker `assistente` da Cloudflare. Na atualização, o token protegido do usuário atual é reutilizado automaticamente.
-4. Confira o ícone na bandeja; clique com o botão direito e veja **Status: Conectado**. Se não estiver visível, abra os ícones ocultos ao lado do relógio.
-5. Opcionalmente ative **Iniciar com Windows** no mesmo menu. Deixe o executável na pasta definitiva antes de ativar; mover/excluir o arquivo depois pode quebrar a inicialização.
-6. No ChatGPT, teste `pc_status`, `pc_janelas` ou `pc_abrir` pelo Assistente MCPs.
+## Segurança
+Sem execução livre de PowerShell, CMD ou scripts remotos. A lista fixa de comandos é validada no Worker **e** no agente; argumento extra é rejeitado. Operações de UIA são marcadas como escrita no escopo OAuth do MCP, mas isso não equivale a aprovação interativa por comando. Ainda é necessário observar o efeito no aplicativo e confirmar ações sensíveis. Nenhuma imagem é transmitida ou armazenada. Resultados e nomes de janelas/controles podem conter dados pessoais; trate-os como conteúdo sensível.
 
-O aplicativo deve permanecer ativo na bandeja para permitir controles. **Sair** encerra o processo e a conexão; fechar uma janela de configuração não encerra o aplicativo. É necessário estar logado no Windows para executar ações visuais; com a sessão bloqueada, capturas e cliques podem não funcionar.
-
-## Configuração e segurança
-
-- Para trocar a chave use **Configurar token** no menu; o aplicativo reconecta usando o novo valor.
-- Para apagar a credencial, encerre o aplicativo e execute `AssistentePc.exe reset` (exibe uma confirmação visual), depois revogue o secret no Worker.
-- `AssistentePc.exe configure` abre somente o diálogo para salvar o token; abra/reconecte o aplicativo depois.
-- O caminho da conexão é `wss://assistente.joaolds.xyz.br/pc/connect`. O token `PC_AGENT_TOKEN` é distinto do OAuth do ChatGPT.
-- Os comandos são validados no Worker e novamente no programa. Não existe shell irrestrito, elevação, escrita de arquivos nem suporte multi-monitor nesta versão.
-- `pc_status` consulta a conexão; `pc_informacoes` mostra versão do agente, nome da máquina, Windows, arquitetura, tempo ligado e tamanho da tela; `pc_processos` lista até 40 nomes de programas em execução (somente leitura).
-- `pc_janelas` lista janelas visíveis; `pc_tela` captura a tela ativa. `pc_abrir` continua restrito a Bloco de Notas, Calculadora e Explorador.
-- `pc_pasta` abre apenas Downloads, Documentos, Imagens ou Área de Trabalho no Explorador.
-- `pc_clicar` aceita clique simples esquerdo (padrão), clique direito e duplo clique esquerdo. `pc_rolar` rola a janela sob o mouse de 1 a 12 passos.
-- `pc_tecla` aceita teclas de navegação, atualizar (F5), edição e atalhos usuais do navegador. `pc_digitar` continua restrito a até 500 caracteres, sem credenciais.
-- Essas novas ferramentas exigem **ambos:** Worker atualizado/promovido e versão mais recente do aplicativo Windows. O MCP só anuncia as ferramentas do Worker ativo; um executável antigo não sabe executar os novos comandos.
-- Capturas de tela e conteúdo digitado podem ser sensíveis; não utilize em sessões compartilhadas ou com dados secretos expostos.
-
-## Desenvolvimento e validação
-
-O código do aplicativo fica em `src/pc-agent/` (`.NET 8`, Windows Forms, `WinExe`). O Worker e as ferramentas MCP ficam em `src/mcps/pc/`.
-
-- CI GitHub: `npm run check` e `dotnet publish src/pc-agent/AssistentePc.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true`.
-- O workflow `.github/workflows/release-pc.yml` gera o ZIP e checksum de cada release.
-- A conexão real do agente anterior foi confirmada no Windows em 08/10/2026 com `pc_status`, `pc_janelas` e abertura da Calculadora. **O usuário confirmou o funcionamento da bandeja no Windows. As novas ferramentas desta atualização ainda exigem testes reais após instalar a versão atualizada.**
-- O Worker e as credenciais existentes não precisam ser modificados para esta mudança visual.
-- Referência oficial: [Microsoft — NotifyIcon no Windows Forms](https://learn.microsoft.com/en-us/dotnet/desktop/winforms/controls/notifyicon-component-windows-forms).
-
-## Correção de teclado (0.3.1)
-
-Os testes reais da versão 0.3.0 confirmaram mouse, duplo clique e captura de tela, mas `pc_digitar` e `pc_tecla` falharam. A causa identificada foi o tamanho incompatível da estrutura Win32 `INPUT`: a união era modelada somente com `KEYBDINPUT`, mas precisa incluir o maior membro `MOUSEINPUT`. `SendInput` exige o tamanho exato dessa estrutura.
-
-A versão 0.3.1 corrige o layout e o CI Windows executa `AssistentePc.exe --check-input-layout` para impedir regressão no tamanho da estrutura. Esse teste é estrutural, **não injeta teclas** e não substitui a verificação real de `pc_tecla` e `pc_digitar` após a atualização no Windows.
-
-Referências: https://learn.microsoft.com/pt-br/windows/win32/api/winuser/ns-winuser-input e https://learn.microsoft.com/pt-br/windows/win32/api/winuser/nf-winuser-sendinput.
+## Validação
+- CI: `npm run check`, `dotnet publish ... -r win-x64 --self-contained true -p:PublishSingleFile=true` e `--check-terminal`.
+- Testes de schema verificam que ferramentas antigas não existem e scripts/argumentos de terminal são recusados.
+- O build Windows não prova compatibilidade de cada app com UI Automation; executar testes reais após instalar a versão 0.4.
+- Fonte oficial: [Microsoft — MSBuild Windows Desktop](https://learn.microsoft.com/pt-br/dotnet/core/project-sdk/msbuild-props-desktop), [InvokePattern](https://learn.microsoft.com/en-us/dotnet/api/system.windows.automation.invokepattern.invoke), [ValuePattern](https://learn.microsoft.com/en-us/dotnet/api/system.windows.automation.valuepattern.setvalue).

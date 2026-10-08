@@ -1,6 +1,4 @@
 using System.Diagnostics;
-using System.Drawing;
-using System.Drawing.Imaging;
 using System.Net.WebSockets;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -19,13 +17,13 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
-        if (args.Length == 1 && args[0] == "--check-input-layout")
+        if (args.Length == 1 && args[0] == "--check-terminal")
         {
-            // Verificação segura do ABI no runner Windows (não injeta teclas).
-            int expectedSize = Environment.Is64BitProcess ? 40 : 28;
-            int actualSize = Marshal.SizeOf<Input>();
-            // Retorna o tamanho observado se houver erro, para diagnosticar o CI.
-            Environment.ExitCode = actualSize == expectedSize ? 0 : actualSize;
+            Environment.ExitCode =
+                TerminalCommands.IsAllowed("identidade") &&
+                TerminalCommands.IsAllowed("rede") &&
+                !TerminalCommands.IsAllowed("powershell") &&
+                !TerminalCommands.IsAllowed("cmd /c dir") ? 0 : 1;
             return;
         }
 
@@ -84,9 +82,9 @@ internal static class Program
                 JsonElement root = json.RootElement;
                 id = root.GetProperty("id").GetString() ?? "";
                 string name = root.GetProperty("name").GetString() ?? "";
-                response = Execute(name, root.GetProperty("args"), id);
+                response = await ExecuteAsync(name, root.GetProperty("args"), id);
             }
-            catch (Exception ex) when (ex is JsonException or KeyNotFoundException or ArgumentException or InvalidOperationException or ExternalException)
+            catch (Exception ex) when (ex is JsonException or KeyNotFoundException or ArgumentException or InvalidOperationException or ExternalException or System.ComponentModel.Win32Exception)
             {
                 response = new { id, ok = false, error = "Operação inválida ou não disponível nesta sessão." };
             }
@@ -97,7 +95,7 @@ internal static class Program
         }
     }
 
-    private static object Execute(string name, JsonElement args, string id)
+    private static async Task<object> ExecuteAsync(string name, JsonElement args, string id)
     {
         switch (name)
         {
@@ -112,7 +110,16 @@ internal static class Program
                 } };
             case "pc_processos": return new { id, ok = true, data = ListProcesses() };
             case "pc_janelas": return new { id, ok = true, data = new { janelas = ListWindows() } };
-            case "pc_tela": return new { id, ok = true, image = CaptureJpeg() };
+            case "pc_terminal":
+                string comando = args.GetProperty("comando").GetString() ?? "";
+                return new { id, ok = true, data = await TerminalCommands.RunAsync(comando) };
+            case "pc_ui_elementos":
+                return new { id, ok = true, data = WindowAutomation.Inspect() };
+            case "pc_ui_acao":
+                string alvo = args.GetProperty("alvo").GetString() ?? "";
+                string acao = args.GetProperty("acao").GetString() ?? "";
+                string? valor = args.TryGetProperty("texto", out var inputText) ? inputText.GetString() : null;
+                return new { id, ok = true, data = WindowAutomation.Act(alvo, acao, valor) };
             case "pc_abrir":
                 string app = args.GetProperty("aplicativo").GetString() ?? "";
                 string executable = app switch {
@@ -137,40 +144,6 @@ internal static class Program
                 explorer.ArgumentList.Add(path);
                 Process.Start(explorer);
                 return new { id, ok = true, data = new { pasta } };
-            case "pc_clicar":
-                int x = args.GetProperty("x").GetInt32(), y = args.GetProperty("y").GetInt32();
-                int w = GetSystemMetrics(0), h = GetSystemMetrics(1);
-                if (x < 0 || y < 0 || x >= w || y >= h) throw new ArgumentException("Coordenada fora da tela.");
-                string botao = args.TryGetProperty("botao", out var buttonArg) ? buttonArg.GetString() ?? "" : "esquerdo";
-                bool duplo = args.TryGetProperty("duplo", out var doubleArg) && doubleArg.GetBoolean();
-                if (botao != "esquerdo" && botao != "direito") throw new ArgumentException("Botão não permitido.");
-                if (duplo && botao != "esquerdo") throw new ArgumentException("Duplo clique direito não permitido.");
-                if (!SetCursorPos(x, y)) throw new InvalidOperationException("Clique indisponível.");
-                uint down = botao == "esquerdo" ? 0x0002u : 0x0008u;
-                uint up = botao == "esquerdo" ? 0x0004u : 0x0010u;
-                for (int i = 0; i < (duplo ? 2 : 1); i++)
-                {
-                    mouse_event(down, 0, 0, 0, UIntPtr.Zero);
-                    mouse_event(up, 0, 0, 0, UIntPtr.Zero);
-                }
-                return new { id, ok = true, data = new { x, y, botao, duplo } };
-            case "pc_rolar":
-                string direcao = args.GetProperty("direcao").GetString() ?? "";
-                int passos = args.GetProperty("passos").GetInt32();
-                if ((direcao != "cima" && direcao != "baixo") || passos < 1 || passos > 12)
-                    throw new ArgumentException("Rolagem não permitida.");
-                int delta = (direcao == "cima" ? 1 : -1) * passos * 120;
-                mouse_event(0x0800, 0, 0, unchecked((uint)delta), UIntPtr.Zero);
-                return new { id, ok = true, data = new { direcao, passos } };
-            case "pc_digitar":
-                string text = args.GetProperty("texto").GetString() ?? "";
-                if (text.Length == 0 || text.Length > 500) throw new ArgumentException("Texto inválido.");
-                foreach (char c in text) { SendUnicode(c, false); SendUnicode(c, true); }
-                return new { id, ok = true, data = new { digitado = text.Length } };
-            case "pc_tecla":
-                string shortcut = args.GetProperty("atalho").GetString() ?? "";
-                SendShortcut(shortcut);
-                return new { id, ok = true, data = new { atalho = shortcut } };
             default: throw new ArgumentException("Ferramenta não permitida.");
         }
     }
@@ -205,74 +178,10 @@ internal static class Program
         return titles;
     }
 
-    private static string CaptureJpeg()
-    {
-        int width = GetSystemMetrics(0), height = GetSystemMetrics(1);
-        if (width <= 0 || height <= 0) throw new InvalidOperationException("Tela indisponível.");
-        using var source = new Bitmap(width, height);
-        using (Graphics g = Graphics.FromImage(source))
-            g.CopyFromScreen(0, 0, 0, 0, new Size(width, height));
-        double scale = Math.Min(1d, Math.Min(960d / width, 540d / height));
-        using var resized = new Bitmap(source, new Size(Math.Max(1, (int)(width * scale)), Math.Max(1, (int)(height * scale))));
-        using var memory = new MemoryStream();
-        ImageCodecInfo codec = ImageCodecInfo.GetImageEncoders().First(c => c.MimeType == "image/jpeg");
-        using var parameters = new EncoderParameters(1);
-        parameters.Param[0] = new EncoderParameter(System.Drawing.Imaging.Encoder.Quality, 50L);
-        resized.Save(memory, codec, parameters);
-        return Convert.ToBase64String(memory.ToArray());
-    }
-
-    private static void SendShortcut(string combo)
-    {
-        byte? modifier = combo.StartsWith("CTRL+", StringComparison.Ordinal) ? (byte)0x11
-                       : combo.StartsWith("ALT+", StringComparison.Ordinal) ? (byte)0x12 : null;
-        byte key = combo switch {
-            "ENTER" => 0x0D, "TAB" => 0x09, "ESC" => 0x1B,
-            "BACKSPACE" => 0x08, "DELETE" => 0x2E,
-            "UP" => 0x26, "DOWN" => 0x28, "LEFT" => 0x25, "RIGHT" => 0x27,
-            "PAGEUP" => 0x21, "PAGEDOWN" => 0x22, "HOME" => 0x24, "END" => 0x23,
-            "F5" => 0x74,
-            "CTRL+S" => 0x53, "CTRL+C" => 0x43, "CTRL+V" => 0x56,
-            "CTRL+A" => 0x41, "CTRL+F" => 0x46, "CTRL+T" => 0x54,
-            "CTRL+W" => 0x57, "CTRL+L" => 0x4C,
-            "CTRL+Z" => 0x5A, "CTRL+Y" => 0x59, "ALT+TAB" => 0x09,
-            _ => throw new ArgumentException("Atalho não autorizado.")
-        };
-        if (modifier is byte down) Key(down, false);
-        try { Key(key, false); Key(key, true); }
-        finally { if (modifier is byte up) Key(up, true); }
-    }
-    private static void Key(byte key, bool release)
-    {
-        var input = new Input { Type = 1, U = new InputUnion { Keyboard = new KeyboardInput { VirtualKey = key, Flags = release ? 2u : 0u } } };
-        if (SendInput(1, new[] { input }, Marshal.SizeOf<Input>()) != 1) throw new InvalidOperationException("Teclado indisponível.");
-    }
-    private static void SendUnicode(char character, bool release)
-    {
-        var input = new Input { Type = 1, U = new InputUnion { Keyboard = new KeyboardInput { Scan = character, Flags = 4u | (release ? 2u : 0u) } } };
-        if (SendInput(1, new[] { input }, Marshal.SizeOf<Input>()) != 1) throw new InvalidOperationException("Digitação indisponível.");
-    }
-
-    // A união nativa INPUT usa o tamanho do maior membro (MOUSEINPUT).
-    // Apenas KEYBDINPUT deixa cbSize menor que sizeof(INPUT) e SendInput falha (erro 87).
-    [StructLayout(LayoutKind.Sequential)] private struct Input { public uint Type; public InputUnion U; }
-    [StructLayout(LayoutKind.Explicit)] private struct InputUnion {
-        [FieldOffset(0)] public KeyboardInput Keyboard;
-        [FieldOffset(0)] public MouseInput Mouse;
-    }
-    [StructLayout(LayoutKind.Sequential)] private struct KeyboardInput {
-        public ushort VirtualKey; public ushort Scan; public uint Flags; public uint Time; public IntPtr ExtraInfo;
-    }
-    [StructLayout(LayoutKind.Sequential)] private struct MouseInput {
-        public int X; public int Y; public uint MouseData; public uint Flags; public uint Time; public IntPtr ExtraInfo;
-    }
     private delegate bool EnumWindowsProc(IntPtr window, IntPtr extra);
     [DllImport("user32.dll")] private static extern bool EnumWindows(EnumWindowsProc callback, IntPtr extra);
     [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr window);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetWindowText(IntPtr window, StringBuilder text, int max);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetWindowTextLength(IntPtr window);
     [DllImport("user32.dll")] private static extern int GetSystemMetrics(int index);
-    [DllImport("user32.dll")] private static extern bool SetCursorPos(int x, int y);
-    [DllImport("user32.dll")] private static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extra);
-    [DllImport("user32.dll", SetLastError = true)] private static extern uint SendInput(uint count, [In] Input[] input, int size);
 }

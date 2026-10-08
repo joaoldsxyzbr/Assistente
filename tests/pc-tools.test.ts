@@ -6,18 +6,21 @@ import { pcAgentRequest, pcCall, pcIsConfigured } from "../src/mcps/pc/gateway.t
 test("catálogo é limitado e classifica corretamente as ferramentas", () => {
   assert.equal(new Set(PC_TOOL_CATALOG.map((t) => t.name)).size, PC_TOOL_CATALOG.length);
   assert.equal(isPcWrite("pc_status"), false);
-  assert.equal(isPcWrite("pc_tela"), false);
-  assert.equal(isPcWrite("pc_informacoes"), false);
-  assert.equal(isPcWrite("pc_processos"), false);
-  assert.equal(isPcWrite("pc_pasta"), true);
-  assert.equal(isPcWrite("pc_rolar"), true);
-  assert.equal(isPcWrite("pc_digitar"), true);
+  assert.equal(isPcWrite("pc_terminal"), false);
+  assert.equal(isPcWrite("pc_ui_elementos"), false);
+  assert.equal(isPcWrite("pc_ui_acao"), true);
+  assert.equal(isPcTool("pc_tela"), false);
+  assert.equal(isPcTool("pc_clicar"), false);
+  assert.equal(isPcTool("pc_digitar"), false);
+  assert.equal(isPcTool("pc_rolar"), false);
+  assert.equal(isPcTool("pc_tecla"), false);
+  assert.equal(isPcWrite("pc_digitar"), false);
   assert.equal(isPcTool("pc_exec_shell"), false);
   assert.ok(PC_TOOL_CATALOG.every((tool) => tool.inputSchema.additionalProperties === false));
 });
 
-test("imagem JPEG permanece imagem MCP e erros permanecem erros", () => {
-  assert.deepEqual(pcResultToMcp({ ok: true, image: "AQID" }), { isError: false, content: [{ type: "image", data: "AQID", mimeType: "image/jpeg" }] });
+test("imagens são rejeitadas e erros permanecem erros", () => {
+  assert.equal(pcResultToMcp({ ok: true, image: "AQID" }).isError, true);
   assert.equal(pcResultToMcp({ ok: false, error: "Offline" }).isError, true);
   assert.equal(pcResultToMcp({ ok: true, image: "/".repeat(1_400_001) }).isError, true);
   assert.equal(pcResultToMcp({ unrelated: true }).isError, true);
@@ -48,31 +51,26 @@ test("contrato de loopback deve evitar namespace provisionado no upload inicial"
   assert.equal(config.compatibility_flags.includes("enable_ctx_exports"), true);
 });
 
-test("validação adicional da fronteira de execução", () => {
+test("terminal e UIA possuem contratos estritos", () => {
+  assert.equal(validPcArguments("pc_terminal", { comando: "rede" }), true);
+  assert.equal(validPcArguments("pc_terminal", { comando: "cmd /c dir" }), false);
+  assert.equal(validPcArguments("pc_terminal", { comando: "powershell" }), false);
+  assert.equal(validPcArguments("pc_terminal", { comando: "rede", argumento: "/all" }), false);
+  assert.equal(validPcArguments("pc_ui_elementos", {}), true);
+  assert.equal(validPcArguments("pc_ui_elementos", { extra: true }), false);
+  assert.equal(validPcArguments("pc_ui_acao", { alvo: "Salvar", acao: "acionar" }), true);
+  assert.equal(validPcArguments("pc_ui_acao", { alvo: "Nome", acao: "preencher", texto: "teste" }), true);
+  assert.equal(validPcArguments("pc_ui_acao", { alvo: "Senha", acao: "preencher", texto: "" }), false);
+  assert.equal(validPcArguments("pc_ui_acao", { alvo: "Salvar", acao: "acionar", texto: "enganar" }), false);
+  assert.equal(validPcArguments("pc_ui_acao", { alvo: "Salvar", acao: "excluir" }), false);
+  assert.equal(validPcArguments("pc_ui_acao", { alvo: "X".repeat(101), acao: "acionar" }), false);
   assert.equal(validPcArguments("pc_abrir", { aplicativo: "explorador" }), true);
   assert.equal(validPcArguments("pc_abrir", { aplicativo: "powershell" }), false);
-  assert.equal(validPcArguments("pc_clicar", { x: 4, y: 20 }), true);
-  assert.equal(validPcArguments("pc_clicar", { x: -1, y: 20 }), false);
-  assert.equal(validPcArguments("pc_clicar", { x: 4, y: 20, extra: true }), false);
-  assert.equal(validPcArguments("pc_digitar", { texto: "ok" }), true);
-  assert.equal(validPcArguments("pc_digitar", { texto: "x".repeat(501) }), false);
-  assert.equal(validPcArguments("pc_tecla", { atalho: "WIN+R" }), false);
-  assert.equal(validPcArguments("pc_status", {}), true);
-  assert.equal(validPcArguments("pc_informacoes", {}), true);
-  assert.equal(validPcArguments("pc_informacoes", { extra: 1 }), false);
-  assert.equal(validPcArguments("pc_processos", {}), true);
   assert.equal(validPcArguments("pc_pasta", { pasta: "downloads" }), true);
-  assert.equal(validPcArguments("pc_pasta", { pasta: "sistema" }), false);
-  assert.equal(validPcArguments("pc_clicar", { x: 4, y: 20, botao: "direito" }), true);
-  assert.equal(validPcArguments("pc_clicar", { x: 4, y: 20, duplo: true }), true);
-  assert.equal(validPcArguments("pc_clicar", { x: 4, y: 20, botao: "direito", duplo: true }), false);
-  assert.equal(validPcArguments("pc_clicar", { x: 4, y: 20, botao: "meio" }), false);
-  assert.equal(validPcArguments("pc_rolar", { direcao: "baixo", passos: 3 }), true);
-  assert.equal(validPcArguments("pc_rolar", { direcao: "cima", passos: 12 }), true);
-  assert.equal(validPcArguments("pc_rolar", { direcao: "baixo", passos: 13 }), false);
-  assert.equal(validPcArguments("pc_rolar", { direcao: "baixo", passos: 1.5 }), false);
-  assert.equal(validPcArguments("pc_tecla", { atalho: "CTRL+F" }), true);
-  assert.equal(validPcArguments("pc_tecla", { atalho: "DELETE" }), true);
+  for (const retired of ["pc_tela", "pc_clicar", "pc_rolar", "pc_digitar", "pc_tecla"]) {
+    assert.equal(isPcTool(retired), false);
+    assert.equal(validPcArguments(retired, {}), false);
+  }
 });
 
 test("respostas malformadas e excessivas são erros", () => {
@@ -92,9 +90,9 @@ test("parâmetros inválidos não chegam ao Durable Object", async () => {
     } },
   };
   assert.equal((await pcCall(environment, "pc_abrir", { aplicativo: "terminal" })).isError, true);
-  assert.equal((await pcCall(environment, "pc_tecla", { atalho: "WIN+R" })).isError, true);
-  assert.equal((await pcCall(environment, "pc_pasta", { pasta: "sistema" })).isError, true);
-  assert.equal((await pcCall(environment, "pc_rolar", { direcao: "baixo", passos: 100 })).isError, true);
+  assert.equal((await pcCall(environment, "pc_terminal", { comando: "powershell" })).isError, true);
+  assert.equal((await pcCall(environment, "pc_ui_acao", { alvo: "Senha", acao: "preencher" })).isError, true);
+  assert.equal((await pcCall(environment, "pc_tela", {})).isError, true);
   assert.equal(accesses, 0);
 });
 

@@ -84,7 +84,7 @@ export class PcRelay extends DurableObject {
   }
 
   async webSocketMessage(socket: WebSocket, message: string | ArrayBuffer): Promise<void> {
-    if (typeof message !== "string" || message.length > 1_400_000) return;
+    if (typeof message !== "string" || message.length > 65_536) return;
     let body: unknown;
     try { body = JSON.parse(message); } catch { return; }
     if (!body || typeof body !== "object") return;
