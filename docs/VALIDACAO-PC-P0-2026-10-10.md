@@ -78,3 +78,12 @@ Workflow: [`verify-pc-release.yml`](../.github/workflows/verify-pc-release.yml),
 O teste automatizado **não** verifica UI Automation de aplicativos reais, foco da janela, sessão bloqueada, UAC, DPAPI do usuário, reconexão ao Worker ou instalação na máquina pessoal. Esses itens permanecem pendentes na [issue #55](https://github.com/joaoldsxyzbr/Assistente/issues/55). Um resultado verde **não autoriza** declarar P0 concluída.
 
 **Próxima etapa de produto, caso seja desejada instalação futura sem intervenção manual:** desenhar um atualizador **opt-in**, autenticado, com assinatura/integridade, aprovação local, rollback e teste de recuperação. Isso requer uma primeira instalação local de uma versão que já inclua o atualizador; não é possível ativá-lo retroativamente no 0.4 apenas por um commit. Implementação sujeita a revisão específica de segurança.
+
+## 5. Resultado da automação GitHub — 10/10/2026
+
+- [GitHub Actions — verificar release #38055378894](https://github.com/joaoldsxyzbr/Assistente/actions/runs/38055378894): **sucesso** no runner `windows-latest`. Os logs confirmam: SHA-256 do ZIP igual ao manifesto, versão de `AssistentePc.exe` **0.5.0.0** coerente com a tag `pc-v0.5.0-beta.1`, extração válida e `--check-terminal` com código de saída 0.
+- [GitHub Actions — CI #38055378985](https://github.com/joaoldsxyzbr/Assistente/actions/runs/38055378985): **sucesso** em `checks` e `windows-agent` na branch da PR #61.
+- **Check externo Workers Builds: assistente:** continua com falha na prévia da PR #61; acompanhamento separado na [issue #52](https://github.com/joaoldsxyzbr/Assistente/issues/52). Não foi realizado deploy nem alterado token.
+- [Issue #62](https://github.com/joaoldsxyzbr/Assistente/issues/62): proposta de atualizador opt-in para futuras versões, com consentimento local e rollback; **não implementado**.
+
+**Aceite parcial:** artefato GitHub 0.5 validado em CI; **P0 de Windows real ainda pendente**, pois a máquina pessoal continua no 0.4 até atualização local autorizada. Os resultados do runner não representam a instalação do usuário.
