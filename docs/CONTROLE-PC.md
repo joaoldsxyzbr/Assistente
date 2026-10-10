@@ -81,3 +81,7 @@ Sem execução livre de PowerShell, CMD ou scripts remotos. A lista fixa de coma
 **Compatibilidade:** a versão 0.4 continua sendo a versão efetivamente instalada no PC até uma versão 0.5 ser gerada, instalada e verificada. Ações da UIA são dependentes do provedor de acessibilidade; operações sensíveis só quando explicitamente solicitadas. Não afirmar sucesso apenas pelo retorno de Invoke quando não for possível observar o estado final.
 
 **Validação necessária:** testes de catálogo/validação no Node, compilação e empacotamento win-x64 no GitHub Actions, testes de padrões UIA em Windows real, concorrência e reconexão; confirmar compatibilidade do Brave e do Explorador. Publicação de release só após CI verde.
+
+## Próximas evoluções — planejamento
+
+O plano completo de evolução inspirado no Desktop Commander está em [PLANO-EVOLUCAO-PC.md](PLANO-EVOLUCAO-PC.md), com fases P0–P5, contratos, segurança, critérios de aceite e issues. É **proposta**, não descrição de recursos instalados ou autorização de implementação. O estado atual e as restrições deste manual continuam valendo.
