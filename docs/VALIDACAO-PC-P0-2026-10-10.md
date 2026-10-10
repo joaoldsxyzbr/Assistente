@@ -68,3 +68,13 @@ Este registro contém **somente evidências técnicas minimizadas**. Não inclui
 - [ ] Só depois aprovar a entrada na fase P1.
 
 **Segurança e escopo:** nenhuma captura de tela, leitura de arquivo, comando de shell livre, mudança de Worker/produção ou alteração de configurações locais foi feita nesta validação. A única ação local executada foi solicitar a abertura do Bloco de Notas; o aplicativo apareceu entre as janelas, mas o foco permaneceu no navegador. Não se afirma que a atualização foi realizada.
+
+## 4. Validação automatizada exclusivamente no GitHub
+
+A solicitação de execução pelo GitHub é atendida **até o limite técnico da arquitetura atual**: o GitHub Actions consegue verificar o pacote publicado, seu SHA-256, a extração, os metadados de versão e o comando de autoteste de terminal em um runner Windows descartável. **Não consegue instalar ou trocar o executável do computador pessoal**: o agente 0.4 não possui canal de atualização remota, e um runner GitHub não é a sessão Windows do usuário. Não introduzir mecanismo de execução arbitrária ou expor credenciais para contornar essa restrição.
+
+Workflow: [`verify-pc-release.yml`](../.github/workflows/verify-pc-release.yml), acionado quando sua própria definição é proposta em PR e manualmente no GitHub Actions após a integração. Padrão de release: `pc-v0.5.0-beta.1`.
+
+O teste automatizado **não** verifica UI Automation de aplicativos reais, foco da janela, sessão bloqueada, UAC, DPAPI do usuário, reconexão ao Worker ou instalação na máquina pessoal. Esses itens permanecem pendentes na [issue #55](https://github.com/joaoldsxyzbr/Assistente/issues/55). Um resultado verde **não autoriza** declarar P0 concluída.
+
+**Próxima etapa de produto, caso seja desejada instalação futura sem intervenção manual:** desenhar um atualizador **opt-in**, autenticado, com assinatura/integridade, aprovação local, rollback e teste de recuperação. Isso requer uma primeira instalação local de uma versão que já inclua o atualizador; não é possível ativá-lo retroativamente no 0.4 apenas por um commit. Implementação sujeita a revisão específica de segurança.
