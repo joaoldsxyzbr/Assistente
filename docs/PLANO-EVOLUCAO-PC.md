@@ -254,20 +254,20 @@ Complexidade é estimativa qualitativa; não é prazo nem compromisso de entrega
 
 **Definição de pronto para cada fase:** documentação e issue atualizadas; testes de contrato/negativos; revisão de segurança; build; teste real quando aplicável; release identificável; rollback testado; nenhuma regressão nos MCPs existentes; evidências registradas no GitHub.
 
-## 9. Backlog de issues/PRs proposto
+## 9. Backlog rastreável de issues/PRs
 
-Manter [#53](https://github.com/joaoldsxyzbr/Assistente/issues/53) como **issue guarda-chuva** da pesquisa e deste plano; [#48](https://github.com/joaoldsxyzbr/Assistente/issues/48) preserva a decisão anterior sobre UIA/terminal. Cada entrega abaixo deve virar issue pequena com checklist e PR correspondente:
+**Issue guarda-chuva:** [#53 — estudo Remote Desktop Commander](https://github.com/joaoldsxyzbr/Assistente/issues/53). **Decisão de segurança existente:** [#48](https://github.com/joaoldsxyzbr/Assistente/issues/48). **PR deste plano (rascunho):** [#54](https://github.com/joaoldsxyzbr/Assistente/pull/54).
 
-- **P0:** validar agente 0.5 no Windows real e registrar baseline/UIA/erros.
-- **P1:** política de raízes, protocolo de capacidades e testes negativos.
-- **P2A:** metadados/leitura paginada de arquivos de texto autorizados.
-- **P2B:** pesquisa limitada de nomes de arquivos autorizados.
-- **P3A:** prévia/diff e controle de versão sem escrita.
-- **P3B:** aprovação local, edição atômica, backup e reconciliação.
-- **P4:** diagnósticos e processos permitidos, sem shell arbitrário.
-- **P5:** multidispositivo, **backlog opcional**, não executar sem confirmação.
+| Ordem | Issue | Escopo e divisão em PRs | Dependência |
+| --- | --- | --- | --- |
+| P0 | [#55](https://github.com/joaoldsxyzbr/Assistente/issues/55) | Validar 0.5, UIA e baseline real; correções pontuais | Nenhuma |
+| P1 | [#56](https://github.com/joaoldsxyzbr/Assistente/issues/56) | Raízes locais, política, protocolo e testes negativos | P0 |
+| P2 | [#57](https://github.com/joaoldsxyzbr/Assistente/issues/57) | PR 2A leitura/metadados; PR 2B busca limitada | P1 |
+| P3 | [#58](https://github.com/joaoldsxyzbr/Assistente/issues/58) | PR 3A diff/hash; PR 3B aprovação local/escrita/backup | P1 + P2 |
+| P4 | [#59](https://github.com/joaoldsxyzbr/Assistente/issues/59) | Diagnósticos e processos permitidos | P0 + P1 |
+| P5 | [#60](https://github.com/joaoldsxyzbr/Assistente/issues/60) | Multidispositivo, **opcional** | Decisão explícita |
 
-Não juntar P1, P2 e P3 em um único PR. Nunca iniciar implementação só porque a issue foi criada.
+Não juntar P1, P2 e P3 em um único PR. As issues registram o **planejamento**, não autorização automática de implementação.
 
 ## 10. Referências e licenças
 
