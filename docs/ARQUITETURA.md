@@ -43,7 +43,7 @@ Para ponto:
 
 ### Contrato com o Assistente Geral
 
-Na versão 1.5.10 do plugin, o roteamento rotineiro de ponto ficou explícito e direto:
+No fluxo atual do plugin, o roteamento rotineiro de ponto é direto:
 - `ponto HHMM` ou `ponto HH:MM` → `ponto_registrar`;
 - `ponto hoje` → `ponto_hoje`;
 - `ponto resumo` → `ponto_resumo`.
@@ -159,6 +159,12 @@ Sem período explícito, todas as ferramentas usam o **mês seguinte** (timezone
 
 O cliente remoto estabelece até 15 segundos para handshake e até 45 segundos para a chamada. Erros de timeout de leitura podem ser repetidos. Quando uma chamada de escrita já começou, qualquer falha de rede, timeout ou rejeição sem retorno confiável é marcada como resultado incerto e **não recebe retry automático**. A resposta solicita verificar o recurso de origem antes de outra tentativa. Logs registram metadados do resultado, não a exceção bruta.
 
-## Controle do PC (primeira versão)
+## Stack escolhida (revisão de 13/10/2026)
 
-O módulo opcional src/mcps/pc/ declara ferramentas especializadas protegidas pelo OAuth existente. O agente Windows em src/pc-agent/ usa o WebSocket de saída para o mesmo Worker, com secret separado PC_AGENT_TOKEN protegido por DPAPI no PC. O Durable Object PcRelay, acessado por `ctx.exports.PcRelay` sem binding `env`, hospeda a conexão WebSocket hibernável e permite encaminhar comandos a partir de chamadas independentes do Worker. Sem secret as ferramentas pc_* não são registradas; sem computador conectado elas retornam offline. O agente 0.4 não captura nem transmite imagens; o MCP expõe apenas consultas fixas por terminal sem shell e inspeção/ação via Windows UI Automation na janela ativa, com validação de argumentos no Worker e no agente. Essa integração não utiliza D1 e não muda os domínios de ponto e gastos. Limites, regras, configuração e testes constam em [docs/CONTROLE-PC.md](CONTROLE-PC.md).
+- **TypeScript** como linguagem principal para contratos, validações e testes; sem migração injustificada para outras linguagens.
+- **Cloudflare Workers** para o hub HTTP stateless; **Agents SDK / MCP SDK v2** para transporte MCP; **OAuthProvider** para OAuth 2.1, PKCE e CIMD.
+- **Cloudflare KV** somente para estado OAuth. **D1** segue canônico e acessado pelo MCP Cloudflare para ponto/gastos, sem binding direto no hub.
+- **GitHub** como fonte de verdade, com npm lockfile, CI para typecheck/testes/build e promoção de versão separada.
+- **Não usar Durable Objects, WebSocket, agentes Windows ou infraestrutura adicional**: não há requisito atual que justifique seu custo de manutenção.
+
+A descontinuação do módulo de controle remoto do PC foi solicitada em 10/10/2026 e aplicada ao código em 13/10/2026, sem apagar o histórico Git. Pendências antigas desse módulo devem ser encerradas, não implementadas. Testes devem usar dados sintéticos e nunca escrever em D1 real.

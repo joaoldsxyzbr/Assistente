@@ -3,7 +3,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, chore/retire-pc-20261013]
 
 permissions:
   contents: read
@@ -18,21 +18,18 @@ jobs:
           node-version: 24
       - run: npm ci --no-audit --no-fund
       - run: npm run check
-  windows-agent:
-    runs-on: windows-latest
+
+  retire-pc-files:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/chore/retire-pc-20261013'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-dotnet@v5
-        with:
-          dotnet-version: '10.0.x'
-      - run: dotnet publish src/pc-agent/AssistentePc.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o dist/AssistentePc
-      - name: Validar catálogo restrito de terminal
-        shell: pwsh
+      - name: Delete retired PC-only code and workflow
+        shell: bash
         run: |
-          $process = Start-Process -FilePath "./dist/AssistentePc/AssistentePc.exe" -ArgumentList "--check-terminal" -Wait -PassThru
-          if ($process.ExitCode -ne 0) { throw "Catálogo de terminal inválido." }
-      - uses: actions/upload-artifact@v6
-        with:
-          name: AssistentePc-win-x64
-          path: dist/AssistentePc/
-          if-no-files-found: error
+          set -euo pipefail
+          git rm -r -- src/pc-agent src/mcps/pc tests/pc-tools.test.ts docs/CONTROLE-PC.md docs/RELEASE-PC.md .github/workflows/release-pc.yml
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'chore: remove retired PC agent, relay, tests and release workflow'
+          git push origin HEAD:chore/retire-pc-20261013
