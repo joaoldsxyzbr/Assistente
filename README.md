@@ -4,6 +4,9 @@ O **Assistente** é o hub MCP do plugin **Assistente Geral**. O plugin cuida das
 
 ## Arquitetura
 
+O escopo ativo é exclusivamente **Cloudflare, GitHub, ponto e gastos**. A integração de controle remoto de PC foi descontinuada em 13/10/2026; seus arquivos, workflow e endpoint são removidos nesta limpeza. O histórico técnico permanece no Git e nas issues encerradas.
+
+
 - **1 Worker:** `assistente`.
 - **1 endpoint MCP:** `https://assistente.joaolds.xyz.br/mcp`.
 - **1 módulo por MCP/domínio:** `src/mcps/<nome>`.
@@ -14,7 +17,6 @@ O **Assistente** é o hub MCP do plugin **Assistente Geral**. O plugin cuida das
 - **Controle de ponto:** ferramentas locais `ponto_registrar`, `ponto_hoje` e `ponto_resumo` usam somente o Cloudflare MCP para consultar/escrever no D1; o Worker não possui binding D1.
 - **Controle de gastos:** cinco ferramentas locais (`gastos_resumo`, `gastos_listar`, `gastos_registrar`, `gastos_atualizar`, `gastos_excluir`) usam o Cloudflare MCP para o D1 canônico, sem binding D1 no Worker.
 
-- **Controle do PC (opcional):** agente Windows em C# na bandeja, sem CMD. A versão 0.4 usa **terminal de diagnósticos restritos** e **Windows UI Automation** para encontrar/acionar/preencher controles acessíveis, **sem captura da tela ou mouse por coordenadas**. Mantém conexão WebSocket, reconexão automática, token DPAPI, pastas e aplicativos conhecidos. Consulte [docs/CONTROLE-PC.md](docs/CONTROLE-PC.md); exige `PC_AGENT_TOKEN` como secret, fora do Git.
 
 Detalhes e decisões duráveis ficam em [docs/ARQUITETURA.md](docs/ARQUITETURA.md). Trabalho pendente fica em Issues.
 
@@ -105,7 +107,7 @@ O **Assistente Geral** usa cinco ferramentas do **Assistente MCPs**: `gastos_res
 - O status de lançamento novo é `pendente`, salvo pedido explícito de pago. Não há recorrência automática nem migração de dados.
 - `GASTOS_D1_DATABASE_ID` está no Wrangler; testes de escrita usam **somente SQLite em memória**, não valores pessoais.
 
-A skill `assistente-controle-de-gastos` deve chamar diretamente essas ferramentas para pedidos rotineiros, mantendo o executor genérico reservado às exceções.
+O especialista **Assistente Pessoal** deve usar diretamente essas ferramentas em pedidos rotineiros; o executor genérico fica reservado às exceções.
 
 ## Checks de PR e Deploy
 
