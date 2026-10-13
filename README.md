@@ -115,7 +115,9 @@ O especialista **Assistente Pessoal** deve usar diretamente essas ferramentas em
 
 O **CI do GitHub** valida `npm run check`. **Workers Builds** é um check externo independente e requer seu próprio token de build válido. O deploy da branch `main` faz upload de uma versão, mas **não promove automaticamente** o tráfego; valide a versão ativa e faça a promoção separadamente quando solicitada.
 
-Se um check de PR da Cloudflare falhar com `Authentication error [10000]` ou `Invalid access token [9109]` ao executar `wrangler preview`, revise **Settings → Builds → API token** no painel do Worker e a permissão da credencial associada ao trigger de preview. Não desabilite o check nem force uma dependência apenas para ocultar o erro. Registre o incidente em Issues e reexecute o check após corrigir a credencial.
+O projeto configura **dois triggers Cloudflare Builds separados**, vinculados exclusivamente ao repositório `joaoldsxyzbr/Assistente` e com token de build de usuário válido: **produção** para `main` (com `npx wrangler versions upload --config wrangler.assistente.jsonc`) e **prévia** para `*` exceto `main` (com `npx wrangler preview --config wrangler.assistente.jsonc`). A prévia não deve promover tráfego da produção nem acessar D1 real. Os triggers e seus tokens são geridos no painel/API Cloudflare, **nunca em código ou secrets do GitHub**.
+
+Em 13/10/2026, identificamos que PRs antigas usavam o token legado `assistente build token`, enquanto a `main` compilava com outro token válido. Foi criado um trigger de prévia explícito usando a mesma credencial de build válida da produção (issue #52). Valide o check de PR antes de considerar resolvida a falha. Em caso de `Authentication error [10000]` / `Invalid access token [9109]`, conferir o token **do trigger de prévia** e variáveis `CLOUDFLARE_API_TOKEN`; não desabilitar o check para mascarar falha.
 
 Os SDKs MCP devem permanecer alinhados com os `peerDependencies` de `agents`; não usar `--force` ou `--legacy-peer-deps` para atualizar client/server isoladamente.
 
