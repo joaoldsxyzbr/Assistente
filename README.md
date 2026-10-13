@@ -75,7 +75,7 @@ O GitHub é a fonte de verdade. O build conectado ao Cloudflare usa:
 
 Isso cria uma versão sem trocar o tráfego automaticamente. Depois do CI verde e da validação necessária, a versão é promovida para produção.
 
-**Exceção única — migração de desligamento do `PcRelay` (13/10/2026):** a Cloudflare ainda mantém um namespace de Durable Objects do antigo PC. A configuração declara o tombstone `exports.PcRelay.state = "deleted"`; versões com tombstones **não podem** ser publicadas usando `wrangler versions upload`. Consulte [o procedimento de migração](docs/MIGRACAO-PC-RELAY.md) para executar **uma única vez** `npx wrangler deploy --config wrangler.assistente.jsonc` e verificar a exclusão; esse comando substitui o Worker ativo imediatamente e exclui definitivamente **somente o namespace PcRelay**. Depois da migração e verificação, retire o tombstone em uma segunda alteração Git, volte ao fluxo de upload de versões e mantenha OAuth/KV e os bancos D1 intactos.
+**Histórico:** a migração única que eliminou o Durable Object `PcRelay` ocorreu em 13/10/2026 via `wrangler deploy` (PR #64, versão Cloudflare `89d9deb1-341b-447c-8c91-33c36c4676c0`). O código final não exporta essa classe e não inclui tombstone; o fluxo normal volta a `versions upload`. Confira o [registro da migração](docs/MIGRACAO-PC-RELAY.md) para detalhes e restrições de rollback.
 
 ## GitHub MCP oficial
 

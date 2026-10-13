@@ -8,7 +8,15 @@ Somente o namespace/armazenamento **PcRelay** será permanentemente excluído. *
 
 Referência: https://developers.cloudflare.com/durable-objects/reference/durable-objects-migrations/
 
-## Procedimento (uma única mudança de ciclo de vida)
+## Execução confirmada em produção
+
+- **PR:** #64, commit `0dfa9ef2d6f2d28ca98c7f00ae4d01b668c18951`.
+- **Worker:** `assistente`, versão `89d9deb1-341b-447c-8c91-33c36c4676c0` implantada em 13/10/2026 às 12:56:37 UTC com 100% do tráfego.
+- **Evidência Cloudflare Builds:** `Durable Object exports reconciliation: Deleted: PcRelay`; `Success: Deploy command completed` e `Success! Build completed.`
+- **Verificações:** `assistente_status` retornou Cloudflare configurado com três ferramentas e GitHub com 21; leitura de identificação GitHub passou; GitHub CI da `main` aprovado (run 38401029157).
+- **Etapa de encerramento:** remoção do tombstone e restabelecimento de `wrangler versions upload` na branch `main`. Dados anteriores do PcRelay foram definitivamente eliminados.
+
+## Procedimento executado (referência histórica)
 
 1. Verifique `main`, `npm run check` e o SHA do commit da migração. Garanta que a configuração não possui binding de `PcRelay`, que a classe não é exportada pelo Worker e que há somente `exports.PcRelay = { type: "durable-object", state: "deleted" }`.
 2. Na Cloudflare > Workers & Pages > `assistente` > Settings > Builds, **temporariamente** altere o comando de deploy da branch **main** de `npx wrangler versions upload --config wrangler.assistente.jsonc` para:
