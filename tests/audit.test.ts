@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { audit } from "../src/shared/audit.ts";
 
-test("audit keeps only allowlisted metadata", () => {
+test("audit keeps only allowlisted metadata and emits safe trace/latency fields", () => {
   const messages: string[] = [];
   const original = console.log;
   console.log = (message?: unknown) => messages.push(String(message));
@@ -12,12 +12,10 @@ test("audit keeps only allowlisted metadata", () => {
       status: 200,
       write: false,
       outcome: "accepted",
-    traceId: "00000000-0000-4000-8000-000000000001",
-    durationMs: 27,
-      payload: "blocked",
-      secret: "blocked",
       traceId: "00000000-0000-4000-8000-000000000001",
       durationMs: 27,
+      payload: "blocked",
+      secret: "blocked",
     });
   } finally {
     console.log = original;
@@ -29,5 +27,7 @@ test("audit keeps only allowlisted metadata", () => {
     status: 200,
     write: false,
     outcome: "accepted",
+    traceId: "00000000-0000-4000-8000-000000000001",
+    durationMs: 27,
   });
 });

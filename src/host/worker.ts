@@ -234,6 +234,7 @@ export function createAssistenteMcpServer(
             { code: buildPontoHojeCode(pontoDatabaseId, local.data) },
             false,
             environment.MCP_CLOUDFLARE_ACCOUNT_ID,
+            traceId,
           );
         }
 
@@ -274,6 +275,7 @@ export function createAssistenteMcpServer(
           { code: buildGastosCode(gastosDatabaseId, prepared.action) },
           definition.isWrite,
           environment.MCP_CLOUDFLARE_ACCOUNT_ID,
+          traceId,
         );
       },
     );

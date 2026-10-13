@@ -2,7 +2,7 @@
 
 ## Objetivo
 
-Este repositório implementa o hub MCP do plugin Assistente Geral. O plugin mantém skills e regras conversacionais; o Worker `assistente` autentica o ChatGPT, publica uma allowlist de ferramentas e encaminha cada chamada ao MCP de destino.
+Este repositório implementa o hub MCP do plugin Assistente. O plugin mantém skills e regras conversacionais; o Worker `assistente` autentica o ChatGPT, publica uma allowlist de ferramentas e encaminha cada chamada ao MCP de destino.
 
 A regra estrutural é simples: **um Worker, um endpoint MCP e um módulo local por integração ou domínio**.
 
@@ -10,7 +10,7 @@ A regra estrutural é simples: **um Worker, um endpoint MCP e um módulo local p
 
 | Camada | Responsabilidade |
 |---|---|
-| Assistente Geral | Skills, regras de domínio, interpretação da intenção e apresentação dos resultados |
+| Assistente | Skills, regras de domínio, interpretação da intenção e apresentação dos resultados |
 | Worker `assistente` | OAuth, catálogo allowlist, escopos, ferramentas locais e roteamento MCP |
 | `src/mcps/<nome>/` | Contratos e lógica fixa das ferramentas aprovadas |
 | MCP de destino | Execução técnica e aplicação das permissões do token de serviço |
@@ -41,7 +41,7 @@ Para ponto:
 
 `ponto_registrar` usa escrita atômica no D1: segunda a sexta preenche `entrada → ida_intervalo → volta_intervalo → saida`; sábado preenche somente `entrada → saida`. `ponto_hoje` consulta a view `banco_horas`; `ponto_resumo` consulta a view `resumo`.
 
-### Contrato com o Assistente Geral
+### Contrato com o Assistente
 
 No fluxo atual do plugin, o roteamento rotineiro de ponto é direto:
 - `ponto HHMM` ou `ponto HH:MM` → `ponto_registrar`;
@@ -61,7 +61,7 @@ O Worker usa o **mesmo cliente MCP remoto**, passando `Authorization: Bearer <MC
 
 As ferramentas são declaradas localmente em `src/mcps/github/tools.ts` (não são descobertas automaticamente). Nomes publicados recebem prefixo `mcp_github__`; leitura exige `mcp:read` e escrita exige também `mcp:write`. A conexão só é publicada quando URL e secret estão configurados. Nenhuma ferramenta aceita token, endpoint arbitrário ou SQL em seus parâmetros.
 
-O GitHub MCP **não tem filtro hardcoded por repositório**. Os parâmetros `owner` e `repo` são fornecidos no pedido, e os direitos efetivos são os da credencial GitHub. A regra de trabalhar exclusivamente no repositório `joaoldsxyzbr/Assistente` aplica-se a este projeto, não ao MCP multi-projetos.
+O GitHub MCP **não tem filtro hardcoded por repositório**. Os parâmetros `owner` e `repo` são fornecidos no pedido, e os direitos efetivos são os da credencial GitHub. A regra de trabalhar exclusivamente no repositório `joaoldsxyzbr/Assistente-mcps` aplica-se a este projeto, não ao MCP multi-projetos.
 
 Para conectar, crie PAT com escopo por repositórios conforme sua necessidade e permissões mínimas para as operações que efetivamente serão feitas; armazene-o somente como **secret `MCP_GITHUB_TOKEN`** do Worker. Testar primeiro com `mcp_github__get_me`, sem operações de escrita. Consulte [documentação oficial GitHub MCP](https://github.com/github/github-mcp-server/blob/main/docs/server-configuration.md).
 
@@ -151,7 +151,7 @@ O CI de PR continua validando typecheck, testes unitários/de banco sintético e
 
 ### Gastos — cinco ferramentas dedicadas
 
-O Worker expõe `gastos_resumo` e `gastos_listar` (somente leitura), além de `gastos_registrar`, `gastos_atualizar` e `gastos_excluir` (escopo de escrita). A configuração `GASTOS_D1_DATABASE_ID` aponta para o D1 já usado pelo controle financeiro. O fluxo é `@Assistente Geral → Assistente MCPs → Cloudflare MCP → D1`, sem binding direto do D1 e sem banco paralelo.
+O Worker expõe `gastos_resumo` e `gastos_listar` (somente leitura), além de `gastos_registrar`, `gastos_atualizar` e `gastos_excluir` (escopo de escrita). A configuração `GASTOS_D1_DATABASE_ID` aponta para o D1 já usado pelo controle financeiro. O fluxo é `@Assistente → Assistente MCPs → Cloudflare MCP → D1`, sem binding direto do D1 e sem banco paralelo.
 
 Sem período explícito, todas as ferramentas usam o **mês seguinte** (timezone America/Sao_Paulo). Os identificadores `movimentacoes_MM_AAAA` são validados e nunca aceitos como SQL livre. A coluna `valor` continua TEXT: o parse estrito converte para centavos inteiros; valores inválidos tornam os totais não confirmáveis. Leituras não criam tabelas; o primeiro registro autorizado de mês novo utiliza esquema verificado da referência persistida, sem copiar registros. Operações por descrição retornam candidatos se ambíguas, e atualizações/exclusões usam condições de estado antigo e `RETURNING` para impedir perda silenciosa de mudanças. Escritas incertas não são repetidas automaticamente. Dado de teste é sintético e não acessa o D1 real.
 
@@ -168,3 +168,11 @@ O cliente remoto estabelece até 15 segundos para handshake e até 45 segundos p
 - **Não usar Durable Objects, WebSocket, agentes Windows ou infraestrutura adicional**: não há requisito atual que justifique seu custo de manutenção.
 
 A descontinuação do módulo de controle remoto do PC foi solicitada em 10/10/2026 e aplicada ao código em 13/10/2026, sem apagar o histórico Git. Pendências antigas desse módulo devem ser encerradas, não implementadas. Testes devem usar dados sintéticos e nunca escrever em D1 real.
+
+## Pós-auditoria #67
+
+Mantém-se um único Worker stateless, sem binding D1 nem serviço de PC. As chamadas MCP registram `traceId` e `durationMs` sem conteúdo ou segredos. Respostas remotas `isError` após iniciar escrita são tratadas como resultado incerto, exigindo reconciliação.
+
+O registro de gastos evita duplicação por descrições equivalentes usuais em português na SQL atômica, sem migração de dados, e escolhe referência de schema cronologicamente. Catálogo `pc_*` remanescente no ChatGPT decorre de metadados locais anteriores, não de nova ferramenta no backend.
+
+O workflow semanal de auditoria de dependências é separado do CI. Não se confirmou rate limiting do OAuth na borda Cloudflare, pois o token acessível não autorizou leitura de regras WAF; verificar na interface Cloudflare. Teste de OAuth/renovação real depende de conexão interativa e não deve escrever dados artificiais em D1. Ver [issue #67](https://github.com/joaoldsxyzbr/Assistente-mcps/issues/67).
