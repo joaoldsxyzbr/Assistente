@@ -123,6 +123,39 @@ test("consulta não cria mês ausente; registro autorizado copia só o schema",a
   assert.equal((await f.call("gastos_listar")).quantidade,0);
  }finally{f.db.close();}
 });
+test("registro atômico evita duplicatas simultâneas com acentos, espaços e valores legados",async()=>{
+ const f=setup();
+ try{
+   const items=await Promise.all([
+     f.call("gastos_registrar",{descricao:"ÁGUA",valor:"10,00",tipo:"saida"}),
+     f.call("gastos_registrar",{descricao:"água",valor:"10.00",tipo:"saida"})
+   ]);
+   assert.deepEqual(items.map(r=>r.status).sort(),["duplicado","registrado"]);
+   assert.equal((await f.call("gastos_listar")).quantidade,1);
+   f.db.prepare("INSERT INTO movimentacoes_11_2026(descricao,tipo,valor) VALUES (?,?,?)").run(
+     "  Luz   Elétrica  ","saida","R$ 20,00");
+   const legacy=await f.call("gastos_registrar",{descricao:"luz elétrica",valor:"20.00",tipo:"saida"});
+   assert.equal(legacy.status,"duplicado");
+   assert.equal((await f.call("gastos_listar")).quantidade,2);
+ }finally{f.db.close();}
+});
+test("clonagem de esquema seleciona mês mais recente por ano e mês",async()=>{
+ const f=setup();
+ try{
+   f.db.exec("CREATE TABLE movimentacoes_12_2025 ("+
+     "id INTEGER PRIMARY KEY AUTOINCREMENT,descricao TEXT NOT NULL,"+
+     "tipo TEXT NOT NULL,categoria TEXT DEFAULT 'antigo',valor TEXT NOT NULL,"+
+     "status TEXT NOT NULL,observacao TEXT)");
+   f.db.exec("CREATE TABLE movimentacoes_01_2026 ("+
+     "id INTEGER PRIMARY KEY AUTOINCREMENT,descricao TEXT NOT NULL,"+
+     "tipo TEXT NOT NULL,categoria TEXT DEFAULT 'recente',valor TEXT NOT NULL,"+
+     "status TEXT NOT NULL,observacao TEXT)");
+   const r=await f.call("gastos_registrar",{periodo:"02/2027",descricao:"Teste",valor:"1.00",tipo:"saida"});
+   assert.equal(r.status,"registrado");
+   const row=f.db.prepare("SELECT sql FROM sqlite_master WHERE name='movimentacoes_02_2027'").get() as {sql:string};
+   assert.match(row.sql,/recente/);
+ }finally{f.db.close();}
+});
 test("inexistência não permite apagar ou editar",async()=>{
  const f=setup();
  try{

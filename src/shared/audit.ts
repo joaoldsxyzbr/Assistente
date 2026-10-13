@@ -9,6 +9,8 @@ const ALLOWED_FIELDS = new Set([
   "write",
   "uncertain",
   "scopes",
+  "traceId",
+  "durationMs",
 ]);
 
 export function audit(

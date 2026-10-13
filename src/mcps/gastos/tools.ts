@@ -127,11 +127,24 @@ const parse=(raw)=>{
 };
 const decimal=(c)=>Math.trunc(c/100)+"."+String(c%100).padStart(2,"0");
 const normalize=(s)=>String(s).trim().replace(/\s+/g," ").toLocaleLowerCase("pt-BR");
+// Mirror the Portuguese case/whitespace key inside the atomic INSERT guard.
+// SQLite lower() only folds ASCII, so accented capitals need explicit handling.
+const normalizedDescriptionSql=(()=>{
+ let expr="lower(descricao)";
+ for(const [upper,lower] of [["Á","á"],["À","à"],["Â","â"],["Ã","ã"],["É","é"],["Ê","ê"],["Í","í"],["Ó","ó"],["Ô","ô"],["Õ","õ"],["Ú","ú"],["Ü","ü"],["Ç","ç"]]) {
+   expr="replace("+expr+",'"+upper+"','"+lower+"')";
+ }
+ for(const whitespace of ["\\u00a0","\\t","\\n","\\r"]) {
+   expr="replace("+expr+",'"+whitespace+"',' ')";
+ }
+ for(let i=0;i<8;i++)expr="replace("+expr+",'  ',' ')";
+ return "trim("+expr+")";
+})();
 const present=(row)=>{const c=parse(row.valor);return {...row,valor_centavos:c,valor_brl:c===null?null:"R$ "+decimal(c).replace(".",",")}};
 let exists=await query("SELECT name FROM sqlite_master WHERE type='table' AND name=?",[table]);
 if(!exists.length&&input.operacao==="registrar"){
  // Criar SOMENTE uma tabela mensal, após verificar a estrutura já persistida.
- const ref=(await query("SELECT name,sql FROM sqlite_master WHERE type='table' AND name GLOB 'movimentacoes_[0-1][0-9]_20[0-9][0-9]' ORDER BY name DESC LIMIT 1"))[0];
+ const ref=(await query("SELECT name,sql FROM sqlite_master WHERE type='table' AND name GLOB 'movimentacoes_[0-1][0-9]_20[0-9][0-9]' ORDER BY substr(name,18,4) DESC, substr(name,15,2) DESC LIMIT 1"))[0];
  if(!ref||!/^movimentacoes_(0[1-9]|1[0-2])_20\d\d$/.test(ref.name))return {status:"sem_schema",periodo:input.periodo};
  const info=await query("PRAGMA table_info("+ref.name+")");
  if(info.map(x=>x.name).join(",")!=="id,descricao,tipo,categoria,valor,status,observacao")return {status:"schema_incompativel",periodo:input.periodo};
@@ -181,7 +194,7 @@ if(input.operacao==="registrar"){
  }
  if(candidates.length&&!input.permitir_duplicado)return {status:"duplicado",periodo:input.periodo,candidatos:candidates.slice(0,10)};
  const uniqueSql="INSERT INTO "+table+" (descricao,tipo,categoria,valor,status,observacao) "+
-  "SELECT ?,?,?,?,?,? WHERE NOT EXISTS (SELECT 1 FROM "+table+" WHERE lower(trim(descricao))=? AND tipo=? AND valor=?) RETURNING "+cols;
+  "SELECT ?,?,?,?,?,? WHERE NOT EXISTS (SELECT 1 FROM "+table+" WHERE "+normalizedDescriptionSql+"=? AND tipo=? AND valor=?) RETURNING "+cols;
  const sql=input.permitir_duplicado?
   "INSERT INTO "+table+" (descricao,tipo,categoria,valor,status,observacao) VALUES (?,?,?,?,?,?) RETURNING "+cols:uniqueSql;
  const params=[input.descricao,input.tipo,input.categoria,input.valor,input.status,input.observacao];

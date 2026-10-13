@@ -23,7 +23,7 @@ export interface OAuthMcpWorkerOptions<Environment extends OAuthMcpEnvironment> 
   resource: string;
   resourceName: string;
   writeToolNames: readonly string[];
-  createServer: (environment: Environment) => McpServer;
+  createServer: (environment: Environment, traceId?: string) => McpServer;
 }
 
 type McpWorkerContext = Parameters<StatelessMcpHandler>[2];
@@ -39,9 +39,11 @@ export function createOAuthMcpWorker<Environment extends OAuthMcpEnvironment>(
 
   const apiHandler = {
     async fetch(request: Request, environment: Environment, context: McpWorkerContext) {
+      const traceId = crypto.randomUUID();
+      const startedAt = Date.now();
       const auth = (context as OAuthExecutionContext).auth;
       if (auth === undefined) {
-        audit("warn", "mcp_authentication_denied", { status: 401 });
+        audit("warn", "mcp_authentication_denied", { status: 401, traceId });
         return new Response("Unauthorized", {
           status: 401,
           headers: { "WWW-Authenticate": "Bearer" },
@@ -55,6 +57,7 @@ export function createOAuthMcpWorker<Environment extends OAuthMcpEnvironment>(
           status: 403,
           write: isWriteCall,
           scopes: requiredScopes,
+          traceId,
         });
         return insufficientScope(
           auth,
@@ -66,7 +69,7 @@ export function createOAuthMcpWorker<Environment extends OAuthMcpEnvironment>(
       }
 
       const handler = createMcpHandler(
-        () => options.createServer(environment),
+        () => options.createServer(environment, traceId),
         { route: "/mcp" },
       );
       const response = await handler(request, environment, context);
@@ -74,6 +77,8 @@ export function createOAuthMcpWorker<Environment extends OAuthMcpEnvironment>(
         status: response.status,
         write: isWriteCall,
         outcome: response.ok ? "accepted" : "rejected",
+        traceId,
+        durationMs: Date.now() - startedAt,
       });
       return response;
     },

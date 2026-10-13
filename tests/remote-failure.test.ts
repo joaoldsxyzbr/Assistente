@@ -37,6 +37,15 @@ test("write failure after starting remote call is always uncertain", () => {
   }
 });
 
+test("an upstream MCP isError after a started write is uncertain, even without exception", () => {
+  const write = classifyRemoteCallFailure(undefined, true, true);
+  const read = classifyRemoteCallFailure(undefined, false, true);
+  assert.equal(write.uncertain, true);
+  assert.equal(write.outcome, "uncertain");
+  assert.match(write.message, /antes de tentar novamente/);
+  assert.equal(read.uncertain, false);
+});
+
 test("untrusted exceptions are never echoed to the user", () => {
   const failure = classifyRemoteCallFailure(new Error("token=supersecret"), false, true);
   assert.equal(failure.outcome, "failed");

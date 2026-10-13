@@ -69,9 +69,11 @@ async function callRemoteTool(
   args: Record<string, unknown>,
   isWrite: boolean,
   defaultCloudflareAccountId?: string,
+  traceId?: string,
 ) {
   const client = new RemoteMcpClient(configuration);
   let callStarted = false;
+  const startedAt = Date.now();
 
   try {
     await client.connect();
@@ -81,16 +83,21 @@ async function callRemoteTool(
       : args;
     const result = await client.callTool(remoteName, remoteArgs);
     const isError = result.isError ?? false;
+    // Upstream errors can arrive after a remote write committed.
+    // Never echo provider error content (it may contain internal details).
+    const failure = isError ? classifyRemoteCallFailure(undefined, isWrite, true) : undefined;
     audit(isError ? "warn" : "info", "upstream_tool_call", {
       server: configuration.id,
       tool: remoteName,
       write: isWrite,
-      outcome: isError ? "remote_error" : "success",
+      outcome: failure?.outcome ?? "success",
+      uncertain: failure?.uncertain ?? false,
+      traceId,
+      durationMs: Date.now() - startedAt,
     });
-    return {
-      content: textContent(result),
-      isError,
-    };
+    return failure
+      ? { isError: true, content: [{ type: "text" as const, text: failure.message }] }
+      : { isError: false, content: textContent(result) };
   } catch (error) {
     const failure = classifyRemoteCallFailure(error, isWrite, callStarted);
     audit("warn", "upstream_tool_call", {
@@ -99,6 +106,8 @@ async function callRemoteTool(
       write: isWrite,
       outcome: failure.outcome,
       uncertain: failure.uncertain,
+      traceId,
+      durationMs: Date.now() - startedAt,
     });
     return { isError: true, content: [{ type: "text" as const, text: failure.message }] };
   } finally {
@@ -132,6 +141,7 @@ function pontoConfigurationError(message: string) {
 
 export function createAssistenteMcpServer(
   environment: AssistenteWorkerEnvironment,
+  traceId?: string,
 ): McpServer {
   const configurations = readMcpConfigurations(environment);
   const server = new McpServer({ name: "assistente", version: "0.1.0" });
@@ -212,6 +222,7 @@ export function createAssistenteMcpServer(
             },
             true,
             environment.MCP_CLOUDFLARE_ACCOUNT_ID,
+            traceId,
           );
         }
 
@@ -232,6 +243,7 @@ export function createAssistenteMcpServer(
           { code: buildPontoResumoCode(pontoDatabaseId) },
           false,
           environment.MCP_CLOUDFLARE_ACCOUNT_ID,
+          traceId,
         );
       },
     );
@@ -314,7 +326,7 @@ const writeToolNames = [
 ];
 
 const oauthWorker = createOAuthMcpWorker<AssistenteWorkerEnvironment>({
-  createServer: (environment) => createAssistenteMcpServer(environment),
+  createServer: (environment, traceId) => createAssistenteMcpServer(environment, traceId),
   resource: "https://assistente.joaolds.xyz.br/mcp",
   resourceName: "Assistente MCP",
   writeToolNames,
