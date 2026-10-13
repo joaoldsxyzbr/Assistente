@@ -23,12 +23,9 @@ test("controle de PC está aposentado sem código, relay ou workflow de release"
   const configuration = JSON.parse(
     await readFile(new URL("wrangler.assistente.jsonc", root), "utf8"),
   );
-  // Tombstone transitória exigida para excluir o namespace de PC na Cloudflare.
-  // Depois do primeiro wrangler deploy, ela poderá ser removida quando stale.
-  assert.deepEqual(configuration.exports?.PcRelay, {
-    type: "durable-object",
-    state: "deleted",
-  });
+  // A exclusão do namespace foi aplicada em produção em 13/10/2026.
+  // A configuração definitiva não deve reintroduzir classe nem tombstone.
+  assert.equal(configuration.exports?.PcRelay, undefined);
   assert.equal(configuration.durable_objects?.bindings?.length ?? 0, 0);
   assert.equal(configuration.compatibility_flags.includes("enable_ctx_exports"), false);
   assert.equal(configuration.main, "src/host/worker.ts");

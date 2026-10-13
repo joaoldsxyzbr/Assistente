@@ -124,7 +124,7 @@ A configuração continua com `redact_query_string: true`, `invocation_logs: fal
 - `PONTO_D1_DATABASE_ID` identifica o D1 de ponto usado pelas chamadas via Cloudflare MCP;
 - `MCP_GITHUB_URL` aponta para `https://api.githubcopilot.com/mcp/`; o token `MCP_GITHUB_TOKEN` é sempre secret independente.
 
-O `npm run build:workers` faz build dry-run. Normalmente, o pipeline conectado à Cloudflare usa `wrangler versions upload` e promoção de versão separada. **Excepcionalmente**, a eliminação do Durable Object `PcRelay` precisa de um `wrangler deploy` com tombstone de classe, pois upload de versão não aplica mudanças do ciclo de vida. A migração apaga permanentemente apenas os dados do `PcRelay`, torna impossível voltar a versões que dependem dele e **não** alcança KV OAuth nem os bancos D1. Ver `docs/MIGRACAO-PC-RELAY.md`. Após confirmar o sucesso, a entrada `exports.PcRelay` deve ser removida se apontada como obsoleta e o build deve retornar a `versions upload`.
+`npm run build:workers` faz build dry-run. O pipeline conectado à Cloudflare usa normalmente `wrangler versions upload` e promoção de versão separada. Em 13/10/2026 a migração única do extinto `PcRelay` foi aplicada via `wrangler deploy` (versão `89d9deb1-341b-447c-8c91-33c36c4676c0`), com confirmação explícita `Deleted: PcRelay` nos logs. Seu tombstone de configuração foi retirado em uma segunda PR e o fluxo voltou a `versions upload`. Não é possível fazer rollback para versões que dependem do Durable Object removido; não houve alteração dos bancos D1 nem do KV OAuth. Ver `docs/MIGRACAO-PC-RELAY.md`.
 
 ## Organização
 
