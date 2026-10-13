@@ -142,11 +142,11 @@ test("registro atômico evita duplicatas simultâneas com acentos, espaços e va
 test("clonagem de esquema seleciona mês mais recente por ano e mês",async()=>{
  const f=setup();
  try{
-   f.db.exec("CREATE TABLE movimentacoes_12_2025 ("+
+   f.db.exec("CREATE TABLE movimentacoes_12_2026 ("+
      "id INTEGER PRIMARY KEY AUTOINCREMENT,descricao TEXT NOT NULL,"+
      "tipo TEXT NOT NULL,categoria TEXT DEFAULT 'antigo',valor TEXT NOT NULL,"+
      "status TEXT NOT NULL,observacao TEXT)");
-   f.db.exec("CREATE TABLE movimentacoes_01_2026 ("+
+   f.db.exec("CREATE TABLE movimentacoes_01_2027 ("+
      "id INTEGER PRIMARY KEY AUTOINCREMENT,descricao TEXT NOT NULL,"+
      "tipo TEXT NOT NULL,categoria TEXT DEFAULT 'recente',valor TEXT NOT NULL,"+
      "status TEXT NOT NULL,observacao TEXT)");
