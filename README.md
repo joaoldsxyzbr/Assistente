@@ -75,6 +75,8 @@ O GitHub é a fonte de verdade. O build conectado ao Cloudflare usa:
 
 Isso cria uma versão sem trocar o tráfego automaticamente. Depois do CI verde e da validação necessária, a versão é promovida para produção.
 
+**Exceção única — migração de desligamento do `PcRelay` (13/10/2026):** a Cloudflare ainda mantém um namespace de Durable Objects do antigo PC. A configuração declara o tombstone `exports.PcRelay.state = "deleted"`; versões com tombstones **não podem** ser publicadas usando `wrangler versions upload`. Consulte [o procedimento de migração](docs/MIGRACAO-PC-RELAY.md) para executar **uma única vez** `npx wrangler deploy --config wrangler.assistente.jsonc` e verificar a exclusão; esse comando substitui o Worker ativo imediatamente e exclui definitivamente **somente o namespace PcRelay**. Depois da migração e verificação, retire o tombstone em uma segunda alteração Git, volte ao fluxo de upload de versões e mantenha OAuth/KV e os bancos D1 intactos.
+
 ## GitHub MCP oficial
 
 O Assistente conecta o GitHub **por MCP remoto**, sem chamadas diretas à API GitHub, usando apenas ferramentas locais aprovadas em `src/mcps/github/tools.ts`. O servidor oficial recebe o header `X-MCP-Toolsets: context,repos,issues,pull_requests,actions`; a allowlist do Assistente publica apenas um subconjunto estável (leitura e escrita). [Documentação oficial](https://github.com/github/github-mcp-server/blob/main/docs/remote-server.md).
