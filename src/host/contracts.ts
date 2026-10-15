@@ -11,6 +11,12 @@ export const MCP_SERVER_CATALOG = [
     endpointVariable: "MCP_GITHUB_URL",
     tokenVariable: "MCP_GITHUB_TOKEN",
   },
+  {
+    id: "penpot",
+    label: "Penpot MCP",
+    endpointVariable: "MCP_PENPOT_URL",
+    tokenVariable: "MCP_PENPOT_TOKEN",
+  },
 ] as const;
 
 export type McpServerId = (typeof MCP_SERVER_CATALOG)[number]["id"];

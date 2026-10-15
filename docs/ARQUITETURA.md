@@ -168,3 +168,13 @@ O cliente remoto estabelece até 15 segundos para handshake e até 45 segundos p
 - **Não usar Durable Objects, WebSocket, agentes Windows ou infraestrutura adicional**: não há requisito atual que justifique seu custo de manutenção.
 
 A descontinuação do módulo de controle remoto do PC foi solicitada em 10/10/2026 e aplicada ao código em 13/10/2026, sem apagar o histórico Git. Pendências antigas desse módulo devem ser encerradas, não implementadas. Testes devem usar dados sintéticos e nunca escrever em D1 real.
+
+## Integração Penpot (2026-10-15)
+
+O catálogo `src/mcps/penpot/tools.ts` publica somente as quatro ferramentas suportadas pelo MCP remoto hospedado: `high_level_overview`, `penpot_api_info`, `execute_code` e `export_shape`. Não publica `import_image` porque depende do modo local. Usa o mesmo fluxo ChatGPT → OAuth Worker → cliente MCP HTTP → Penpot, sem infraestrutura adicional.
+
+**Autenticação distinta:** a URL HTTPS pública fixa `https://design.penpot.app/mcp/stream` é validada por igualdade exata na configuração. O secret independente `MCP_PENPOT_TOKEN` é anexado como `userToken` na URL apenas ao construir o transporte; não é enviado como Authorization Bearer, não aparece em status e nunca é armazenado no repositório. O SDK MCP manipula essa URL em memória. A observabilidade tem query string redigida e erros remotos são normalizados antes de responder ao usuário.
+
+**Escopos:** `execute_code` aceita JavaScript arbitrário no plugin e sempre exige OAuth `mcp:write`, mesmo para consultas. Somente `high_level_overview`, `penpot_api_info` e `export_shape` são leitura. A edição depende de uma aba Penpot conectada em MCP → Connect, e várias abas requerem escolha por `sessionId`. Não tentar mutações reais em CI nem em design de produção para teste.
+
+**Ativação:** cadastrar exclusivamente no Cloudflare Worker o secret `MCP_PENPOT_TOKEN`, implantar e promover versão após validação; testar `assistente_status`, documentação e uma consulta sem mutação em arquivo explicitamente conectado. Sem secret, conexão Penpot é exibida como pendente e suas ferramentas não são publicadas. O CI cobre validação de configuração, limites de endpoint, encoding do token e separação do Bearer, além dos checks anteriores.
