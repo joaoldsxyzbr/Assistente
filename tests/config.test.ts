@@ -7,8 +7,8 @@ test("starts with Cloudflare, Penpot and GitHub as unconfigured connections", ()
 
   assert.deepEqual(configurations.map(({ id, status }) => ({ id, status })), [
     { id: "cloudflare", status: "unconfigured" },
-    { id: "penpot", status: "unconfigured" },
     { id: "github", status: "unconfigured" },
+    { id: "penpot", status: "unconfigured" },
   ]);
 });
 
@@ -38,6 +38,7 @@ test("ignores point and expense variables because they are not hub integrations"
   assert.deepEqual(configurations.map(({ id, status }) => ({ id, status })), [
     { id: "cloudflare", status: "unconfigured" },
     { id: "github", status: "unconfigured" },
+    { id: "penpot", status: "unconfigured" },
   ]);
 });
 
