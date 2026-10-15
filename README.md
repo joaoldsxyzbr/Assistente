@@ -128,3 +128,15 @@ Os SDKs MCP devem permanecer alinhados com os `peerDependencies` de `agents`; n�
 As conexões remotas têm limite de 15 segundos para conectar e 45 segundos por chamada de ferramenta. Erros e timeouts usam mensagens fixas, sem exibir respostas internas nem credenciais. Falhas após iniciar uma chamada de escrita são **resultado incerto**: consultar o serviço de origem antes de repetir, sem retry automático. Consultas de leitura podem ser tentadas novamente.
 
 Os testes automatizados cobrem timeouts, classificação de falhas e exigência de escopos em operações de leitura e escrita. Um login OAuth totalmente novo e sua renovação no ChatGPT continuam exigindo validação interativa; os testes de código não a substituem.
+
+## Penpot MCP remoto
+
+A integração com o [Penpot MCP oficial](https://help.penpot.app/mcp/) utiliza o mesmo Worker e o cliente MCP HTTP existente; não exige VPS, Docker ou outro Worker.
+
+- Módulo: `src/mcps/penpot/tools.ts`. Ferramentas publicadas (com secret): `mcp_penpot__high_level_overview`, `mcp_penpot__penpot_api_info`, `mcp_penpot__execute_code` e `mcp_penpot__export_shape`.
+- URL oficial fixa em `MCP_PENPOT_URL=https://design.penpot.app/mcp/stream`; a chave deve ser cadastrada **somente** no Worker como secret `MCP_PENPOT_TOKEN`. Use apenas o valor da chave, sem `?userToken=` ou URL completa.
+- O Penpot usa `userToken` na query da conexão ao upstream. O Worker adiciona o parâmetro em memória e **não encaminha o OAuth do ChatGPT**, não usa Bearer para Penpot nem coloca o token em arquivos, respostas de status e logs.
+- `execute_code` é classificado integralmente como **escrita** (`mcp:write`), inclusive quando usado para consulta, pois scripts arbitrários podem alterar ou excluir designs; **nunca** interprete script arbitrário como comprovadamente somente leitura. Outras três ferramentas são leitura.
+- No Penpot: **Your account → Integrations → MCP Server → Enable** e gere a chave. Abra o arquivo e selecione **MCP → Connect**. Se tiver várias abas conectadas, informe `sessionId` para as ferramentas pertinentes. Aba suspensa/desconectada impede execuções.
+- Validação após configurar o secret e promover uma versão: `assistente_status` deve mostrar Penpot `CONFIGURED`; chame `mcp_penpot__high_level_overview` e depois teste um `execute_code` de **consulta** com o arquivo aberto, sem fazer escrita real em produção. Sem secret, a integração fica indisponível sem afetar os outros MCPs.
+- Após merge, o Workers Builds pode fazer **versions upload**, mas promoção para tráfego ativo é separada. Preview não herda secrets. A chave **não** deve ser enviada no chat ou adicionada ao GitHub.

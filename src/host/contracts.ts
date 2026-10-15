@@ -6,6 +6,12 @@ export const MCP_SERVER_CATALOG = [
     tokenVariable: "MCP_CLOUDFLARE_TOKEN",
   },
   {
+    id: "penpot",
+    label: "Penpot MCP",
+    endpointVariable: "MCP_PENPOT_URL",
+    tokenVariable: "MCP_PENPOT_TOKEN",
+  },
+  {
     id: "github",
     label: "GitHub MCP",
     endpointVariable: "MCP_GITHUB_URL",
