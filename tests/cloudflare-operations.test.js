@@ -33,5 +33,20 @@ test("logs de build só aceitam UUID e consultas fixas", () => {
   assert.equal(buildCloudflareReadCode("cloudflare_build_logs", { build_id: "../other" }, ids), undefined);
   const code = buildCloudflareReadCode("cloudflare_build_logs", { build_id: ids.gastos }, ids);
   assert.match(code, /\/builds\/builds\//);
+  assert.match(code, /\/logs/);
   assert.match(code, /method: "GET"/);
+});
+
+test("consulta realmente usa endpoint de logs e aceita paginação sem escrever", async () => {
+ const id=ids.ponto;
+ const code=buildCloudflareReadCode("cloudflare_build_logs",{build_id:id,cursor:"A/B+C"},ids);
+ const calls=[];
+ const cloudflare={request:async req => { calls.push(req);return {success:true,result:{lines:[[123,"OK"],[124,"DONE"]],cursor:"next"}}; }};
+ const fn=new Function("cloudflare","accountId","return ("+code+")()");
+ const output=await fn(cloudflare,"testaccount");
+ assert.equal(calls.length,1);
+ assert.equal(calls[0].method,"GET");
+ assert.equal(calls[0].path,"/accounts/testaccount/builds/builds/"+id+"/logs?cursor=A%2FB%2BC");
+ assert.equal(output.linhas.length,2);
+ assert.equal(output.cursor,"next");
 });

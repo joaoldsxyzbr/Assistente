@@ -132,7 +132,7 @@ function buildCloudflareReadCode(name, args, ids) {
     const suffix = args.cursor ? "?cursor=" + encodeURIComponent(args.cursor) : "";
     return `async () => {
       const response = await cloudflare.request({ method: "GET",
-        path: "/accounts/" + accountId + "/builds/builds/" + ${JSON.stringify(args.build_id)} + ${JSON.stringify(suffix)} });
+        path: "/accounts/" + accountId + "/builds/builds/" + ${JSON.stringify(args.build_id)} + "/logs" + ${JSON.stringify(suffix)} });
       if (response.success !== true) throw new Error("Logs de build indisponíveis");
       return { build_id: ${JSON.stringify(args.build_id)}, linhas: (response.result?.lines || []).slice(-60),
         cursor: response.result?.cursor ?? null, truncado: response.result?.truncated ?? false };

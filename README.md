@@ -122,7 +122,7 @@ Sem secret, o GitHub permanece inativo e não interfere no Cloudflare nem nas fe
 ## Consultas específicas e fluxo de desenvolvimento
 
 - `ponto_data` recebe `data: "DD/MM/AAAA"`. `ponto_periodo` recebe `inicio` e `fim` no mesmo formato, limitado a 93 dias. Ambas usam a view oficial `banco_horas`, não alteram D1 e validam as datas no Worker.
-- `cloudflare_d1_listar` lista bancos da conta fixa; `cloudflare_d1_estrutura` lista nomes de tabelas/views exclusivamente do banco canônico de ponto ou gastos; `cloudflare_workers_listar` lista Workers; `cloudflare_worker_diagnostico` consulta deployments e versões; `cloudflare_build_logs` recupera até 60 linhas e cursor de paginação pelo UUID do build. Não há SQL nem código livre nos parâmetros dessas ferramentas. A conta é validada no servidor.
+- `cloudflare_d1_listar` lista bancos da conta fixa; `cloudflare_d1_estrutura` lista nomes de tabelas/views exclusivamente do banco canônico de ponto ou gastos; `cloudflare_workers_listar` lista Workers; `cloudflare_worker_diagnostico` consulta deployments e versões; `cloudflare_build_logs` recupera até 60 linhas e cursor de paginação pelo UUID do build usando o endpoint `/logs`. Não há SQL nem código livre nos parâmetros dessas ferramentas. A conta é validada no servidor.
 - `mcp_github__list_releases` lista releases pelo MCP oficial; `github_ci_resumo` devolve até cinco execuções com status e URL a partir do Actions oficial, opcionalmente filtrando por branch. PRs, checks e logs continuam nas ferramentas existentes. A comparação arbitrária entre branches ainda não é uma ferramenta do MCP oficial; para diffs de PR use `mcp_github__pull_request_read`.
 - Logs de build são consultáveis pela ferramenta dedicada; logs Cloudflare de execução continuam na observabilidade oficial; não foi introduzido tail remoto via WebSocket. Não disparar deploy nem promoção a partir de consultas de diagnóstico.
 - Erros `isError` de escritas remotas são tratados como resultado incerto; detalhes internos não são expostos. Logs operacionais levam `traceId` e `durationMs` sem argumentos e sem dados pessoais. A rotina semanal de `npm audit` fica separada do CI normal.
@@ -158,3 +158,7 @@ As conexões remotas têm limite de 15 segundos para conectar e 45 segundos por 
 
 Os testes automatizados cobrem timeouts, classificação de falhas e exigência de escopos em operações de leitura e escrita. Um login OAuth totalmente novo e sua renovação no ChatGPT continuam exigindo validação interativa; os testes de código não a substituem.
 
+
+### Diagnóstico do token de Preview (16/10/2026)
+
+A revisão do trigger de Preview confirmou Build Token **user-scoped**, mas o comando `wrangler preview` estava falhando na criação do Preview com erros Cloudflare 10000 e 9109. Para reduzir ambiguidade de resolução da conta no Wrangler, foi adicionada ao **trigger de Preview somente** a variável de build não secreta `CLOUDFLARE_ACCOUNT_ID`, com a conta canônica. Isso não modifica bindings da aplicação nem produção; conferir logs do próximo build para determinar se corrige a autorização, sem concluir a causa apenas pela variável. Se o erro 10000 persistir, revisar o API Token de usuário no painel, incluindo Workers Scripts Edit e User Details/Memberships Read conforme documentação oficial; não substituir secret por token não verificado ou desativar o Preview.
