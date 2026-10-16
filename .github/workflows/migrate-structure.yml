@@ -1,0 +1,29 @@
+name: One-time structure and skills migration
+on:
+  push:
+    branches: [feat/estrutura-mcps-skills]
+permissions:
+  contents: write
+jobs:
+  migrate:
+    if: github.actor == 'joaoldsxyzbr'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - run: npm ci --no-audit --no-fund
+      - name: Move source and generate skills catalog
+        run: |
+          node scripts/migrate-structure.mjs
+          rm scripts/migrate-structure.mjs .github/workflows/migrate-structure.yml
+      - run: npm run check
+      - name: Commit restructuring
+        run: |
+          git add -A
+          git diff --cached --quiet && exit 1
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "refactor: organizar mcps, server e skills na raiz"
+          git push origin HEAD:feat/estrutura-mcps-skills
