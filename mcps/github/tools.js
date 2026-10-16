@@ -876,7 +876,40 @@ const GITHUB_TOOL_CATALOG = [
       "additionalProperties": false
     },
     "isWrite": false
-  }
+  },
+  {
+  "serverId": "github",
+  "name": "list_releases",
+  "description": "Lista releases publicados no repositório pelo MCP oficial do GitHub (somente leitura).",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "owner": {
+        "type": "string",
+        "minLength": 1
+      },
+      "repo": {
+        "type": "string",
+        "minLength": 1
+      },
+      "page": {
+        "type": "integer",
+        "minimum": 1
+      },
+      "perPage": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 100
+      }
+    },
+    "required": [
+      "owner",
+      "repo"
+    ],
+    "additionalProperties": false
+  },
+  "isWrite": false
+}
 ];
 export {
   GITHUB_TOOL_CATALOG

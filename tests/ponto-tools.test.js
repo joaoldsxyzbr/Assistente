@@ -21,13 +21,15 @@ test("resolve data e dia da semana em America/Sao_Paulo", () => {
   assert.deepEqual(saturday, { data: "10/10/2026", weekday: "Sat" });
   assert.deepEqual(sunday, { data: "11/10/2026", weekday: "Sun" });
 });
-test("publica somente os tres comandos simples de ponto", () => {
+test("publica os comandos simples e consultas historicas de ponto", () => {
   assert.deepEqual(
     PONTO_TOOL_CATALOG.map(({ name, isWrite }) => ({ name, isWrite })),
     [
       { name: "ponto_registrar", isWrite: true },
       { name: "ponto_hoje", isWrite: false },
-      { name: "ponto_resumo", isWrite: false }
+      { name: "ponto_resumo", isWrite: false },
+      { name: "ponto_data", isWrite: false },
+      { name: "ponto_periodo", isWrite: false }
     ]
   );
 });

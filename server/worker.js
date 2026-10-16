@@ -269,6 +269,46 @@ function createAssistenteMcpServer(environment) {
       }
     );
   }
+  const githubConfiguration = configurations.find(c => c.id === "github" && c.status === "configured");
+  server.registerTool("github_ci_resumo", {
+    description: "Mostra o estado das últimas execuções do GitHub Actions, sem disparar ou alterar workflows.",
+    inputSchema: fromJsonSchema({
+      type: "object",
+      properties: {
+        owner: { type: "string", minLength: 1 },
+        repo: { type: "string", minLength: 1 },
+        branch: { type: "string", description: "Branch opcional para filtrar o resumo." }
+      },
+      required: ["owner", "repo"],
+      additionalProperties: false
+    }),
+    _meta: { securitySchemes: oauthSecuritySchemesForTool(false) }
+  }, async ({ owner, repo, branch }) => {
+    if (!githubConfiguration) return pontoConfigurationError("GitHub MCP não configurado.");
+    if (!/^[A-Za-z0-9-]{1,39}$/.test(owner) || !/^[A-Za-z0-9_.-]{1,100}$/.test(repo) ||
+        (branch !== undefined && (!branch || branch.length > 150 || !/^[A-Za-z0-9_.\/-]+$/.test(branch)))) {
+      return pontoConfigurationError("Repositório ou branch inválidos.");
+    }
+    const response = await callRemoteTool(githubConfiguration, "actions_list", {
+      owner, repo, method: "list_workflow_runs", perPage: 30
+    }, false);
+    if (response.isError) return response;
+    try {
+      const content = response.content.find(c => c.type === "text")?.text;
+      const parsed = JSON.parse(content);
+      const runs = Array.isArray(parsed.workflow_runs) ? parsed.workflow_runs : [];
+      const selected = runs.filter(r => !branch || r.head_branch === branch).slice(0, 5);
+      return { content: [{ type: "text", text: JSON.stringify({
+        repository: owner + "/" + repo, branch: branch ?? null,
+        execucoes: selected.map(r => ({
+          id: r.id, name: r.name, branch: r.head_branch, sha: r.head_sha,
+          status: r.status, conclusion: r.conclusion ?? null, url: r.html_url, created_at: r.created_at
+        }))
+      }) }] };
+    } catch {
+      return pontoConfigurationError("Não foi possível interpretar o resumo do CI.");
+    }
+  });
   const routes = /* @__PURE__ */ new Set();
   for (const configuration of configurations) {
     if (configuration.status !== "configured") continue;
