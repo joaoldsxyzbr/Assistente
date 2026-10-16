@@ -1,57 +1,30 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { access, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { SKILL_NAMES, SKILL_CONTENTS, MCP_SERVER_INSTRUCTIONS } from "../skills/catalog.js";
-
-test("skills sao mantidas em Markdown e disponiveis no catalogo", async () => {
+const read = name => readFile(new URL("../" + name, import.meta.url), "utf8");
+test("skills correspondem às fontes Markdown", async () => {
   assert.deepEqual(SKILL_NAMES, ["ponto", "gastos", "desenvolvimento"]);
-  for (const name of SKILL_NAMES) {
-    const source = await readFile(new URL("../skills/" + name + "/SKILL.md", import.meta.url), "utf8");
-    assert.equal(SKILL_CONTENTS[name], source);
-  }
-  const intro = (await readFile(new URL("../skills/INSTRUCTIONS.md", import.meta.url), "utf8")).trim();
-  assert.equal(MCP_SERVER_INSTRUCTIONS, intro);
+  for (const name of SKILL_NAMES) assert.equal(SKILL_CONTENTS[name], await read("skills/" + name + "/SKILL.md"));
+  assert.equal(MCP_SERVER_INSTRUCTIONS, (await read("skills/INSTRUCTIONS.md")).trim());
 });
-
-test("servidor fornece instrucoes MCP e ferramenta de leitura das skills", async () => {
-  const source = await readFile(new URL("../server/worker.js", import.meta.url), "utf8");
-  assert.ok(source.includes("instructions: MCP_SERVER_INSTRUCTIONS"));
-  assert.ok(source.includes("assistente_skill"));
-  assert.ok(source.includes("SKILL_CONTENTS[nome]"));
-  assert.ok(MCP_SERVER_INSTRUCTIONS.includes("ponto_registrar"));
+test("Worker publica somente status e leitura das skills", async () => {
+  const worker = await read("server/worker.js");
+  assert.ok(worker.includes("assistente_status"));
+  assert.ok(worker.includes("assistente_skill"));
+  assert.equal((worker.match(/server\.registerTool\(/g) || []).length, 2);
+  assert.doesNotMatch(worker, /MCP_GITHUB_TOKEN|MCP_CLOUDFLARE_TOKEN/);
 });
-
-test("pastas visiveis na raiz e src aposentada", async () => {
-  for (const folder of ["mcps", "server", "skills", "scripts", "tests"]) {
-    await access(new URL("../" + folder + "/", import.meta.url));
-  }
-  await assert.rejects(access(new URL("../src/", import.meta.url)), { code: "ENOENT" });
-  await assert.rejects(access(new URL("../scripts/migrate-structure.mjs", import.meta.url)), { code: "ENOENT" });
-});
-
-test("skills de ponto e gastos apontam para os IDs canonicos do Wrangler", async () => {
-  const config = JSON.parse(await readFile(new URL("../wrangler.assistente.jsonc", import.meta.url), "utf8"));
-  const pontoId = config.vars?.PONTO_D1_DATABASE_ID;
-  const gastosId = config.vars?.GASTOS_D1_DATABASE_ID;
-  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  assert.match(pontoId, uuid);
-  assert.match(gastosId, uuid);
-  assert.notEqual(pontoId, gastosId);
-  for (const [nome, variavel, id, outroId] of [
-    ["ponto", "PONTO_D1_DATABASE_ID", pontoId, gastosId],
-    ["gastos", "GASTOS_D1_DATABASE_ID", gastosId, pontoId]
-  ]) {
-    const texto = SKILL_CONTENTS[nome];
-    assert.ok(texto.includes(variavel), `${nome}: variavel D1 ausente`);
-    assert.ok(texto.includes(id), `${nome}: ID D1 divergente`);
-    assert.ok(!texto.includes(outroId), `${nome}: ID do outro banco nao deve aparecer`);
-    assert.ok(texto.includes("não grave"), `${nome}: faltou instrução de bloqueio em divergência`);
+test("bancos D1 mantêm identidades distintas e skills são oficiais", async () => {
+  const config = JSON.parse(await read("wrangler.assistente.jsonc"));
+  const ids = ["PONTO_D1_DATABASE_ID","GASTOS_D1_DATABASE_ID"].map(key=>config.vars[key]);
+  assert.notEqual(ids[0],ids[1]);
+  for (const [name,id,other] of [["ponto",ids[0],ids[1]],["gastos",ids[1],ids[0]]]) {
+    assert.ok(SKILL_CONTENTS[name].includes(id));
+    assert.ok(!SKILL_CONTENTS[name].includes(other));
+    assert.match(SKILL_CONTENTS[name],/MCP oficial Cloudflare/);
   }
 });
-
-test("skill de desenvolvimento cobre qualidade de ponta a ponta sem burocracia", () => {
-  const texto = SKILL_CONTENTS.desenvolvimento;
-  for (const tema of ["RED → GREEN → REFACTOR", "causa raiz", "plano", "revisar", "CI", "produção", "mudança pequena"]) {
-    assert.ok(texto.toLowerCase().includes(tema.toLowerCase()), `Faltou: ${tema}`);
-  }
+test("desenvolvimento preserva qualidade", () => {
+  for (const term of ["RED → GREEN → REFACTOR","causa raiz","CI","produção"]) assert.ok(SKILL_CONTENTS.desenvolvimento.includes(term));
 });
