@@ -1,195 +1,30 @@
-# Arquitetura do Assistente
+# Arquitetura
 
-## Objetivo
+## Modelo
 
-Este repositório implementa o hub independente Assistente MCPs. O Worker `assistente` autentica o ChatGPT, publica uma allowlist de ferramentas e encaminha cada chamada ao MCP de destino. As instruções de ponto, gastos e desenvolvimento ficam em `skills/` e são oferecidas pelo MCP sem depender do plugin antigo.
+```text
+ChatGPT ─── GitHub MCP oficial (OAuth) ── GitHub
+        └── Cloudflare MCP oficial (OAuth) ── D1
+                    ↑
+        Skills em Markdown neste repositório
+```
 
-A regra estrutural é simples: **um Worker, um endpoint MCP e um módulo local por integração ou domínio**.
+Não existe servidor MCP customizado, Worker hospedado, segredo ou cliente HTTP próprio **no código desta branch**. Skills são procedimentos: não executam nem autorizam acesso sozinhas.
 
 ## Responsabilidades
 
-| Camada | Responsabilidade |
-|---|---|
-| ChatGPT | Interpretação do pedido e apresentação dos resultados; instruções do MCP conforme suporte do cliente |
-| Worker `assistente` | OAuth, catálogo allowlist, escopos, ferramentas locais e roteamento MCP |
-| `mcps/<nome>/` | Contratos e lógica fixa das ferramentas aprovadas |
-| MCP de destino | Execução técnica e aplicação das permissões do token de serviço |
-
-O controle de ponto possui cinco ferramentas locais no hub, mas **não acessa D1 diretamente**. Elas compõem chamadas fixas ao Cloudflare MCP, que então usa a API Cloudflare para consultar ou escrever no D1. Gastos utiliza cinco ferramentas locais em `mcps/gastos/`, encaminhadas exclusivamente ao Cloudflare MCP e ao D1 canônico, sem acesso direto do Worker ao D1.
-
-O **GitHub MCP** também é um destino remoto oficial, separado do Cloudflare, com autenticação própria por PAT. Sua allowlist cobre operações usuais de repositórios, commits, arquivos, issues, PRs e Actions, sem fixar `owner` ou `repo`. A capacidade de acessar um repositório depende do token GitHub e da autorização da tarefa.
-
-## Skills incorporadas
-
-Os arquivos `skills/ponto/SKILL.md`, `skills/gastos/SKILL.md` e `skills/desenvolvimento/SKILL.md` guardam apenas procedimentos, não dados pessoais. `skills/INSTRUCTIONS.md` contém as instruções resumidas enviadas pelo servidor no `initialize`. A ferramenta de leitura `assistente_skill` retorna uma skill completa sob demanda.
-
-O script `scripts/sync-skills.mjs` gera `skills/catalog.js` diretamente do Markdown. O CI verifica sua sincronização. O suporte do cliente determina se as instruções MCP são incorporadas automaticamente ao contexto; não há garantia de carregamento de todos os Markdown em cada chamada.
-## Fluxo MCP
-
-O catálogo local é a fonte de verdade das ferramentas publicadas. O Worker não descobre nem publica ferramentas remotas dinamicamente.
-
-Cada ferramenta declara seu contrato OAuth no descriptor MCP: leitura usa `mcp:read`; ferramentas classificadas como escrita usam `mcp:read` + `mcp:write`. Isso permite ao ChatGPT fazer reautorização de escopo (*step-up*) sem pedir permissões fora do contrato da ferramenta.
-
-Para ferramentas remotas genéricas:
-1. o token OAuth do ChatGPT é validado;
-2. o Worker verifica o escopo necessário;
-3. abre uma conexão com o MCP remoto;
-4. executa uma vez;
-5. fecha a conexão.
-
-Para ponto:
-1. `ponto_registrar`, `ponto_hoje`, `ponto_data`, `ponto_periodo` ou `ponto_resumo` recebe somente os dados mínimos do comando;
-2. o Worker resolve a data atual em `America/Sao_Paulo` quando necessário;
-3. monta código fixo para `mcp_cloudflare__execute`;
-4. o Cloudflare MCP chama o endpoint D1 da API Cloudflare;
-5. o resultado pequeno e estruturado volta ao ChatGPT.
-
-`ponto_registrar` usa escrita atômica no D1: segunda a sexta preenche `entrada → ida_intervalo → volta_intervalo → saida`; sábado preenche somente `entrada → saida`. `ponto_hoje`, `ponto_data` e `ponto_periodo` consultam a view `banco_horas`; `ponto_resumo` consulta a view `resumo`. Períodos são limitados a 93 dias e usam parâmetros SQL.
-
-### Contrato operacional para o ChatGPT
-
-O roteamento rotineiro de ponto é direto:
-- `ponto HHMM` ou `ponto HH:MM` → `ponto_registrar`;
-- `ponto hoje` → `ponto_hoje`;
-- `ponto resumo` → `ponto_resumo`;
-- `ponto ontem` / `ponto DD/MM/AAAA` → `ponto_data`;
-- `ponto de DATA até DATA` → `ponto_periodo`.
-
-Esses três pedidos não usam planilha, memória nem o executor genérico antes da ferramenta dedicada. Em resultado incerto de escrita, a skill reconcilia com `ponto_hoje` e não repete `ponto_registrar` cegamente. Correções, exclusões e consultas de datas específicas continuam podendo usar `mcp_cloudflare__execute`, mas somente através do Assistente MCPs e sempre contra o D1 canônico de ponto.
-
-Gastos dispõe de `gastos_resumo`, `gastos_listar`, `gastos_registrar`, `gastos_atualizar` e `gastos_excluir`. O cliente deve usar essas operações dedicadas para o fluxo comum. Todas chamam o D1 canônico via Assistente MCPs → Cloudflare MCP; o executor genérico fica restrito a exceções autorizadas. O período padrão é o próximo mês em `America/Sao_Paulo`.
-
-Operações que podem escrever não recebem retry automático. Se a chamada já começou e falha, o resultado é tratado como potencialmente incerto.
-
-
-### Integração GitHub
-
-O Worker usa o **mesmo cliente MCP remoto**, passando `Authorization: Bearer <MCP_GITHUB_TOKEN>` somente ao GitHub e `X-MCP-Toolsets: context,repos,issues,pull_requests,actions`. O tráfego GitHub não passa pelo Cloudflare MCP. O endpoint GitHub não recebe o token Cloudflare nem o token OAuth do usuário.
-
-As ferramentas são declaradas localmente em `mcps/github/tools.js` (não são descobertas automaticamente). Nomes publicados recebem prefixo `mcp_github__`; leitura exige `mcp:read` e escrita exige também `mcp:write`. A conexão só é publicada quando URL e secret estão configurados. Nenhuma ferramenta aceita token, endpoint arbitrário ou SQL em seus parâmetros.
-
-O GitHub MCP **não tem filtro hardcoded por repositório**. Os parâmetros `owner` e `repo` são fornecidos no pedido, e os direitos efetivos são os da credencial GitHub. A regra de trabalhar exclusivamente no repositório `joaoldsxyzbr/Assistente-mcps` aplica-se a este projeto, não ao MCP GitHub multi-projetos.
-
-Para conectar, crie PAT com escopo por repositórios conforme sua necessidade e permissões mínimas para as operações que efetivamente serão feitas; armazene-o somente como **secret `MCP_GITHUB_TOKEN`** do Worker. Testar primeiro com `mcp_github__get_me`, sem operações de escrita. Consulte [documentação oficial GitHub MCP](https://github.com/github/github-mcp-server/blob/main/docs/server-configuration.md).
-
-## Autenticação e autorização
-
-| Origem → destino | Credencial | Regra |
-|---|---|---|
-| ChatGPT → Worker | OAuth 2.1 + PKCE | `mcp:read` é básico; `mcp:write` é exigido para escrita |
-| Navegador → autorização | `ASSISTENTE_OAUTH_PASSWORD` | senha conferida antes de concluir a autorização |
-| Worker → Cloudflare MCP | `MCP_CLOUDFLARE_TOKEN` | bearer separado do OAuth do ChatGPT; `MCP_CLOUDFLARE_ACCOUNT_ID` seleciona a conta padrão |
-| Worker → GitHub MCP oficial | `MCP_GITHUB_TOKEN` | PAT separado, com permissões do GitHub para os repositórios escolhidos; sem owner/repo fixado pelo Worker |
-| Cloudflare MCP → API Cloudflare | API Token Cloudflare | permissões do token limitam os recursos acessíveis |
-
-O token do ChatGPT nunca é encaminhado ao MCP remoto.
-
-### Fluxo de autorização
-
-No `GET /authorize`, o Worker valida a requisição OAuth e renderiza a tela de autorização.
-
-No `POST /authorize`, a senha é conferida e a mesma requisição OAuth é validada novamente antes de `completeAuthorization` emitir o código. O formulário não cria cookie, handle ou transação própria de consentimento.
-
-A página mantém CSP mínima: `default-src 'none'`, `base-uri 'none'` e `frame-ancestors 'none'`. Não usa `form-action`, pois essa diretiva bloquearia a cadeia de redirect até o callback do ChatGPT.
-
-O `OAUTH_KV` guarda exclusivamente o estado exigido pela biblioteca OAuth. O rastreamento provisório de fronteiras com marcadores `diagnostic:oauth:*` foi retirado do caminho de requisição após validação do MCP em produção; a observabilidade permanente continua nos logs estruturados.
-
-### Auditoria
-
-O Worker mantém logs estruturados permanentes na observabilidade da Cloudflare para permitir auditoria e depuração sem expor conteúdo sensível.
-
-Os eventos registram apenas metadados operacionais: etapa, status, resultado, servidor, ferramenta, classificação leitura/escrita, resultado incerto e scopes exigidos. Não entram nos logs senha, bearer token, authorization code, query string OAuth, argumentos de ferramenta, código executado nem conteúdo de banco.
-
-Eventos principais:
-- autorização OAuth concluída, negada ou rejeitada;
-- falhas de token/OAuth reportadas pelo provider, sem persistir o corpo da resposta;
-- falha de autenticação ou escopo MCP;
-- resultado da requisição MCP;
-- resultado de chamada ao MCP remoto, incluindo escrita potencialmente incerta.
-
-A configuração continua com `redact_query_string: true`, `invocation_logs: false` e persistência dos logs explícitos do Assistente.
+- **GitHub MCP oficial:** arquivos, branches, PRs e CI, conforme permissões concedidas pelo usuário.
+- **Cloudflare MCP oficial:** consultas e atualizações D1, com OAuth e validação explícita de conta e IDs.
+- **Skill ponto:** horários em America/Sao_Paulo, quatro batidas de segunda a sexta e duas aos sábados, consultas em `banco_horas` e `resumo`, registro condicional, confirmação e reconciliação; detalhes em `skills/ponto/SQL.md`.
+- **Skill gastos:** padrão próximo mês, tabela mensal `movimentacoes_MM_AAAA`, centavos inteiros, bloqueio de duplicatas, atualizações condicionadas e ausência de criação de tabela em consultas; detalhes em `skills/gastos/EXECUCAO.md`.
+- **Skill desenvolvimento:** práticas de implementação proporcional, testes, revisão, GitHub CI e validação de deploys.
 
 ## Segurança
 
-- endpoints MCP remotos precisam coincidir com os endpoints HTTPS oficiais Cloudflare e GitHub; não podem conter credenciais, query string ou fragmento;
-- a allowlist local impede exposição automática de ferramentas remotas;
-- ferramentas de ponto usam SQL e endpoint fixos gerados no código do hub, sem aceitar SQL livre do ChatGPT;
-- secrets não entram no Git nem em respostas de status;
-- erros remotos não revelam endpoint, token ou exceção interna;
-- query strings são redigidas na observabilidade;
-- invocation logs permanecem desativados;
-- **não há binding D1 neste Worker**.
+Os identificadores canônicos estão nas skills; são dados de roteamento, não credenciais. Não manter tokens ou dados pessoais no Git. O MCP oficial é responsável pela autenticação OAuth; ChatGPT só pode agir dentro das permissões da conexão. Não executar operações destrutivas para testar.
 
-## Configuração e deploy
+## Ativação
 
-`wrangler.assistente.jsonc` é a fonte declarativa do Worker:
-- `assistente.joaolds.xyz.br` como custom domain;
-- `workers.dev` e previews desativados;
-- binding `OAUTH_KV`;
-- endpoint do Cloudflare MCP;
-- conta Cloudflare padrão injetada automaticamente no `execute` quando a chamada não informa `account_id`;
-- `PONTO_D1_DATABASE_ID` identifica o D1 de ponto usado pelas chamadas via Cloudflare MCP;
-- `MCP_GITHUB_URL` aponta para `https://api.githubcopilot.com/mcp/`; o token `MCP_GITHUB_TOKEN` é sempre secret independente.
+Conectar os dois MCPs oficiais pelo ChatGPT, instalar ou consultar as skills e validar primeiro acesso em leitura. O serviço antigo pode continuar implantado até conclusão da transição, mas não deve ser usado como fluxo novo. Cloudflare Workers Builds vinculado ao repositório precisa ser desativado separadamente para impedir deploys a partir de uma base agora sem Worker.
 
-`npm run build:workers` faz build dry-run. O pipeline conectado à Cloudflare usa normalmente `wrangler versions upload` e promoção de versão separada. Em 13/10/2026 a migração única do extinto `PcRelay` foi aplicada via `wrangler deploy` (versão `89d9deb1-341b-447c-8c91-33c36c4676c0`), com confirmação explícita `Deleted: PcRelay` nos logs. Seu tombstone de configuração foi retirado em uma segunda PR e o fluxo voltou a `versions upload`. Não é possível fazer rollback para versões que dependem do Durable Object removido; não houve alteração dos bancos D1 nem do KV OAuth. Ver `docs/MIGRACAO-PC-RELAY.md`.
-
-## Organização
-
-| Caminho | Responsabilidade |
-|---|---|
-| `server/config.js` | valida a configuração dos MCPs |
-| `server/remote-client.js` | cliente MCP remoto |
-| `server/worker.js` | Worker real: servidor MCP, roteamento e catálogo |
-| `mcps/cloudflare/` | contratos da integração Cloudflare |
-| `mcps/github/` | allowlist de ferramentas da integração GitHub oficial |
-| `mcps/ponto/` | ferramentas dedicadas de ponto que usam Cloudflare MCP |
-| `mcps/gastos/` | cinco ferramentas de gastos que usam Cloudflare MCP |
-| `server/shared/oauth-authorization.js` | página e fluxo HTTP de autorização |
-| `server/shared/oauth-mcp-worker.js` | OAuthProvider, escopos e proteção do endpoint MCP |
-| `tests/` | testes das regras puras e contratos |
-
-Não existe segunda implementação de host. Novas abstrações só entram quando houver necessidade concreta.
-
-## Auditoria de confiabilidade (outubro de 2026)
-
-Foi confirmado em produção o acesso de leitura aos MCPs GitHub e Cloudflare e conferido o schema canônico D1 de ponto. A rodada posterior à auditoria adiciona testes SQLite em memória para o registro de ponto e fixa o destino HTTPS dos tokens do GitHub e Cloudflare. Diagnósticos antigos de OAuth não são mais gravados no KV durante o atendimento normal; logs estruturados permanecem.
-
-O CI de PR continua validando typecheck, testes unitários/de banco sintético e build dry-run, **não substitui** o teste de OAuth fresco e smoke de escritas MCP em ambiente descartável. A proteção de `main` não foi alterada por exclusão explícita do usuário. Dependabot cuida de avisos semanais de atualização de npm sem ampliar o CI normal.
-
-### Gastos — cinco ferramentas dedicadas
-
-O Worker expõe `gastos_resumo` e `gastos_listar` (somente leitura), além de `gastos_registrar`, `gastos_atualizar` e `gastos_excluir` (escopo de escrita). A configuração `GASTOS_D1_DATABASE_ID` aponta para o D1 já usado pelo controle financeiro. O fluxo é `ChatGPT → Assistente MCPs → Cloudflare MCP → D1`, sem binding direto do D1 e sem banco paralelo.
-
-Sem período explícito, todas as ferramentas usam o **mês seguinte** (timezone America/Sao_Paulo). Os identificadores `movimentacoes_MM_AAAA` são validados e nunca aceitos como SQL livre. A coluna `valor` continua TEXT: o parse estrito converte para centavos inteiros; valores inválidos tornam os totais não confirmáveis. Leituras não criam tabelas; o primeiro registro autorizado de mês novo utiliza esquema verificado da referência persistida, sem copiar registros. Operações por descrição retornam candidatos se ambíguas, e atualizações/exclusões usam condições de estado antigo e `RETURNING` para impedir perda silenciosa de mudanças. Escritas incertas não são repetidas automaticamente. Dado de teste é sintético e não acessa o D1 real.
-
-## Recuperação de falhas de MCP
-
-O cliente remoto estabelece até 15 segundos para handshake e até 45 segundos para a chamada. Erros de timeout de leitura podem ser repetidos. Quando uma chamada de escrita já começou, qualquer falha de rede, timeout ou rejeição sem retorno confiável é marcada como resultado incerto e **não recebe retry automático**. A resposta solicita verificar o recurso de origem antes de outra tentativa. Logs registram metadados do resultado, não a exceção bruta.
-
-## Stack escolhida (revisão de 13/10/2026)
-
-- **JavaScript nativo (ES Modules)** para código e testes. Não usamos TypeScript, React, Vite ou framework de frontend; mantemos SDKs oficiais para MCP/OAuth.
-- **Cloudflare Workers** para o hub HTTP stateless; **Agents SDK / MCP SDK v2** para transporte MCP; **OAuthProvider** para OAuth 2.1, PKCE e CIMD.
-- **Cloudflare KV** somente para estado OAuth. **D1** segue canônico e acessado pelo MCP Cloudflare para ponto/gastos, sem binding direto no hub.
-- **GitHub** como fonte de verdade, com npm lockfile, CI para typecheck/testes/build e promoção de versão separada.
-- **Não usar Durable Objects, WebSocket, agentes Windows ou infraestrutura adicional**: não há requisito atual que justifique seu custo de manutenção.
-
-A descontinuação do módulo de controle remoto do PC foi solicitada em 10/10/2026 e aplicada ao código em 13/10/2026, sem apagar o histórico Git. Pendências antigas desse módulo devem ser encerradas, não implementadas. Testes devem usar dados sintéticos e nunca escrever em D1 real.
-
-
-
-## Evolução das operações — 16/10/2026
-
-O hub preserva o executor Cloudflare genérico para exceções, mas publica cinco ferramentas dedicadas de **consulta**, incluindo inspeção de D1 canônico e diagnóstico de versões/deployments. A conta é validada por variável de ambiente; IDs D1 devem ser UUIDs distintos. Essas ferramentas **não** promovem versões nem manipulam dados. Logs de Builds usam a API oficial somente leitura; Cloudflare Tail de execução exigiria transporte próprio e não foram acoplados.
-
-No GitHub, `mcp_github__list_releases` usa o MCP oficial e `github_ci_resumo` consulta o histórico de Actions em uma única operação do cliente. Diffs de PR já são obtidos por `pull_request_read`; comparar branches arbitrárias exige suporte upstream específico e não justificou introduzir API GitHub paralela.
-
-As consultas históricas de ponto usam a view existente `banco_horas`, sem persistência extra. A normalização de datas valida o calendário e a janela máxima; operações de escrita continuam restritas ao registro de hoje.
-
-Logs em `server/shared/audit.js` permitem correlação por `traceId` e `durationMs` sem armazenar parâmetros. Erros após escrita são incertos e requerem reconciliação antes de novo envio. `dependency-security.yml` executa auditoria de pacotes semanalmente sem sobrecarregar o CI principal.
-
-Pendências de infraestrutura da [issue #67](https://github.com/joaoldsxyzbr/Assistente-mcps/issues/67), como WAF do `/authorize` e teste OAuth fresco, exigem validação separada na conta e no cliente. CI verde não comprova essas verificações.
-
-### Correção do Preview duplicado — 16/10/2026
-
-O Cloudflare Builds emitia duas execuções de Preview para um commit: a configuração autorizada do Worker `assistente` passava, enquanto um trigger antigo de branch vinculado a outro tag (não listado como Worker de produção) usava o token legado `assistente build token` e retornava 10000/9109. A simples exclusão do trigger secundário não foi suficiente: a Cloudflare o recriou no push seguinte. Também houve tentativa de atualizar o filtro do trigger derivado, mas a Cloudflare recriou o trigger no próximo push, restaurando branch e token antigos. Para a PR #79, o trigger derivado foi atualizado para o token user-scoped válido e recebeu `CLOUDFLARE_ACCOUNT_ID` apenas como variável de Build. A recorrência de triggers derivados deve ser acompanhada em PRs futuras até correção na origem da integração; não considerar que um PATCH desse trigger impede nova criação. Os triggers legítimos de produção e Preview do Worker de origem foram preservados. A variável pública `CLOUDFLARE_ACCOUNT_ID` foi definida apenas no ambiente do trigger de Preview para explicitar a conta. Não foram alterados tokens, bindings D1 nem o tráfego da produção. Os logs da PR #79 e da issue #67 documentam a validação.
+Acompanhe o checklist e a reversão em [MIGRACAO-OAUTH-OFICIAL.md](MIGRACAO-OAUTH-OFICIAL.md).

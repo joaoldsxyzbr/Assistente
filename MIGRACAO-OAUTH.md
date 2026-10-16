@@ -1,7 +1,5 @@
-# Migração para OAuth oficial
+# Migração para MCPs oficiais
 
-A arquitetura-alvo corrigida está em [docs/MIGRACAO-OAUTH-OFICIAL.md](docs/MIGRACAO-OAUTH-OFICIAL.md).
+Esta branch transforma o repositório em fonte **somente de skills**. O acesso ao GitHub e à Cloudflare/D1 é feito pelos MCPs oficiais com OAuth diretamente no ChatGPT.
 
-**Ponto e gastos são apenas skills.** O ChatGPT usa o MCP oficial Cloudflare com OAuth para acessar os dois D1. O GitHub também usa o MCP oficial diretamente. Nenhum Worker ou binding D1 personalizado faz parte da arquitetura-alvo.
-
-A implementação legada não foi removida; a transição só pode ser concluída quando conexões, skills e comandos estiverem validados.
+Consulte o [plano e checklist de ativação](docs/MIGRACAO-OAUTH-OFICIAL.md). Não desative o Worker antigo até validar os dois logins oficiais, as consultas D1 e as regras de gravação de ponto/gastos.

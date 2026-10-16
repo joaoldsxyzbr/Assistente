@@ -1,171 +1,50 @@
-# Assistente
+# Assistente MCPs — Skills
 
-O **Assistente MCPs** é um hub independente conectado diretamente ao ChatGPT. Este repositório mantém um único Worker que autentica o cliente e encaminha somente as ferramentas MCP declaradas localmente. As três skills específicas ficam em `skills/`, com instruções curtas na conexão e conteúdo aprofundado sob demanda, sem depender do plugin Assistente.
+Repositório de **instruções (skills)** para uso dos **MCPs oficiais GitHub e Cloudflare**, conectados diretamente ao ChatGPT com OAuth. **Não hospeda servidor MCP, Worker, proxy, credenciais ou banco de dados.**
 
-## Organização na raiz
+## Estrutura
 
-| Pasta | Responsabilidade |
+| Pasta | Conteúdo |
 | --- | --- |
-| `mcps/` | Integrações Cloudflare, GitHub, ponto e gastos |
-| `skills/` | Skills operacionais; fonte em Markdown e catálogo JS gerado |
-| `server/` | Servidor MCP, conexões e OAuth |
-| `docs/` | Documentação e decisões |
-| `scripts/` | Scripts auxiliares e sincronização |
-| `tests/` | Testes automatizados |
-| `.github/` | GitHub Actions |
+| `skills/ponto/SKILL.md` | Controle de ponto no D1 via Cloudflare oficial |
+| `skills/ponto/SQL.md` | Consultas e escritas atômicas de referência |
+| `skills/gastos/SKILL.md` | Controle financeiro pelo Cloudflare oficial |
+| `skills/gastos/EXECUCAO.md` | Rotina de referência para D1 |
+| `skills/desenvolvimento/SKILL.md` | Processo de desenvolvimento e GitHub |
+| `skills/INSTRUCTIONS.md` | Orientações resumidas para o projeto ChatGPT |
+| `tests/` | Verificação local das skills, referências e segurança |
+| `docs/` | Arquitetura, migração e histórico |
 
-**Skills:** edite `skills/<nome>/SKILL.md` ou `skills/INSTRUCTIONS.md`, depois execute `npm run skills:sync` e `npm run check`. O `skills/catalog.js` é gerado, não editado manualmente.
+## Conectar no ChatGPT
 
-As skills de **ponto** e **gastos** registram seus IDs D1 canônicos por referência ao Wrangler; `tests/skills.test.js` detecta divergência entre documentação e configuração. Os IDs não concedem acesso e não substituem a validação do destino no servidor. A skill de **desenvolvimento** adota um fluxo proporcional inspirado no [Superpowers](https://github.com/obra/superpowers): plano para tarefas grandes, testes RED/GREEN/REFACTOR quando úteis, diagnóstico de causa raiz, revisão e verificação final sem burocracia para pequenos ajustes.
+1. Adicione/ative a conexão **GitHub oficial**, faça login com OAuth e autorize as permissões desejadas.
+2. Adicione/ative a conexão **Cloudflare oficial**, faça login com OAuth e autorize acesso à conta e aos bancos D1 apropriados.
+3. Coloque as instruções de `skills/INSTRUCTIONS.md` nas **instruções do projeto ChatGPT** e use as skills `SKILL.md` como referência consultável no repositório.
+4. Teste primeiro `ponto hoje`, `ponto resumo` e `gastos resumo` (somente leitura). Testes de escrita exigem um registro **real solicitado**; nunca use dados fictícios no D1 pessoal.
 
-As orientações curtas são enviadas no handshake MCP; `assistente_skill` consulta o conteúdo completo sob demanda. A aplicação automática dessas instruções depende do suporte do cliente.
+**Limitação:** arquivos Markdown no GitHub não são injetados automaticamente em todas as conversas do ChatGPT. O cliente precisa ter acesso ao arquivo ou às instruções instaladas. Este repositório não publica ferramentas `ponto_*` ou `gastos_*`: os comandos são orientações para o MCP Cloudflare oficial.
 
-## Arquitetura
+## Bancos e segurança
 
-O escopo ativo é exclusivamente **Cloudflare, GitHub, ponto e gastos**. A integração de controle remoto de PC foi descontinuada em 13/10/2026; seus arquivos, workflow e endpoint são removidos nesta limpeza. O histórico técnico permanece no Git e nas issues encerradas.
+- Ponto: `96b39cda-f037-4259-b406-09fea5431469`.
+- Gastos: `0c6c31c2-f2fd-4f60-9c75-b232019ae63f`.
+- Conta: `924f32dc9eeb8946dc033801c0c17c42`.
 
+IDs identificam recursos, mas não concedem permissão. As skills guardam apenas regras, **nunca** dados pessoais, tokens ou segredos. Executar operações somente na conta/banco confirmado via OAuth; escritas exigem validação e reconciliação para evitar repetição.
 
-- **1 Worker:** `assistente`.
-- **1 endpoint MCP:** `https://assistente.joaolds.xyz.br/mcp`.
-- **1 módulo por MCP/domínio:** `mcps/<nome>`.
-- **Allowlist local:** configurar um MCP não publica ferramentas automaticamente.
-- **ChatGPT:** usa diretamente o **Assistente MCPs**, sem exigir o plugin Assistente.
-- **Cloudflare MCP:** três ferramentas genéricas (`docs`, `search`, `execute`) e cinco ferramentas locais de consulta (`cloudflare_d1_listar`, `cloudflare_d1_estrutura`, `cloudflare_workers_listar`, `cloudflare_worker_diagnostico`, `cloudflare_build_logs`).
-- **GitHub MCP oficial:** integração remota via PAT separado, com ferramentas de repositório, branches, arquivos, issues, PRs, releases e Actions; **sem restringir o MCP a um repositório fixo**.
-- **Controle de ponto:** ferramentas locais `ponto_registrar`, `ponto_hoje`, `ponto_data`, `ponto_periodo` e `ponto_resumo` usam somente o Cloudflare MCP para consultar/escrever no D1; o Worker não possui binding D1.
-- **Controle de gastos:** cinco ferramentas locais (`gastos_resumo`, `gastos_listar`, `gastos_registrar`, `gastos_atualizar`, `gastos_excluir`) usam o Cloudflare MCP para o D1 canônico, sem binding D1 no Worker.
+## Validação
 
+```bash
+npm ci
+npm run check
+```
 
-Detalhes e decisões duráveis ficam em [docs/ARQUITETURA.md](docs/ARQUITETURA.md). Trabalho pendente fica em Issues.
+A suíte usa Node.js nativo e **não instala dependências**. GitHub Actions executa os checks em PRs e na `main`.
 
-## Autenticação
+## Desativação do serviço antigo
 
-ChatGPT → Worker usa OAuth 2.1 com authorization code, PKCE, descoberta e Client ID Metadata Documents. A autorização exige a senha do proprietário em `ASSISTENTE_OAUTH_PASSWORD`.
+A migração do código **não** apaga recursos remotos automaticamente. Se houver um Worker `assistente` existente e Cloudflare Workers Builds vinculado ao repositório, sua desativação deve ser feita **separadamente** e **depois** da validação do OAuth oficial. Não confunda merge no GitHub com deploy. Para detalhes e rollback consulte [docs/MIGRACAO-OAUTH-OFICIAL.md](docs/MIGRACAO-OAUTH-OFICIAL.md).
 
-O Worker publica:
-- `mcp:read` para chamadas básicas e consultas de ponto;
-- `mcp:write` para operações de escrita, como `mcp_cloudflare__execute`, `ponto_registrar` e ferramentas GitHub de alteração;
-- `offline_access` para renovação da conexão.
+## Fonte de verdade
 
-Worker → Cloudflare MCP usa um token separado em `MCP_CLOUDFLARE_TOKEN`. Worker → GitHub MCP oficial usa `MCP_GITHUB_TOKEN`, **outro token**, sem troca de credenciais entre serviços. O OAuth do ChatGPT não é enviado aos MCPs remotos.
-
-## Configuração de produção
-
-A configuração declarativa está em `wrangler.assistente.jsonc`:
-
-- custom domain: `assistente.joaolds.xyz.br`;
-- `workers.dev` e previews desativados;
-- KV OAuth: `OAUTH_KV`;
-- endpoint remoto Cloudflare: `https://mcp.cloudflare.com/mcp`;
-- endpoint remoto GitHub: `https://api.githubcopilot.com/mcp/` (`MCP_GITHUB_URL`);
-- conta Cloudflare padrão: `MCP_CLOUDFLARE_ACCOUNT_ID`, usada automaticamente pelo `execute`;
-- banco canônico do ponto: `PONTO_D1_DATABASE_ID`, usado apenas para montar chamadas fixas ao Cloudflare MCP.
-
-Secrets necessários, configurados fora do Git:
-- `ASSISTENTE_OAUTH_PASSWORD`;
-- `MCP_CLOUDFLARE_TOKEN`;
-- `MCP_GITHUB_TOKEN` (PAT GitHub; configurar no Worker apenas quando disponível).
-
-No ChatGPT, use:
-
-    https://assistente.joaolds.xyz.br/mcp
-
-com autenticação OAuth.
-
-## Desenvolvimento
-
-**Stack atual:** JavaScript nativo (ES Modules), Node.js e Cloudflare Workers. Sem TypeScript, React, Vite ou framework de frontend; SDKs oficiais para os protocolos MCP/OAuth.
-
-Requisitos:
-- Node.js 24 ou superior;
-- npm.
-
-Instale e valide:
-
-    npm ci
-    npm run check
-
-`npm run check` verifica a sintaxe JavaScript, skills sincronizadas, testes e build dry-run do Worker.
-
-## Entrega
-
-O GitHub é a fonte de verdade. O build conectado ao Cloudflare usa:
-
-    npx wrangler versions upload --config wrangler.assistente.jsonc
-
-Isso cria uma versão sem trocar o tráfego automaticamente. Depois do CI verde e da validação necessária, a versão é promovida para produção.
-
-**Histórico:** a migração única que eliminou o Durable Object `PcRelay` ocorreu em 13/10/2026 via `wrangler deploy` (PR #64, versão Cloudflare `89d9deb1-341b-447c-8c91-33c36c4676c0`). O código final não exporta essa classe e não inclui tombstone; o fluxo normal volta a `versions upload`. Confira o [registro da migração](docs/MIGRACAO-PC-RELAY.md) para detalhes e restrições de rollback.
-
-## GitHub MCP oficial
-
-O Assistente conecta o GitHub **por MCP remoto**, sem chamadas diretas à API GitHub, usando apenas ferramentas locais aprovadas em `mcps/github/tools.js`. O servidor oficial recebe o header `X-MCP-Toolsets: context,repos,issues,pull_requests,actions`; a allowlist do Assistente publica apenas um subconjunto estável (leitura e escrita). [Documentação oficial](https://github.com/github/github-mcp-server/blob/main/docs/remote-server.md).
-
-**Nenhum repositório é fixado no código**. Em cada chamada, `owner` e `repo` são passados conforme a tarefa. O acesso real aos repositórios é limitado **pelas permissões do token GitHub**, não pela configuração do MCP. As regras deste projeto exigem trabalhar somente em `joaoldsxyzbr/Assistente-mcps` quando a tarefa for sobre este repositório.
-
-Para ativar:
-1. Crie um **Personal Access Token (fine-grained)** no GitHub para os repositórios que desejar conectar (seleção ampla ou todos os repositórios da conta, se necessário), com permissões proporcionais às operações desejadas: Contents, Issues, Pull requests e Actions.
-2. No painel Cloudflare do Worker `assistente`, adicione o **secret `MCP_GITHUB_TOKEN`** (não coloque no GitHub, no `wrangler.assistente.jsonc` ou no chat).
-3. Faça upload da versão no Workers Builds e promova-a para **100% de tráfego**. Verifique `assistente_status` e faça uma chamada **somente de leitura** como `mcp_github__get_me` ou `mcp_github__search_repositories`.
-4. Recarregue/atualize o Assistente MCPs no ChatGPT se o catálogo de ferramentas ficar em cache.
-
-Sem secret, o GitHub permanece inativo e não interfere no Cloudflare nem nas ferramentas de ponto. Nenhuma chamada de escrita de teste é necessária.
-
-## Verificação e simplificação (auditoria de outubro de 2026)
-
-- Os testes de ponto incluem agora execução de SQL em SQLite em memória com datas e horários **sintéticos**, inclusive concorrência lógica, duplicação e sábado. Não há gravações de teste no D1 pessoal.
-- A autenticação OAuth usa os logs estruturados já existentes, sem gravação de marcadores temporários no KV por requisição; mantemos o fluxo de registro de cliente enquanto a compatibilidade não for reavaliada após um novo login completo.
-- As integrações aceitam somente os dois endpoints HTTPS oficiais configurados. Se um fornecedor mudar o endereço, atualize a validação, os testes e a configuração juntos para não enviar secrets a hosts inesperados.
-- Dependabot verifica atualizações npm semanalmente; o CI existente continua o mesmo, enxuto.
-- Proteção de branch `main` foi **explicitamente excluída** desta rodada pelo proprietário.
-
-## Consultas específicas e fluxo de desenvolvimento
-
-- `ponto_data` recebe `data: "DD/MM/AAAA"`. `ponto_periodo` recebe `inicio` e `fim` no mesmo formato, limitado a 93 dias. Ambas usam a view oficial `banco_horas`, não alteram D1 e validam as datas no Worker.
-- `cloudflare_d1_listar` lista bancos da conta fixa; `cloudflare_d1_estrutura` lista nomes de tabelas/views exclusivamente do banco canônico de ponto ou gastos; `cloudflare_workers_listar` lista Workers; `cloudflare_worker_diagnostico` consulta deployments e versões; `cloudflare_build_logs` recupera até 60 linhas e cursor de paginação pelo UUID do build usando o endpoint `/logs`. Não há SQL nem código livre nos parâmetros dessas ferramentas. A conta é validada no servidor.
-- `mcp_github__list_releases` lista releases pelo MCP oficial; `github_ci_resumo` devolve até cinco execuções com status e URL a partir do Actions oficial, opcionalmente filtrando por branch. PRs, checks e logs continuam nas ferramentas existentes. A comparação arbitrária entre branches ainda não é uma ferramenta do MCP oficial; para diffs de PR use `mcp_github__pull_request_read`.
-- Logs de build são consultáveis pela ferramenta dedicada; logs Cloudflare de execução continuam na observabilidade oficial; não foi introduzido tail remoto via WebSocket. Não disparar deploy nem promoção a partir de consultas de diagnóstico.
-- Erros `isError` de escritas remotas são tratados como resultado incerto; detalhes internos não são expostos. Logs operacionais levam `traceId` e `durationMs` sem argumentos e sem dados pessoais. A rotina semanal de `npm audit` fica separada do CI normal.
-- Novas ferramentas são declaradas localmente e requerem recarregar a integração MCP no ChatGPT após a versão ser promovida.
-
-## Controle de gastos (ferramentas dedicadas)
-
-O **Assistente MCPs** oferece cinco ferramentas dedicadas: `gastos_resumo`, `gastos_listar`, `gastos_registrar`, `gastos_atualizar` e `gastos_excluir`. O período omitido é **o próximo mês** em `America/Sao_Paulo`; `periodo: "MM/AAAA"` prevalece. Não existe binding D1 no Worker: o caminho é `ChatGPT → Assistente MCPs → Cloudflare MCP → D1`.
-
-- Consulta não cria tabelas. Somente registro autorizado de um novo mês copia um schema mensal existente, sem copiar dados.
-- Valores TEXT são interpretados em centavos inteiros com validação rigorosa, nunca somados via `SUM(valor)`. Registros com valor inválido impedem confirmação de totais.
-- Edição e exclusão exigem ID ou descrição inequívoca; escrita condicionada ao estado observado bloqueia sobrescrever alterações concorrentes. Lançamentos duplicados exigem confirmação de que são transações distintas.
-- O status de lançamento novo é `pendente`, salvo pedido explícito de pago. Não há recorrência automática nem migração de dados.
-- `GASTOS_D1_DATABASE_ID` está no Wrangler; testes de escrita usam **somente SQLite em memória**, não valores pessoais.
-
-Em pedidos rotineiros, o cliente deve usar diretamente essas ferramentas; o executor genérico fica reservado às exceções autorizadas.
-
-## Checks de PR e Deploy
-
-O **CI do GitHub** valida `npm run check`. **Workers Builds** é um check externo independente e requer seu próprio token de build válido. O deploy da branch `main` faz upload de uma versão, mas **não promove automaticamente** o tráfego; valide a versão ativa e faça a promoção separadamente quando solicitada.
-
-Os triggers Cloudflare Builds devem ser conferidos no painel para apontar exclusivamente ao repositório `joaoldsxyzbr/Assistente-mcps`, com token de build válido: **produção** para `main` (com `npx wrangler versions upload --config wrangler.assistente.jsonc`) e **prévia** para `*` exceto `main` (com `npx wrangler preview --config wrangler.assistente.jsonc`). A prévia não deve promover tráfego da produção nem acessar D1 real. Os triggers e seus tokens são geridos no painel/API Cloudflare, **nunca em código ou secrets do GitHub**.
-
-O bloco `previews: {}` em `wrangler.assistente.jsonc` ativa o build de prévia **isolado e sem bindings/variáveis/secrets de produção**. Isto valida o empacotamento e a publicação de Preview, **não** o login OAuth nem funções que dependam de KV, Cloudflare/GitHub ou D1: tais testes exigiriam recursos e secrets *exclusivamente de desenvolvimento* e autorização própria. Não apontar `previews.kv_namespaces` ao `OAUTH_KV` real nem fornecer secrets reais de produção.
-
-Em 13/10/2026, identificamos que PRs antigas usavam o token legado `assistente build token`, enquanto a `main` compilava com outro token válido. Foi criado um trigger de prévia explícito usando a mesma credencial de build válida da produção (issue #52). Valide o check de PR antes de considerar resolvida a falha. Em caso de `Authentication error [10000]` / `Invalid access token [9109]`, conferir o token **do trigger de prévia** e variáveis `CLOUDFLARE_API_TOKEN`; não desabilitar o check para mascarar falha.
-
-Os SDKs MCP devem permanecer alinhados com os `peerDependencies` de `agents`; não usar `--force` ou `--legacy-peer-deps` para atualizar client/server isoladamente.
-
-## Confiabilidade das chamadas MCP
-
-As conexões remotas têm limite de 15 segundos para conectar e 45 segundos por chamada de ferramenta. Erros e timeouts usam mensagens fixas, sem exibir respostas internas nem credenciais. Falhas após iniciar uma chamada de escrita são **resultado incerto**: consultar o serviço de origem antes de repetir, sem retry automático. Consultas de leitura podem ser tentadas novamente.
-
-Os testes automatizados cobrem timeouts, classificação de falhas e exigência de escopos em operações de leitura e escrita. Um login OAuth totalmente novo e sua renovação no ChatGPT continuam exigindo validação interativa; os testes de código não a substituem.
-
-
-### Diagnóstico e correção de Previews (16/10/2026)
-
-O projeto chegou a publicar **dois Builds para o mesmo commit e a mesma branch**:
-
-- O trigger correto vinculado ao Worker de produção `assistente`, selecionando `*` exceto `main`, executou `wrangler preview` com token user-scoped e obteve sucesso.
-- Um trigger antigo, vinculado a um **tag diferente do Worker original**, filtrava exclusivamente `feat/evolucao-mcps-20261016` e continuava usando `assistente build token`. Esse segundo Build falhava com **10000** na criação do Preview e **9109** ao consultar contas.
-
-Correção feita pela API Cloudflare: a variável de Build **não secreta** `CLOUDFLARE_ACCOUNT_ID` foi adicionada somente ao trigger correto de Preview. O trigger duplicado antigo da branch foi excluído após validar ID, nome da branch, token e tag; porém a Cloudflare **o recriou automaticamente no próximo push**, vinculado a um tag de Preview derivado. A tentativa de desativar o filtro do trigger derivado também foi sobrescrita pela Cloudflare no push seguinte. Para a PR #79, a credencial desse trigger derivado foi atualizada para o **mesmo token user-scoped válido** do trigger principal, com `CLOUDFLARE_ACCOUNT_ID` definido no ambiente de Build. **A criação automática de triggers derivados a cada push permanece um comportamento da plataforma e exige acompanhamento em futuros PRs**. Os triggers do Worker principal continuam sendo apenas produção e Preview. Não houve alteração da configuração de deploy da produção, nem desativação de checks, nem escrita no D1.
-
-Após a atualização do código, o GitHub CI e o Workers Builds Preview devem ambos passar **no mesmo commit** antes de fazer merge. A verificação de WAF no `/authorize` e login OAuth fresco continua distinta do check de build.
+Todos os procedimentos e alterações ficam neste repositório: `joaoldsxyzbr/Assistente-mcps`. Simplicidade e clareza acima de tudo.
