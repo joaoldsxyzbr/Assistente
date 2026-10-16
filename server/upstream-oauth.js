@@ -44,7 +44,7 @@ function authorizationMetadataUrl(issuer) {
   return url.origin + "/.well-known/oauth-authorization-server" + suffix;
 }
 async function fetchJson(fetchFn, url, init = {}) {
-  const response = await fetchFn(url, { ...init, redirect: "error" });
+  const response = await fetchFn(url, { ...init, redirect: "manual" });
   if (!response.ok) throw Error("OAUTH_HTTP_" + response.status);
   return response.json();
 }
@@ -52,7 +52,7 @@ async function discover(provider, fetchFn) {
   const config = PROVIDERS[provider];
   const probe = await fetchFn(config.endpoint, {
     method: "POST",
-    redirect: "error",
+    redirect: "manual",
     headers: {
       accept: "application/json, text/event-stream",
       "content-type": "application/json"
@@ -68,6 +68,7 @@ async function discover(provider, fetchFn) {
       }
     })
   });
+  if (probe.status >= 300 && probe.status < 400) throw Error("OAUTH_REDIRECT_REJECTED");
   const challenge = probe.headers.get("www-authenticate") ?? "";
   const marker = challenge.toLowerCase().indexOf("resource_metadata=");
   let metadataCandidate = null;

@@ -30,6 +30,7 @@ function post(url, body, origin = "https://assistente.example") {
 function githubFetch() {
   let refreshes = 0;
   return async (url, init = {}) => {
+    assert.equal(init.redirect, "manual", "OAuth requests must use a Workers-supported redirect mode");
     const target = String(url);
     if (target === "https://api.githubcopilot.com/mcp/x/all") {
       return new Response("", {
@@ -75,6 +76,7 @@ function githubFetch() {
 }
 function cloudflareFetch() {
   return async (url, init = {}) => {
+    assert.equal(init.redirect, "manual", "OAuth requests must use a Workers-supported redirect mode");
     const target = String(url);
     if (target === "https://mcp.cloudflare.com/mcp") {
       return new Response("", {
@@ -154,6 +156,35 @@ test("upstream management POSTs reject cross-origin requests", async () => {
     githubFetch()
   );
   assert.equal(response.status, 403);
+});
+
+test("OAuth discovery rejects redirects without visiting their destinations", async () => {
+  const endpoints = [
+    "https://api.githubcopilot.com/mcp/x/all",
+    "https://api.githubcopilot.com/.well-known/oauth-protected-resource/mcp/x/all",
+    "https://github.com/.well-known/oauth-authorization-server/login/oauth"
+  ];
+  for (const endpoint of endpoints) {
+    const env = environment();
+    const normalFetch = githubFetch();
+    const fetchFn = async (url, init) => {
+      assert.notEqual(new URL(url).hostname, "attacker.example");
+      assert.equal(init.redirect, "manual");
+      if (String(url) === endpoint) {
+        return new Response(null, { status: 302, headers: {
+          location: "https://attacker.example/collect",
+          "www-authenticate": 'Bearer resource_metadata="https://api.githubcopilot.com/.well-known/oauth-protected-resource/mcp/x/all"'
+        } });
+      }
+      return normalFetch(url, init);
+    };
+    const response = await handleUpstreamRoutes(post(
+      "https://assistente.example/connections/github/start",
+      { password: env.ASSISTENTE_OAUTH_PASSWORD }
+    ), env, fetchFn);
+    assert.equal(response.status, 503);
+    assert.equal(env.OAUTH_KV.values.size, 0);
+  }
 });
 
 test("upstream management accepts same-origin Referer when Origin is absent", async () => {

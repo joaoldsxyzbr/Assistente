@@ -22,7 +22,7 @@ async function revoke({ token, fetchFn }) {
     "https://api.github.com/applications/" + encodeURIComponent(token.client_id) + "/token",
     {
       method: "DELETE",
-      redirect: "error",
+      redirect: "manual",
       headers: {
         authorization: "Basic " + btoa(String.fromCharCode(...credentials)),
         "content-type": "application/json",

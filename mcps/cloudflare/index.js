@@ -44,7 +44,7 @@ async function revoke({ token, fetchFn, clientAuth }) {
     if (token.client_id) clientAuth(token, body, headers);
     const response = await fetchFn(token.revocation_endpoint, {
       method: "POST",
-      redirect: "error",
+      redirect: "manual",
       headers,
       body: body.toString()
     });
