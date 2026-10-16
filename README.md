@@ -159,6 +159,13 @@ As conexões remotas têm limite de 15 segundos para conectar e 45 segundos por 
 Os testes automatizados cobrem timeouts, classificação de falhas e exigência de escopos em operações de leitura e escrita. Um login OAuth totalmente novo e sua renovação no ChatGPT continuam exigindo validação interativa; os testes de código não a substituem.
 
 
-### Diagnóstico do token de Preview (16/10/2026)
+### Diagnóstico e correção de Previews (16/10/2026)
 
-A revisão do trigger de Preview confirmou Build Token **user-scoped**, mas o comando `wrangler preview` estava falhando na criação do Preview com erros Cloudflare 10000 e 9109. Para reduzir ambiguidade de resolução da conta no Wrangler, foi adicionada ao **trigger de Preview somente** a variável de build não secreta `CLOUDFLARE_ACCOUNT_ID`, com a conta canônica. Isso não modifica bindings da aplicação nem produção; conferir logs do próximo build para determinar se corrige a autorização, sem concluir a causa apenas pela variável. Se o erro 10000 persistir, revisar o API Token de usuário no painel, incluindo Workers Scripts Edit e User Details/Memberships Read conforme documentação oficial; não substituir secret por token não verificado ou desativar o Preview.
+O projeto chegou a publicar **dois Builds para o mesmo commit e a mesma branch**:
+
+- O trigger correto vinculado ao Worker de produção `assistente`, selecionando `*` exceto `main`, executou `wrangler preview` com token user-scoped e obteve sucesso.
+- Um trigger antigo, vinculado a um **tag diferente do Worker original**, filtrava exclusivamente `feat/evolucao-mcps-20261016` e continuava usando `assistente build token`. Esse segundo Build falhava com **10000** na criação do Preview e **9109** ao consultar contas.
+
+Correção feita pela API Cloudflare: a variável de Build **não secreta** `CLOUDFLARE_ACCOUNT_ID` foi adicionada somente ao trigger correto de Preview. O trigger duplicado antigo da branch foi excluído após validar ID, nome da branch, token e tag. Nova consulta confirmou **apenas os dois triggers legítimos** no Worker `assistente` (produção e Preview), com o trigger antigo ausente. Não houve alteração da configuração de deploy da produção, nem desativação de checks, nem escrita no D1.
+
+Após a atualização do código, o GitHub CI e o Workers Builds Preview devem ambos passar **no mesmo commit** antes de fazer merge. A verificação de WAF no `/authorize` e login OAuth fresco continua distinta do check de build.

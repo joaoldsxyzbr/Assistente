@@ -189,3 +189,7 @@ As consultas históricas de ponto usam a view existente `banco_horas`, sem persi
 Logs em `server/shared/audit.js` permitem correlação por `traceId` e `durationMs` sem armazenar parâmetros. Erros após escrita são incertos e requerem reconciliação antes de novo envio. `dependency-security.yml` executa auditoria de pacotes semanalmente sem sobrecarregar o CI principal.
 
 Pendências de infraestrutura da [issue #67](https://github.com/joaoldsxyzbr/Assistente-mcps/issues/67), como WAF do `/authorize` e teste OAuth fresco, exigem validação separada na conta e no cliente. CI verde não comprova essas verificações.
+
+### Correção do Preview duplicado — 16/10/2026
+
+O Cloudflare Builds emitia duas execuções de Preview para um commit: a configuração autorizada do Worker `assistente` passava, enquanto um trigger antigo de branch vinculado a outro tag (não listado como Worker de produção) usava o token legado `assistente build token` e retornava 10000/9109. Foi removido **somente** esse trigger duplicado, mantendo o trigger de produção e o trigger de Preview da origem. A variável pública `CLOUDFLARE_ACCOUNT_ID` foi definida apenas no ambiente do trigger de Preview para explicitar a conta. Não foram alterados tokens, bindings D1 nem o tráfego da produção. Os logs da PR #79 e da issue #67 documentam a validação.
