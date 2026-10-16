@@ -44,7 +44,7 @@ test("write tools require write classification, read tools are separate", () => 
 });
 
 test("GitHub uses distinct token and correct upstream toolsets", () => {
-  assert.deepEqual(MCP_SERVER_CATALOG.map(({ id }) => id), ["cloudflare", "github", "penpot"]);
+  assert.deepEqual(MCP_SERVER_CATALOG.map(({ id }) => id), ["cloudflare", "github"]);
   const configurations = readMcpConfigurations({
     MCP_CLOUDFLARE_URL: "https://mcp.cloudflare.com/mcp",
     MCP_CLOUDFLARE_TOKEN: "cloudflare-secret",
