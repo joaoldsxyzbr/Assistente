@@ -20,7 +20,7 @@ const decoder = new TextDecoder();
 function base64url(bytes) {
   let raw = "";
   for (const byte of bytes) raw += String.fromCharCode(byte);
-  return btoa(raw).replace(/\\+/g, "-").replace(/\\//g, "_").replace(/=+$/, "");
+  return btoa(raw).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
 }
 function unbase64url(value) {
   if (typeof value !== "string" || !/^[A-Za-z0-9_-]+$/.test(value)) throw Error("INVALID_KEY");
@@ -102,9 +102,9 @@ async function discover(provider, fetchFn) {
   }
   if (metadata.issuer && new URL(providerUrl(provider, metadata.issuer, "auth")).href !== issuer) throw Error("OAUTH_ISSUER_MISMATCH");
   return {
+    ...metadata,
     resource: typeof resource.resource === "string" ? resource.resource : config.endpoint,
-    scopes: Array.isArray(resource.scopes_supported) ? resource.scopes_supported : (metadata.scopes_supported ?? []),
-    ...metadata
+    scopes: Array.isArray(resource.scopes_supported) ? resource.scopes_supported : (metadata.scopes_supported ?? [])
   };
 }
 function publicOrigin(env) {
@@ -421,9 +421,12 @@ function formOriginMatches(request, env) {
 }
 export async function handleUpstreamRoutes(request, env, fetchFn = fetch) {
   const url = new URL(request.url);
-  const match = /^\\/connections\\/(github|cloudflare)\\/(start|callback|disconnect)$/.exec(url.pathname);
-  if (!match) return undefined;
-  const [, provider, operation] = match;
+  const parts = url.pathname.split("/");
+  if (parts.length !== 4 || parts[1] !== "connections" ||
+      !Object.hasOwn(PROVIDERS, parts[2]) ||
+      !["start", "callback", "disconnect"].includes(parts[3])) return undefined;
+  const provider = parts[2];
+  const operation = parts[3];
   if (operation === "callback") {
     if (request.method !== "GET") return new Response("Method not allowed", { status: 405, headers: { allow: "GET" } });
     if (url.searchParams.has("error")) return html("<h1>Autorização recusada no provedor.</h1>", 400);

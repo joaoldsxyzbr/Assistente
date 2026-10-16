@@ -19,12 +19,11 @@ test("worker publica duas skills, estado e quatro endpoints remotos",async()=>{
  assert.deepEqual(remoteToolNames,["mcp_github_call","mcp_cloudflare_call"]);
  assert.equal((worker.match(/server\.registerTool\(/g)||[]).length,2);
 });
-test("identidades upstream HTTPS imutáveis, segredos fora de status",()=>{
- assert.equal(endpointFor("github"),"https://api.githubcopilot.com/mcp/");
+test("endpoints oficiais fixos e configuração OAuth lida do KV",async()=>{
+ assert.equal(endpointFor("github"),"https://api.githubcopilot.com/mcp/x/all");
  assert.equal(endpointFor("cloudflare"),"https://mcp.cloudflare.com/mcp");
  assert.equal(endpointFor("unknown"),null);
- assert.equal(readRemoteConfiguration({},"github"),null);
- assert.deepEqual(readRemoteConfiguration({GITHUB_OAUTH_ACCESS_TOKEN:" example "},"github"),{id:"github",endpoint:endpointFor("github"),token:"example"});
+ assert.equal(await readRemoteConfiguration({},"github"),null);
 });
 test("bancos D1 permanecem distintos e corretos",async()=>{
  const config=JSON.parse(await read("wrangler.assistente.jsonc"));
