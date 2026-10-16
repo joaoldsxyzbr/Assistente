@@ -156,7 +156,7 @@ async function clientOptions(env, provider, fetchFn) {
   return adapter.clientOptions({
     env,
     metadata,
-    fetchJson,
+    fetchJson: (url, init) => fetchJson(fetchFn, url, init),
     fetchFn,
     readSealed,
     writeSealed,
