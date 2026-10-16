@@ -6,9 +6,9 @@ ChatGPT → Assistente MCPs (Worker Cloudflare) → MCPs GitHub e Cloudflare ofi
 
 ## Estado
 
-A branch de integração implementa discovery OAuth upstream, Authorization Code + PKCE, DCR Cloudflare, armazenamento AES-GCM em KV, renovação quando o provedor fornece refresh token, revogação quando disponível, descoberta dinâmica de ferramentas oficiais e testes simulados. O Worker não copia nem redefine ferramentas upstream.
+A integração está na `main`. O CI passou com testes simulados de OAuth, verificação das skills e build dry-run para produção e preview. O Worker encaminha ferramentas oficiais sem copiá-las ou redefini-las.
 
-OAuth upstream exige configuração e consentimento independentes do OAuth do ChatGPT. Os fluxos simulados passam no CI; não há ainda validação real das contas. Não promover a produção antes de concluir as etapas em docs/OAUTH-UPSTREAM.md. Produção e D1 continuam intactos.
+A validação real de OAuth ainda depende da configuração e do consentimento dos provedores. O código foi integrado, mas a versão ativa de produção não foi promovida; produção e D1 permanecem sem alteração. As etapas para configurar e validar os provedores estão em docs/OAUTH-UPSTREAM.md.
 
 ## Componentes
 

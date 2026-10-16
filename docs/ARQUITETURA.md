@@ -21,4 +21,4 @@ ChatGPT conecta-se por OAuth ao único Worker Assistente MCPs. O Worker hospeda 
 - Hosts upstream são fixos; endpoints OAuth descobertos são aceitos apenas nos domínios oficiais de cada provedor e redirecionamentos HTTP são recusados.
 - Estado OAuth de uso único, PKCE S256, CSP, validação de origem dos formulários e criptografia AES-GCM para registros em KV.
 - CI cobre discovery, DCR Cloudflare, PKCE, cifragem, renovação e revogação GitHub com respostas simuladas; o build dry-run verifica os ambientes de produção e preview. Isso não comprova consentimento ou chamadas reais aos provedores.
-- Merge e deploy de produção continuam bloqueados até credenciais, consentimentos, preview seguro e validação ponta a ponta. D1 e produção permanecem intactos.
+- A integração foi mesclada na `main`. A promoção da versão para produção fica pendente até configurar as credenciais OAuth, autorizar os provedores e concluir uma validação ponta a ponta segura. Não fazer escritas de teste nem alterar D1.

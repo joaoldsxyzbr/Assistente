@@ -51,4 +51,4 @@ Os links de consentimento upstream são https://assistente-preview.contato-24f.w
 
 - Este Worker tem um único operador; tokens upstream são guardados por provedor, não por usuário final. Para um serviço multiusuário, é necessário separar tokens por identidade OAuth e aplicar autorização por usuário.
 - CI usa provedores simulados. Ainda falta registrar/configurar o OAuth App GitHub, adicionar secrets no Worker, autorizar as duas contas, realizar uma leitura real segura de cada MCP, testar refresh/revogação no ambiente de preview e revisar o deploy. Não executar escrita de teste nem alterar D1.
-- A branch não deve ser promovida a produção até a validação acima. A versão ativa e os bancos D1 não foram alterados.
+- O código foi integrado na `main`, mas a versão ativa do Worker ainda não foi promovida. Antes da promoção, configure o OAuth App e as credenciais no ambiente escolhido, autorize GitHub e Cloudflare e valide leituras, renovação e revogação. Não faça escritas de teste nem altere os bancos D1.
