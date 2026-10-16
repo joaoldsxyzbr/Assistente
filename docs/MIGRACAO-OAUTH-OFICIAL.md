@@ -1,24 +1,22 @@
-# Migração para MCPs oficiais
+# Integração com os MCPs oficiais
 
-## Situação de destino
+## Arquitetura escolhida
 
-O Worker `assistente` continua ativo apenas como **servidor MCP das skills**. GitHub e Cloudflare são conectados **diretamente ao ChatGPT** com seus OAuth oficiais. Ponto e gastos são exclusivamente instruções que usam o MCP da Cloudflare, não ferramentas próprias do Worker.
+O Assistente MCPs é o único MCP conectado ao ChatGPT. Ele hospeda as skills Ponto, Gastos e Desenvolvimento e encaminha chamadas aos servidores oficiais do GitHub e da Cloudflare.
 
-## Mudanças
+`ChatGPT → Assistente MCPs (Worker) → MCPs oficiais GitHub e Cloudflare + skills locais`
 
-- Remover do catálogo público as ferramentas próprias `ponto_*`, `gastos_*`, `mcp_github__*`, `mcp_cloudflare__*` e os diagnósticos próprios.
-- Conservar `assistente_skill` e `assistente_status`.
-- Conservar proteção OAuth atual para o Worker até migração específica de identidade.
-- Remover dependência operacional de `MCP_GITHUB_TOKEN` e `MCP_CLOUDFLARE_TOKEN` sem alterar secrets existentes em produção.
-- Preservar as validações e SQL testadas das skills no histórico Git como referência.
-- Atualizar README, catálogo de skills, testes e configurações no mesmo commit.
+O Worker usa OAuth próprio na conexão com o ChatGPT e mantém um fluxo OAuth separado para cada provedor. Ele não repassa o token do ChatGPT aos servidores upstream.
 
-## Validação necessária
+## Implementado na main
 
-1. CI do GitHub e build Cloudflare verdes.
-2. Login OAuth **novo** do MCP Assistente funcionando no ChatGPT.
-3. OAuth do GitHub e Cloudflare oficiais autorizados no ChatGPT.
-4. Consultas somente leitura no D1 correto e operações de escrita apenas quando houver pedido real.
-5. Promover a versão somente depois de testar; limpar secrets antigos no painel só após confirmação.
+- Adaptadores separados em `mcps/github/` e `mcps/cloudflare/`.
+- Descoberta e encaminhamento dinâmico de ferramentas dos MCPs oficiais.
+- Fluxos OAuth upstream com PKCE, validação de domínios, armazenamento cifrado em KV e suporte a renovação/revogação quando oferecidos pelos provedores.
+- Skills e testes automatizados para OAuth, roteamento remoto e catálogo de skills.
 
-**Aviso:** este fluxo usa três conexões no ChatGPT, não um único token OAuth compartilhado. A alternativa de um único hub com acesso delegado a GitHub/Cloudflare exigiria fluxos OAuth upstream com armazenamento de tokens e maior complexidade.
+## Validação pendente no ambiente
+
+A integração foi mesclada na `main` e a CI passou com provedores simulados e build dry-run. Isso não comprova consentimento OAuth nem chamadas reais aos provedores.
+
+A validação ponta a ponta depende da etapa do Worker: configurar credenciais, autorizar GitHub e Cloudflare no preview e testar chamadas somente de leitura, renovação e desconexão. Até essa etapa, a integração está implementada no código, mas não confirmada em execução real. Produção e D1 permanecem sem alteração.
