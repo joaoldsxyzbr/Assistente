@@ -5,6 +5,13 @@ description: Procedimentos do controle de ponto e banco de horas no Assistente M
 
 # Ponto
 
+## Banco D1 canônico
+
+- Banco de ponto: `PONTO_D1_DATABASE_ID` = `96b39cda-f037-4259-b406-09fea5431469`.
+- O valor de referência está em `wrangler.assistente.jsonc`; as ferramentas `ponto_*` devem usar exclusivamente esse banco, resolvido e validado pelo servidor.
+- Este ID identifica o destino, **não** é credencial nem autorização para usar SQL genérico.
+- Em correções excepcionais via Cloudflare, confirme o ID efetivo do banco antes de qualquer escrita. Se a configuração ou o banco identificado divergirem, **não grave**; investigue primeiro. Nunca direcione ponto ao D1 de gastos.
+
 ## Comandos diretos
 
 - `ponto HHMM` ou `ponto HH:MM`: execute uma vez `ponto_registrar` com o horário escolhido. A ferramenta determina automaticamente a próxima batida válida.

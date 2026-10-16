@@ -16,6 +16,8 @@ O **Assistente MCPs** é um hub independente conectado diretamente ao ChatGPT. E
 
 **Skills:** edite `skills/<nome>/SKILL.md` ou `skills/INSTRUCTIONS.md`, depois execute `npm run skills:sync` e `npm run check`. O `skills/catalog.js` é gerado, não editado manualmente.
 
+As skills de **ponto** e **gastos** registram seus IDs D1 canônicos por referência ao Wrangler; `tests/skills.test.js` detecta divergência entre documentação e configuração. Os IDs não concedem acesso e não substituem a validação do destino no servidor. A skill de **desenvolvimento** adota um fluxo proporcional inspirado no [Superpowers](https://github.com/obra/superpowers): plano para tarefas grandes, testes RED/GREEN/REFACTOR quando úteis, diagnóstico de causa raiz, revisão e verificação final sem burocracia para pequenos ajustes.
+
 As orientações curtas são enviadas no handshake MCP; `assistente_skill` consulta o conteúdo completo sob demanda. A aplicação automática dessas instruções depende do suporte do cliente.
 
 ## Arquitetura
