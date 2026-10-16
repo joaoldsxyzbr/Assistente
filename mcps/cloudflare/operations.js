@@ -119,7 +119,7 @@ function buildCloudflareReadCode(name, args, ids) {
       ]);
       if (deploys.success !== true || versions.success !== true) throw new Error("Diagnóstico do Worker indisponível");
       const deployments = Array.isArray(deploys.result?.deployments) ? deploys.result.deployments : [];
-      const versoes = Array.isArray(versions.result) ? versions.result : [];
+      const versoes = Array.isArray(versions.result?.items) ? versions.result.items : Array.isArray(versions.result) ? versions.result : [];
       return {
         worker: ${JSON.stringify(args.nome)},
         implantacoes: deployments.slice(0, 5).map(d => ({ id: d.id, created_on: d.created_on, source: d.source, versions: d.versions })),
