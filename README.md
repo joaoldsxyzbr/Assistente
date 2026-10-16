@@ -1,6 +1,22 @@
 # Assistente
 
-O **Assistente MCPs** é um hub independente conectado diretamente ao ChatGPT. Este repositório mantém um único Worker que autentica o cliente e encaminha somente as ferramentas MCP declaradas localmente. A futura incorporação de instruções operacionais de ponto, gastos e desenvolvimento não depende do plugin Assistente.
+O **Assistente MCPs** é um hub independente conectado diretamente ao ChatGPT. Este repositório mantém um único Worker que autentica o cliente e encaminha somente as ferramentas MCP declaradas localmente. As três skills específicas ficam em `skills/`, com instruções curtas na conexão e conteúdo aprofundado sob demanda, sem depender do plugin Assistente.
+
+## Organização na raiz
+
+| Pasta | Responsabilidade |
+| --- | --- |
+| `mcps/` | Integrações Cloudflare, GitHub, ponto e gastos |
+| `skills/` | Skills operacionais; fonte em Markdown e catálogo JS gerado |
+| `server/` | Servidor MCP, conexões e OAuth |
+| `docs/` | Documentação e decisões |
+| `scripts/` | Scripts auxiliares e sincronização |
+| `tests/` | Testes automatizados |
+| `.github/` | GitHub Actions |
+
+**Skills:** edite `skills/<nome>/SKILL.md` ou `skills/INSTRUCTIONS.md`, depois execute `npm run skills:sync` e `npm run check`. O `skills/catalog.js` é gerado, não editado manualmente.
+
+As orientações curtas são enviadas no handshake MCP; `assistente_skill` consulta o conteúdo completo sob demanda. A aplicação automática dessas instruções depende do suporte do cliente.
 
 ## Arquitetura
 
@@ -9,7 +25,7 @@ O escopo ativo é exclusivamente **Cloudflare, GitHub, ponto e gastos**. A integ
 
 - **1 Worker:** `assistente`.
 - **1 endpoint MCP:** `https://assistente.joaolds.xyz.br/mcp`.
-- **1 módulo por MCP/domínio:** `src/mcps/<nome>`.
+- **1 módulo por MCP/domínio:** `mcps/<nome>`.
 - **Allowlist local:** configurar um MCP não publica ferramentas automaticamente.
 - **ChatGPT:** usa diretamente o **Assistente MCPs**, sem exigir o plugin Assistente.
 - **Cloudflare MCP:** integração genérica atrás do hub, com `docs`, `search` e `execute`.
@@ -67,7 +83,7 @@ Instale e valide:
     npm ci
     npm run check
 
-`npm run check` executa typecheck, testes e build dry-run do Worker.
+`npm run check` verifica a sintaxe JavaScript, skills sincronizadas, testes e build dry-run do Worker.
 
 ## Entrega
 
@@ -81,7 +97,7 @@ Isso cria uma versão sem trocar o tráfego automaticamente. Depois do CI verde 
 
 ## GitHub MCP oficial
 
-O Assistente conecta o GitHub **por MCP remoto**, sem chamadas diretas à API GitHub, usando apenas ferramentas locais aprovadas em `src/mcps/github/tools.js`. O servidor oficial recebe o header `X-MCP-Toolsets: context,repos,issues,pull_requests,actions`; a allowlist do Assistente publica apenas um subconjunto estável (leitura e escrita). [Documentação oficial](https://github.com/github/github-mcp-server/blob/main/docs/remote-server.md).
+O Assistente conecta o GitHub **por MCP remoto**, sem chamadas diretas à API GitHub, usando apenas ferramentas locais aprovadas em `mcps/github/tools.js`. O servidor oficial recebe o header `X-MCP-Toolsets: context,repos,issues,pull_requests,actions`; a allowlist do Assistente publica apenas um subconjunto estável (leitura e escrita). [Documentação oficial](https://github.com/github/github-mcp-server/blob/main/docs/remote-server.md).
 
 **Nenhum repositório é fixado no código**. Em cada chamada, `owner` e `repo` são passados conforme a tarefa. O acesso real aos repositórios é limitado **pelas permissões do token GitHub**, não pela configuração do MCP. As regras deste projeto exigem trabalhar somente em `joaoldsxyzbr/Assistente-mcps` quando a tarefa for sobre este repositório.
 

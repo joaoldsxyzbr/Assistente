@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readMcpConfigurations } from "../src/host/config.js";
+import { readMcpConfigurations } from "../server/config.js";
 test("starts with Cloudflare and GitHub as unconfigured connections", () => {
   const configurations = readMcpConfigurations({});
   assert.deepEqual(configurations.map(({ id, status }) => ({ id, status })), [

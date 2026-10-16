@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { audit } from "../src/shared/audit.js";
+import { audit } from "../server/shared/audit.js";
 test("audit keeps only allowlisted metadata", () => {
   const messages = [];
   const original = console.log;

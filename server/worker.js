@@ -19,9 +19,10 @@ import {
 } from "./config.js";
 import { RemoteMcpClient } from "./remote-client.js";
 import { classifyRemoteCallFailure } from "./remote-failure.js";
-import { createOAuthMcpWorker } from "../shared/oauth-mcp-worker.js";
-import { oauthSecuritySchemesForTool } from "../shared/oauth-helpers.js";
-import { audit } from "../shared/audit.js";
+import { createOAuthMcpWorker } from "./shared/oauth-mcp-worker.js";
+import { oauthSecuritySchemesForTool } from "./shared/oauth-helpers.js";
+import { audit } from "./shared/audit.js";
+import { SKILL_NAMES, SKILL_CONTENTS, MCP_SERVER_INSTRUCTIONS } from "../skills/catalog.js";
 function toolManifest(serverId) {
   return MCP_TOOL_CATALOG.filter((tool) => tool.serverId === serverId);
 }
@@ -92,7 +93,7 @@ function pontoConfigurationError(message) {
 }
 function createAssistenteMcpServer(environment) {
   const configurations = readMcpConfigurations(environment);
-  const server = new McpServer({ name: "assistente", version: "0.1.0" });
+  const server = new McpServer({ name: "assistente", version: "0.1.0" }, { instructions: MCP_SERVER_INSTRUCTIONS });
   server.registerTool(
     "assistente_status",
     {
@@ -109,6 +110,20 @@ function createAssistenteMcpServer(environment) {
     async () => ({
       content: [{ type: "text", text: JSON.stringify(configurationSummary(configurations)) }]
     })
+  );
+  server.registerTool(
+    "assistente_skill",
+    {
+      description: "Consulta instrucoes especializadas de ponto, gastos ou desenvolvimento, sem modificar dados. Use sob demanda.",
+      inputSchema: fromJsonSchema({
+        type: "object",
+        properties: { nome: { type: "string", enum: SKILL_NAMES, description: "Nome da skill." } },
+        required: ["nome"],
+        additionalProperties: false
+      }),
+      _meta: { securitySchemes: oauthSecuritySchemesForTool(false) }
+    },
+    async ({ nome }) => ({ content: [{ type: "text", text: SKILL_CONTENTS[nome] ?? "Skill nao encontrada." }] })
   );
   const cloudflareConfiguration = configurations.find(
     (configuration) => configuration.id === "cloudflare" && configuration.status === "configured"

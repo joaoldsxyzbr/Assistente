@@ -8,7 +8,7 @@ import {
   renderConsentPage,
   requestUsesWriteTool,
   requiredOAuthScopesForToolCall
-} from "../src/shared/oauth-helpers.js";
+} from "../server/shared/oauth-helpers.js";
 const strongPassword = "0123456789abcdef0123456789abcdef";
 const writeTools = ["mcp_cloudflare__execute"];
 test("requires a high-entropy OAuth password and compares it exactly", () => {

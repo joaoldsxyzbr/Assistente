@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { MCP_TOOL_CATALOG } from "../src/mcps/catalog.js";
-import { readMcpConfigurations } from "../src/host/config.js";
+import { MCP_TOOL_CATALOG } from "../mcps/catalog.js";
+import { readMcpConfigurations } from "../server/config.js";
 test("retired Penpot is not published, even if legacy environment variables remain", () => {
   const configurations = readMcpConfigurations({
     MCP_PENPOT_URL: "https://design.penpot.app/mcp/stream",

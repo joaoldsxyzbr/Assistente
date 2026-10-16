@@ -7,7 +7,7 @@ import {
   currentPontoLocalDate,
   normalizePontoHorario,
   PONTO_TOOL_CATALOG
-} from "../src/mcps/ponto/tools.js";
+} from "../mcps/ponto/tools.js";
 test("normaliza horarios aceitos pelo comando ponto", () => {
   assert.equal(normalizePontoHorario("0651"), "06:51");
   assert.equal(normalizePontoHorario("17:09"), "17:09");
