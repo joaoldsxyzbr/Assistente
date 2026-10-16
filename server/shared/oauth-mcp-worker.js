@@ -17,9 +17,11 @@ function createOAuthMcpWorker(options) {
   const writeToolNames = new Set(options.writeToolNames);
   const apiHandler = {
     async fetch(request, environment, context) {
+      const traceId = crypto.randomUUID();
+      const startedAt = Date.now();
       const auth = context.auth;
       if (auth === void 0) {
-        audit("warn", "mcp_authentication_denied", { status: 401 });
+        audit("warn", "mcp_authentication_denied", { status: 401, traceId });
         return new Response("Unauthorized", {
           status: 401,
           headers: { "WWW-Authenticate": "Bearer" }
@@ -31,7 +33,8 @@ function createOAuthMcpWorker(options) {
         audit("warn", "mcp_scope_denied", {
           status: 403,
           write: isWriteCall,
-          scopes: requiredScopes
+          scopes: requiredScopes,
+          traceId
         });
         return insufficientScope(
           auth,
@@ -40,14 +43,16 @@ function createOAuthMcpWorker(options) {
         );
       }
       const handler = createMcpHandler(
-        () => options.createServer(environment),
+        () => options.createServer(environment, traceId),
         { route: "/mcp" }
       );
       const response = await handler(request, environment, context);
       audit(response.ok ? "info" : "warn", "mcp_request", {
         status: response.status,
         write: isWriteCall,
-        outcome: response.ok ? "accepted" : "rejected"
+        outcome: response.ok ? "accepted" : "rejected",
+        traceId,
+        durationMs: Date.now() - startedAt
       });
       return response;
     }

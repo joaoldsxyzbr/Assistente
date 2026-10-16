@@ -44,9 +44,10 @@ function textContent(result) {
     return { type: "text", text: JSON.stringify(item) ?? String(item) };
   });
 }
-async function callRemoteTool(configuration, remoteName, args, isWrite, defaultCloudflareAccountId) {
+async function callRemoteTool(configuration, remoteName, args, isWrite, defaultCloudflareAccountId, traceId) {
   const client = new RemoteMcpClient(configuration);
   let callStarted = false;
+  const startedAt = Date.now();
   try {
     await client.connect();
     callStarted = true;
@@ -57,7 +58,10 @@ async function callRemoteTool(configuration, remoteName, args, isWrite, defaultC
       server: configuration.id,
       tool: remoteName,
       write: isWrite,
-      outcome: isError ? "remote_error" : "success"
+      outcome: isError ? isWrite ? "uncertain" : "remote_error" : "success",
+      uncertain: isWrite && isError,
+      traceId,
+      durationMs: Date.now() - startedAt
     });
     return {
       content: isError ? [{ type: "text", text: isWrite
@@ -72,7 +76,9 @@ async function callRemoteTool(configuration, remoteName, args, isWrite, defaultC
       tool: remoteName,
       write: isWrite,
       outcome: failure.outcome,
-      uncertain: failure.uncertain
+      uncertain: failure.uncertain,
+      traceId,
+      durationMs: Date.now() - startedAt
     });
     return { isError: true, content: [{ type: "text", text: failure.message }] };
   } finally {
@@ -96,7 +102,7 @@ function pontoConfigurationError(message) {
     content: [{ type: "text", text: message }]
   };
 }
-function createAssistenteMcpServer(environment) {
+function createAssistenteMcpServer(environment, traceId) {
   const configurations = readMcpConfigurations(environment);
   const server = new McpServer({ name: "assistente", version: "0.1.0" }, { instructions: MCP_SERVER_INSTRUCTIONS });
   server.registerTool(
@@ -147,7 +153,7 @@ function createAssistenteMcpServer(environment) {
         gastos: environment.GASTOS_D1_DATABASE_ID?.trim()
       });
       if (!code) return pontoConfigurationError("Parâmetros ou banco D1 inválidos.");
-      return callRemoteTool(cloudflareConfiguration, "execute", { code, account_id: accountId }, false, accountId);
+      return callRemoteTool(cloudflareConfiguration, "execute", { code, account_id: accountId }, false, accountId, traceId);
     });
   }
   const pontoDatabaseId = environment.PONTO_D1_DATABASE_ID?.trim() ?? "";
@@ -195,7 +201,8 @@ function createAssistenteMcpServer(environment) {
               )
             },
             true,
-            environment.MCP_CLOUDFLARE_ACCOUNT_ID
+            environment.MCP_CLOUDFLARE_ACCOUNT_ID,
+          traceId
           );
         }
         if (definition.name === "ponto_data") {
@@ -204,7 +211,8 @@ function createAssistenteMcpServer(environment) {
           return callRemoteTool(
             cloudflareConfiguration, "execute",
             { code: buildPontoHojeCode(pontoDatabaseId, data.data) },
-            false, environment.MCP_CLOUDFLARE_ACCOUNT_ID
+            false, environment.MCP_CLOUDFLARE_ACCOUNT_ID,
+          traceId
           );
         }
         if (definition.name === "ponto_periodo") {
@@ -218,7 +226,8 @@ function createAssistenteMcpServer(environment) {
           return callRemoteTool(
             cloudflareConfiguration, "execute",
             { code: buildPontoPeriodoCode(pontoDatabaseId, inicio.iso, fim.iso) },
-            false, environment.MCP_CLOUDFLARE_ACCOUNT_ID
+            false, environment.MCP_CLOUDFLARE_ACCOUNT_ID,
+          traceId
           );
         }
         if (definition.name === "ponto_hoje") {
@@ -228,7 +237,8 @@ function createAssistenteMcpServer(environment) {
             "execute",
             { code: buildPontoHojeCode(pontoDatabaseId, local.data) },
             false,
-            environment.MCP_CLOUDFLARE_ACCOUNT_ID
+            environment.MCP_CLOUDFLARE_ACCOUNT_ID,
+          traceId
           );
         }
         return callRemoteTool(
@@ -236,7 +246,8 @@ function createAssistenteMcpServer(environment) {
           "execute",
           { code: buildPontoResumoCode(pontoDatabaseId) },
           false,
-          environment.MCP_CLOUDFLARE_ACCOUNT_ID
+          environment.MCP_CLOUDFLARE_ACCOUNT_ID,
+          traceId
         );
       }
     );
@@ -264,7 +275,8 @@ function createAssistenteMcpServer(environment) {
           "execute",
           { code: buildGastosCode(gastosDatabaseId, prepared.action) },
           definition.isWrite,
-          environment.MCP_CLOUDFLARE_ACCOUNT_ID
+          environment.MCP_CLOUDFLARE_ACCOUNT_ID,
+          traceId
         );
       }
     );
@@ -291,7 +303,7 @@ function createAssistenteMcpServer(environment) {
     }
     const response = await callRemoteTool(githubConfiguration, "actions_list", {
       owner, repo, method: "list_workflow_runs", perPage: 30
-    }, false);
+    }, false, undefined, traceId);
     if (response.isError) return response;
     try {
       const content = response.content.find(c => c.type === "text")?.text;
@@ -330,7 +342,8 @@ function createAssistenteMcpServer(environment) {
           definition.name,
           args,
           definition.isWrite,
-          environment.MCP_CLOUDFLARE_ACCOUNT_ID
+          environment.MCP_CLOUDFLARE_ACCOUNT_ID,
+          traceId
         )
       );
     }
@@ -343,7 +356,7 @@ const writeToolNames = [
   ...GASTOS_TOOL_CATALOG.filter((tool) => tool.isWrite).map((tool) => tool.name)
 ];
 const oauthWorker = createOAuthMcpWorker({
-  createServer: (environment) => createAssistenteMcpServer(environment),
+  createServer: (environment, traceId) => createAssistenteMcpServer(environment, traceId),
   resource: "https://assistente.joaolds.xyz.br/mcp",
   resourceName: "Assistente MCP",
   writeToolNames
