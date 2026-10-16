@@ -1,35 +1,26 @@
 # Assistente MCPs
 
-Um **Worker MCP** enxuto hospedado na Cloudflare que disponibiliza somente **skills**. GitHub e Cloudflare usam os **MCPs oficiais conectados diretamente ao ChatGPT via OAuth**. O Worker não atua como proxy nem guarda tokens dos fornecedores.
+Servidor MCP único em Cloudflare Workers, implementado em JavaScript puro (ES Modules), que oferece as skills Ponto, Gastos e Desenvolvimento e encaminha chamadas aos MCPs oficiais GitHub e Cloudflare.
 
-## Estrutura
+ChatGPT → Assistente MCPs (Worker Cloudflare) → MCPs GitHub e Cloudflare oficiais + skills locais.
 
-| Diretório | Responsabilidade |
-| --- | --- |
-| `server/` | Servidor MCP de skills e OAuth do próprio Worker |
-| `skills/` | Ponto, gastos e desenvolvimento (instruções, sem dados pessoais) |
-| `docs/` | Arquitetura e integração com os MCPs oficiais |
-| `tests/` | Validação de segurança, OAuth e catálogo |
-| `.github/` | CI |
-| `wrangler.assistente.jsonc` | Publicação do Worker e KV OAuth |
+## Estado
 
-## Conexões
+A branch de integração implementa discovery OAuth upstream, Authorization Code + PKCE, DCR Cloudflare, armazenamento AES-GCM em KV, renovação quando o provedor fornece refresh token, revogação quando disponível, descoberta dinâmica de ferramentas oficiais e testes simulados. O Worker não copia nem redefine ferramentas upstream.
 
-1. **Assistente MCPs**: `https://assistente.joaolds.xyz.br/mcp`. Disponibiliza `assistente_skill` e `assistente_status`.
-2. **GitHub oficial**: conectar ao ChatGPT e autorizar OAuth. Execute ferramentas do GitHub diretamente, não pelo Assistente.
-3. **Cloudflare oficial**: conectar ao ChatGPT e autorizar OAuth. Acesso aos D1 de ponto e gastos é feito diretamente por ferramentas oficiais.
+OAuth upstream exige configuração e consentimento independentes do OAuth do ChatGPT. Os fluxos simulados passam no CI; não há ainda validação real das contas. Não promover a produção antes de concluir as etapas em docs/OAUTH-UPSTREAM.md. Produção e D1 continuam intactos.
 
-A skill **não é uma ferramenta de gravação**. Para registrar ponto ou lançar gastos, consulte a skill e faça a operação com o MCP oficial Cloudflare. IDs de bancos não concedem autorização. O cliente ChatGPT precisa disponibilizar as três conexões no contexto para o fluxo integrado.
+## Componentes
 
-**Autenticação:** não há `MCP_GITHUB_TOKEN` ou `MCP_CLOUDFLARE_TOKEN` no Worker. O OAuth próprio do Assistente ainda usa `ASSISTENTE_OAUTH_PASSWORD` e `OAUTH_KV`; eliminar também essa senha exige outro provedor de identidade. Não confunda autenticação do Assistente com OAuth dos provedores.
+- server/worker.js: servidor MCP do Assistente, catálogo de skills e ferramentas proxy genéricas.
+- server/upstream-oauth.js: discovery, consentimento, tokens cifrados, refresh e desconexão dos provedores.
+- server/remote-client.js e server/remote-tools.js: cliente MCP HTTPS e encaminhamento dinâmico.
+- skills/: instruções em Markdown sincronizadas com o catálogo do Worker.
+- docs/: arquitetura, autenticação e limites.
 
 ## Desenvolvimento
 
-JavaScript nativo, SDKs oficiais de MCP/OAuth e Cloudflare Workers.
+    npm ci
+    npm run check
 
-```sh
-npm ci
-npm run check
-```
-
-CI e upload de versão não significam promoção para produção. Consulte [arquitetura](docs/ARQUITETURA.md) e [migração](docs/MIGRACAO-OAUTH-OFICIAL.md).
+O GitHub é a fonte de verdade deste projeto: joaoldsxyzbr/Assistente-mcps. O CI verifica sintaxe, sincronização de skills, testes e build dry-run. Testes de ponto/gastos nunca escrevem nos bancos D1 reais. A configuração inclui um alvo de preview isolado com KV próprio; OAuth real ainda depende de secrets e consentimento. Deploy de preview e promoção de produção são operações distintas.
