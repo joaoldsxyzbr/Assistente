@@ -9,6 +9,6 @@ test("retired Penpot is not published, even if legacy environment variables rema
     MCP_PENPOT_TOKEN: "old-secret",
   });
   assert.deepEqual(configurations.map((connection) => connection.id), ["cloudflare", "github"]);
-  assert.equal(MCP_TOOL_CATALOG.some((tool) => tool.serverId === "penpot"), false);
+  assert.equal(MCP_TOOL_CATALOG.some((tool) => String(tool.serverId) === "penpot"), false);
   assert.equal(JSON.stringify(configurations).includes("old-secret"), false);
 });
