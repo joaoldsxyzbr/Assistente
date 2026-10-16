@@ -38,8 +38,15 @@ Para configurar secrets apenas no preview, execute cada comando e informe o valo
 Crie um OAuth App GitHub separado para preview, com callback https://assistente-preview.contato-24f.workers.dev/connections/github/callback. O Worker de preview usa o KV assistente-oauth-preview e não tem rota customizada nem binding D1. Rotacionar a chave de criptografia exige reconectar os provedores.
 ## Operação
 
-Depois que o código estiver implantado no ambiente autorizado e os secrets estiverem configurados, acesse /connections/github/start e /connections/cloudflare/start, entre com a senha do Assistente e conclua o consentimento em cada provedor. assistente_status confirma o estado sem revelar tokens. A conexão Cloudflare é a usada pelas skills Ponto e Gastos.
+Para testar sem tocar produção:
 
+1. Crie um OAuth App GitHub separado para preview, com callback https://assistente-preview.contato-24f.workers.dev/connections/github/callback.
+2. Faça o primeiro deploy do Worker isolado com npm run deploy:preview. Ele usa o KV assistente-oauth-preview, o domínio workers.dev e não tem rota customizada nem binding D1.
+3. Configure as quatro secrets listadas acima com --env preview. O password e a chave de criptografia do preview devem ser distintos dos de produção.
+4. Conecte o MCP preview no ChatGPT pela URL https://assistente-preview.contato-24f.workers.dev/mcp e autorize GitHub/Cloudflare em conexões separadas.
+5. Use somente leituras no smoke test. O MCP Cloudflare pode alcançar D1 pela autorização OAuth, então não faça escrita de teste nos bancos pessoais.
+
+Os links de consentimento upstream são https://assistente-preview.contato-24f.workers.dev/connections/github/start e https://assistente-preview.contato-24f.workers.dev/connections/cloudflare/start. assistente_status confirma o estado sem revelar tokens.
 ## Limites e aceite pendente
 
 - Este Worker tem um único operador; tokens upstream são guardados por provedor, não por usuário final. Para um serviço multiusuário, é necessário separar tokens por identidade OAuth e aplicar autorização por usuário.
