@@ -27,9 +27,9 @@ test("publica os comandos simples e consultas historicas de ponto", () => {
     [
       { name: "ponto_registrar", isWrite: true },
       { name: "ponto_hoje", isWrite: false },
-      { name: "ponto_resumo", isWrite: false },
       { name: "ponto_data", isWrite: false },
-      { name: "ponto_periodo", isWrite: false }
+      { name: "ponto_periodo", isWrite: false },
+      { name: "ponto_resumo", isWrite: false }
     ]
   );
 });
