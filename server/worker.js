@@ -35,10 +35,17 @@ export function createAssistenteMcpServer(env = {}) {
   registerRemoteTools(server, env, fromJsonSchema, oauthSecuritySchemesForTool);
   return server;
 }
-const provider = createOAuthMcpWorker({
-  createServer: createAssistenteMcpServer,
-  resource: "https://assistente.joaolds.xyz.br/mcp",
-  resourceName: "Assistente MCP",
-  writeToolNames: remoteToolNames
-});
-export default { fetch(request, env, ctx) { return provider.fetch(request, env, ctx); } };
+const providers = new Map();
+function providerFor(env) {
+  const origin = env.PUBLIC_ORIGIN || "https://assistente.joaolds.xyz.br";
+  if (!providers.has(origin)) {
+    providers.set(origin, createOAuthMcpWorker({
+      createServer: createAssistenteMcpServer,
+      resource: new URL("/mcp", origin).href,
+      resourceName: "Assistente MCP",
+      writeToolNames: remoteToolNames
+    }));
+  }
+  return providers.get(origin);
+}
+export default { fetch(request, env, ctx) { return providerFor(env).fetch(request, env, ctx); } };

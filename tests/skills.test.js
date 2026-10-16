@@ -31,6 +31,10 @@ test("bancos D1 permanecem distintos e corretos",async()=>{
  assert.notEqual(ids[0],ids[1]);
  assert.ok(SKILL_CONTENTS.ponto.includes(ids[0]));
  assert.ok(SKILL_CONTENTS.gastos.includes(ids[1]));
+ assert.notEqual(config.env.preview.kv_namespaces[0].id,config.kv_namespaces[0].id);
+ assert.equal(config.env.preview.vars.PUBLIC_ORIGIN,"https://assistente-preview.contato-24f.workers.dev");
+ assert.equal(config.env.preview.workers_dev,true);
+ assert.deepEqual(config.env.preview.routes,[]);
 });
 test("skills Ponto e Gastos encaminham ao Cloudflare oficial pelo Worker sem duplicar ferramentas",()=>{
  assert.ok(SKILL_CONTENTS.ponto.includes("mcp_cloudflare_call"));

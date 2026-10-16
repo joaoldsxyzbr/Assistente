@@ -26,13 +26,16 @@ Secrets do Worker, nunca do GitHub nem da conversa:
 3. GITHUB_OAUTH_CLIENT_SECRET: secret do OAuth App GitHub.
 4. GITHUB_OAUTH_CLIENT_ID: ID público do OAuth App, disponível como secret ou var de ambiente.
 
-Não guardar nenhum desses valores no repositório. Para configurar secrets pelo Wrangler, execute o comando e informe o valor no prompt seguro:
+Não guardar nenhum desses valores no repositório. A configuração tem um ambiente isolado de preview com namespace KV próprio e URL https://assistente-preview.contato-24f.workers.dev; não use os comandos abaixo sem a flag --env preview, pois a configuração raiz aponta para produção.
 
-    npx wrangler secret put UPSTREAM_OAUTH_ENCRYPTION_KEY --config wrangler.assistente.jsonc
-    npx wrangler secret put GITHUB_OAUTH_CLIENT_SECRET --config wrangler.assistente.jsonc\n    npx wrangler secret put GITHUB_OAUTH_CLIENT_ID --config wrangler.assistente.jsonc\n    npx wrangler secret put ASSISTENTE_OAUTH_PASSWORD --config wrangler.assistente.jsonc
+Para configurar secrets apenas no preview, execute cada comando e informe o valor no prompt seguro:
 
-Cada ambiente precisa de seu próprio OAuth App GitHub, porque o GitHub OAuth App registra um callback por aplicação. Para preview, configure callback com o domínio workers.dev do Worker de preview; para produção, use o domínio assistente.joaolds.xyz.br. Configure a chave de criptografia antes de iniciar qualquer consentimento; rotacioná-la exige reconectar os provedores.
+    npx wrangler secret put ASSISTENTE_OAUTH_PASSWORD --config wrangler.assistente.jsonc --env preview
+    npx wrangler secret put UPSTREAM_OAUTH_ENCRYPTION_KEY --config wrangler.assistente.jsonc --env preview
+    npx wrangler secret put GITHUB_OAUTH_CLIENT_ID --config wrangler.assistente.jsonc --env preview
+    npx wrangler secret put GITHUB_OAUTH_CLIENT_SECRET --config wrangler.assistente.jsonc --env preview
 
+Crie um OAuth App GitHub separado para preview, com callback https://assistente-preview.contato-24f.workers.dev/connections/github/callback. O Worker de preview usa o KV assistente-oauth-preview e não tem rota customizada nem binding D1. Rotacionar a chave de criptografia exige reconectar os provedores.
 ## Operação
 
 Depois que o código estiver implantado no ambiente autorizado e os secrets estiverem configurados, acesse /connections/github/start e /connections/cloudflare/start, entre com a senha do Assistente e conclua o consentimento em cada provedor. assistente_status confirma o estado sem revelar tokens. A conexão Cloudflare é a usada pelas skills Ponto e Gastos.

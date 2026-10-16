@@ -23,4 +23,4 @@ OAuth upstream exige configuração e consentimento independentes do OAuth do Ch
     npm ci
     npm run check
 
-O GitHub é a fonte de verdade deste projeto: joaoldsxyzbr/Assistente-mcps. O CI verifica sintaxe, sincronização de skills, testes e build dry-run. Testes de ponto/gastos nunca escrevem nos bancos D1 reais. Deploy de preview e promoção de produção são operações distintas.
+O GitHub é a fonte de verdade deste projeto: joaoldsxyzbr/Assistente-mcps. O CI verifica sintaxe, sincronização de skills, testes e build dry-run. Testes de ponto/gastos nunca escrevem nos bancos D1 reais. A configuração inclui um alvo de preview isolado com KV próprio; OAuth real ainda depende de secrets e consentimento. Deploy de preview e promoção de produção são operações distintas.
