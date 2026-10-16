@@ -3,6 +3,8 @@ import { MCP_TOOL_CATALOG } from "../mcps/catalog.js";
 import { withDefaultCloudflareAccount } from "../mcps/cloudflare/tools.js";
 import {
   buildPontoHojeCode,
+  buildPontoPeriodoCode,
+  normalizePontoData,
   buildPontoRegistrarCode,
   buildPontoResumoCode,
   currentPontoLocalDate,
@@ -174,6 +176,29 @@ function createAssistenteMcpServer(environment) {
             },
             true,
             environment.MCP_CLOUDFLARE_ACCOUNT_ID
+          );
+        }
+        if (definition.name === "ponto_data") {
+          const data = normalizePontoData(args.data);
+          if (!data) return pontoConfigurationError("Data inválida. Use DD/MM/AAAA.");
+          return callRemoteTool(
+            cloudflareConfiguration, "execute",
+            { code: buildPontoHojeCode(pontoDatabaseId, data.data) },
+            false, environment.MCP_CLOUDFLARE_ACCOUNT_ID
+          );
+        }
+        if (definition.name === "ponto_periodo") {
+          const inicio = normalizePontoData(args.inicio);
+          const fim = normalizePontoData(args.fim);
+          if (!inicio || !fim || inicio.iso > fim.iso) {
+            return pontoConfigurationError("Período inválido. Use DD/MM/AAAA com início anterior ou igual ao fim.");
+          }
+          const elapsedDays = (Date.parse(fim.iso + "T00:00:00Z") - Date.parse(inicio.iso + "T00:00:00Z")) / 86400000;
+          if (elapsedDays > 92) return pontoConfigurationError("O período máximo é de 93 dias.");
+          return callRemoteTool(
+            cloudflareConfiguration, "execute",
+            { code: buildPontoPeriodoCode(pontoDatabaseId, inicio.iso, fim.iso) },
+            false, environment.MCP_CLOUDFLARE_ACCOUNT_ID
           );
         }
         if (definition.name === "ponto_hoje") {

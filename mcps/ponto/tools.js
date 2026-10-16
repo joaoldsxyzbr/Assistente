@@ -26,6 +26,19 @@ const PONTO_TOOL_CATALOG = [
     },
     isWrite: false
   },
+
+  {
+    name: "ponto_data",
+    description: "Consulta ponto e saldo de uma data informada em DD/MM/AAAA, sem modificar registros.",
+    inputSchema: { type: "object", properties: { data: { type: "string", description: "Data em DD/MM/AAAA" } }, required: ["data"], additionalProperties: false },
+    isWrite: false
+  },
+  {
+    name: "ponto_periodo",
+    description: "Consulta os registros do ponto em um intervalo de até 93 dias, sem modificar registros.",
+    inputSchema: { type: "object", properties: { inicio: { type: "string", description: "DD/MM/AAAA" }, fim: { type: "string", description: "DD/MM/AAAA" } }, required: ["inicio", "fim"], additionalProperties: false },
+    isWrite: false
+  },
   {
     name: "ponto_resumo",
     description: "Retorna o resumo acumulado do banco de horas diretamente da view oficial resumo.",
@@ -288,8 +301,40 @@ function buildPontoResumoCode(databaseId) {
     };
   }`;
 }
+
+const PERIODO_SUMMARY_SQL = `
+SELECT data, entrada, ida_intervalo, volta_intervalo, saida,
+  carga_minutos, trabalhado_minutos, saldo_final_minutos, status
+FROM banco_horas
+WHERE (substr(data, 7, 4) || '-' || substr(data, 4, 2) || '-' || substr(data, 1, 2))
+  BETWEEN ?1 AND ?2
+ORDER BY substr(data, 7, 4), substr(data, 4, 2), substr(data, 1, 2)
+LIMIT 94;
+`.trim();
+
+function normalizePontoData(raw) {
+  if (typeof raw !== "string") return undefined;
+  const match = /^(\\d{2})\\/(\\d{2})\\/(\\d{4})$/.exec(raw.trim());
+  if (!match) return undefined;
+  const [, day, month, year] = match;
+  const date = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
+  if (date.getUTCFullYear() !== Number(year) ||
+      date.getUTCMonth() + 1 !== Number(month) || date.getUTCDate() !== Number(day)) return undefined;
+  return { data: `${day}/${month}/${year}`, iso: `${year}-${month}-${day}` };
+}
+
+function buildPontoPeriodoCode(databaseId, inicio, fim) {
+  return `async () => {
+    ${d1RequestHelper(databaseId)}
+    const rows = await query(${JSON.stringify(PERIODO_SUMMARY_SQL)}, [${JSON.stringify(inicio)}, ${JSON.stringify(fim)}]);
+    return { status: "ok", inicio: ${JSON.stringify(inicio)}, fim: ${JSON.stringify(fim)}, total: rows.length, registros: rows };
+  }`;
+}
+
 export {
   PONTO_TOOL_CATALOG,
+  buildPontoPeriodoCode,
+  normalizePontoData,
   buildPontoHojeCode,
   buildPontoRegistrarCode,
   buildPontoResumoCode,
