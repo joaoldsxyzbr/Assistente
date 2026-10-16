@@ -314,7 +314,7 @@ LIMIT 94;
 
 function normalizePontoData(raw) {
   if (typeof raw !== "string") return undefined;
-  const match = /^(\\d{2})\\/(\\d{2})\\/(\\d{4})$/.exec(raw.trim());
+  const match = /^([0-9]{2})\/([0-9]{2})\/([0-9]{4})$/.exec(raw.trim());
   if (!match) return undefined;
   const [, day, month, year] = match;
   const date = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));

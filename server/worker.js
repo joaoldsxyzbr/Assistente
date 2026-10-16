@@ -1,6 +1,7 @@
 import { fromJsonSchema, McpServer } from "@modelcontextprotocol/server";
 import { MCP_TOOL_CATALOG } from "../mcps/catalog.js";
 import { withDefaultCloudflareAccount } from "../mcps/cloudflare/tools.js";
+import { CLOUDFLARE_READ_TOOL_CATALOG, buildCloudflareReadCode, validCloudflareId } from "../mcps/cloudflare/operations.js";
 import {
   buildPontoHojeCode,
   buildPontoPeriodoCode,
@@ -59,7 +60,9 @@ async function callRemoteTool(configuration, remoteName, args, isWrite, defaultC
       outcome: isError ? "remote_error" : "success"
     });
     return {
-      content: textContent(result),
+      content: isError ? [{ type: "text", text: isWrite
+        ? "O serviço de origem retornou erro após iniciar uma escrita. Consulte o registro antes de tentar novamente."
+        : "O MCP de origem rejeitou a consulta. Confira as permissões ou tente novamente." }] : textContent(result),
       isError
     };
   } catch (error) {
@@ -130,6 +133,23 @@ function createAssistenteMcpServer(environment) {
   const cloudflareConfiguration = configurations.find(
     (configuration) => configuration.id === "cloudflare" && configuration.status === "configured"
   );
+  for (const definition of CLOUDFLARE_READ_TOOL_CATALOG) {
+    server.registerTool(definition.name, {
+      description: definition.description,
+      inputSchema: fromJsonSchema(definition.inputSchema),
+      _meta: { securitySchemes: oauthSecuritySchemesForTool(false) }
+    }, async (args) => {
+      if (!cloudflareConfiguration) return pontoConfigurationError("Cloudflare MCP não configurado.");
+      const accountId = environment.MCP_CLOUDFLARE_ACCOUNT_ID?.trim();
+      if (!accountId || !/^[0-9a-f]{32}$/i.test(accountId)) return pontoConfigurationError("Conta Cloudflare não configurada corretamente.");
+      const code = buildCloudflareReadCode(definition.name, args, {
+        ponto: environment.PONTO_D1_DATABASE_ID?.trim(),
+        gastos: environment.GASTOS_D1_DATABASE_ID?.trim()
+      });
+      if (!code) return pontoConfigurationError("Parâmetros ou banco D1 inválidos.");
+      return callRemoteTool(cloudflareConfiguration, "execute", { code, account_id: accountId }, false, accountId);
+    });
+  }
   const pontoDatabaseId = environment.PONTO_D1_DATABASE_ID?.trim() ?? "";
   for (const definition of PONTO_TOOL_CATALOG) {
     server.registerTool(
@@ -147,7 +167,7 @@ function createAssistenteMcpServer(environment) {
             "O Cloudflare MCP necess\xE1rio para o controle de ponto n\xE3o est\xE1 configurado."
           );
         }
-        if (pontoDatabaseId.length === 0) {
+        if (!validCloudflareId(pontoDatabaseId) || pontoDatabaseId === environment.GASTOS_D1_DATABASE_ID?.trim()) {
           return pontoConfigurationError(
             "O banco de ponto n\xE3o est\xE1 configurado no Assistente MCP."
           );
@@ -234,7 +254,7 @@ function createAssistenteMcpServer(environment) {
         if (!cloudflareConfiguration || cloudflareConfiguration.status !== "configured") {
           return pontoConfigurationError("Cloudflare MCP n\xE3o configurado para gastos.");
         }
-        if (!gastosDatabaseId) {
+        if (!validCloudflareId(gastosDatabaseId) || gastosDatabaseId === pontoDatabaseId) {
           return pontoConfigurationError("Banco D1 de gastos n\xE3o configurado.");
         }
         const prepared = prepareGastosAction(definition.name, args);
