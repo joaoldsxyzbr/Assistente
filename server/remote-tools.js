@@ -39,7 +39,7 @@ export function registerRemoteTools(server, env, fromJsonSchema, securitySchemes
       inputSchema: fromJsonSchema({
         type: "object",
         properties: {
-          name: { type: "string", minLength: 1, maxLength: 128, pattern: "^[a-zA-Z][a-zA-Z0-9_-]*$" },
+          name: { type: "string", minLength: 1, maxLength: 128 },
           arguments: { type: "object", additionalProperties: true }
         },
         required: ["name", "arguments"],

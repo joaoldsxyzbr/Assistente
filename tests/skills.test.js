@@ -32,6 +32,11 @@ test("bancos D1 permanecem distintos e corretos",async()=>{
  assert.ok(SKILL_CONTENTS.ponto.includes(ids[0]));
  assert.ok(SKILL_CONTENTS.gastos.includes(ids[1]));
 });
+test("skills Ponto e Gastos encaminham ao Cloudflare oficial pelo Worker sem duplicar ferramentas",()=>{
+ assert.ok(SKILL_CONTENTS.ponto.includes("mcp_cloudflare_call"));
+ assert.ok(SKILL_CONTENTS.gastos.includes("mcp_cloudflare_call"));
+ assert.ok(SKILL_CONTENTS.ponto.includes("não há binding D1"));
+});
 test("desenvolvimento mantém requisitos de qualidade",()=>{
  for(const term of ["RED → GREEN → REFACTOR","causa raiz","CI","produção"])assert.ok(SKILL_CONTENTS.desenvolvimento.includes(term));
 });

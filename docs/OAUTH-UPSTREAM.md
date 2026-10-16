@@ -1,35 +1,44 @@
-# Integração dos MCPs oficiais no Worker
+# OAuth dos MCPs upstream
 
-## Arquitetura-alvo
+## Fluxo
 
-```text
-ChatGPT → Assistente MCPs (Worker Cloudflare)
-                       ├── MCP GitHub oficial
-                       ├── MCP Cloudflare oficial
-                       └── Skills: ponto, gastos, desenvolvimento
-```
+O OAuth de ChatGPT → Assistente MCP é independente do OAuth de Assistente → provedor. O Worker não encaminha o token de ChatGPT ao GitHub ou Cloudflare.
 
-As ferramentas de listagem e chamada remota usam o protocolo MCP por HTTPS e endereços fixos. O código do Worker é JavaScript puro (ES Modules). As dependências de transporte e OAuth são SDKs oficiais.
+Para cada provedor, o Worker consulta o desafio WWW-Authenticate, busca OAuth Protected Resource Metadata e Authorization Server Metadata, valida os domínios oficiais, inicia Authorization Code + PKCE S256 e troca o código no callback. O estado é aleatório, de uso único e expira após 10 minutos.
 
-## Bloqueio de autenticação para produção
+- **GitHub**: MCP remoto oficial https://api.githubcopilot.com/mcp/x/all. O servidor GitHub não oferece Dynamic Client Registration; precisa de um OAuth App próprio do projeto. O callback registrado deve ser https://assistente.joaolds.xyz.br/connections/github/callback. A conta é comparada a GITHUB_EXPECTED_LOGIN (configurada como joaoldsxyzbr).
+- **Cloudflare**: MCP oficial https://mcp.cloudflare.com/mcp. O Worker registra um cliente público por Dynamic Client Registration e guarda o client ID no KV cifrado. A conta e os escopos são escolhidos no consentimento oficial Cloudflare.
 
-O OAuth do ChatGPT para o Assistente **não** concede acesso aos MCPs GitHub/Cloudflare. A ponte de protocolo implementada nesta branch aceita apenas access tokens OAuth dos provedores fornecidos de forma segura pelo ambiente do Worker: `GITHUB_OAUTH_ACCESS_TOKEN` e `CLOUDFLARE_OAUTH_ACCESS_TOKEN`. **Não existe ainda captura, consentimento, armazenamento criptografado e renovação automática desses tokens.** Por isso, não promover esta branch para produção como integração OAuth finalizada.
+Os tokens ficam cifrados com AES-GCM no binding OAUTH_KV, sob o prefixo assistente:upstream:v2:. O Worker renova tokens quando estão próximos do vencimento, se o provedor tiver emitido refresh token. A ação de desconectar tenta revogar o token; quando o provedor não oferece endpoint de revogação, o Worker apaga a cópia local e orienta revogar o acesso nas configurações da conta.
 
-Os próprios MCPs oficiais podem exigir registro de clientes e consentimento específicos. Credenciais NÃO devem ser copiadas do ChatGPT, nem registradas no GitHub, nem obtidas por sessões de terceiros. Configurar OAuth de cada origem com autorização explícita do proprietário e confirmar os escopos necessários antes do deploy.
+## Configuração necessária
 
-## Segurança
+Vars públicas no wrangler.assistente.jsonc:
 
-- Nunca aceite endereço de servidor MCP de parâmetros externos. Endpoints permitidos são fixos.
-- O servidor só registra chamadas se o access token upstream estiver presente no ambiente; resultados e erros não expõem tokens.
-- Todas as chamadas genéricas `mcp_*_call` são classificadas como escrita pelo OAuth do Assistente. Escritas remotas devem ser autorizadas pelo usuário e nunca repetidas automaticamente após resultado incerto.
-- A listagem remota prévia restringe os nomes à lista anunciada pelo servidor de origem; isso **não** substitui uma allowlist de operações sensíveis. Antes de produção, aplicar permissões granulares e controles de ferramenta de acordo com o caso de uso.
-- IDs D1 de ponto e gastos são instruções, não autorizações.
-- Evitar tokens estáticos de longa duração. OAuth completo precisa contemplar expiração, refresh, rotação e revogação.
+- PUBLIC_ORIGIN=https://assistente.joaolds.xyz.br
+- GITHUB_EXPECTED_LOGIN=joaoldsxyzbr
+- GITHUB_OAUTH_SCOPES: escopos OAuth amplos para o toolset GitHub all, incluindo offline_access para refresh tokens.
 
-## Próximos requisitos de aceite
+Secrets do Worker, nunca do GitHub nem da conversa:
 
-1. Implementar consentimento upstream específico para GitHub e Cloudflare, com client registration/PKCE quando suportado.
-2. Armazenar tokens de modo protegido, vinculados ao usuário, com renovação e revogação.
-3. Implementar allowlist/escopos de ferramentas remotas e política de autorização de escrita.
-4. Testes de login, refresh, permissões e chamada real de leitura; nenhum teste de escrita no D1 real.
-5. CI verde, versão de preview testada, promoção e verificação de produção.
+1. ASSISTENTE_OAUTH_PASSWORD: senha aleatória com pelo menos 32 bytes, já exigida pelo OAuth do Assistente.
+2. UPSTREAM_OAUTH_ENCRYPTION_KEY: chave AES de 32 bytes codificada em base64url sem padding.
+3. GITHUB_OAUTH_CLIENT_SECRET: secret do OAuth App GitHub.
+4. GITHUB_OAUTH_CLIENT_ID: ID público do OAuth App, disponível como secret ou var de ambiente.
+
+Não guardar nenhum desses valores no repositório. Para configurar secrets pelo Wrangler, execute o comando e informe o valor no prompt seguro:
+
+    npx wrangler secret put UPSTREAM_OAUTH_ENCRYPTION_KEY --config wrangler.assistente.jsonc
+    npx wrangler secret put GITHUB_OAUTH_CLIENT_SECRET --config wrangler.assistente.jsonc
+
+O callback precisa estar cadastrado exatamente no GitHub OAuth App. Configure a chave de criptografia antes de iniciar qualquer consentimento; rotacioná-la exige reconectar os provedores.
+
+## Operação
+
+Depois que o código estiver implantado no ambiente autorizado e os secrets estiverem configurados, acesse /connections/github/start e /connections/cloudflare/start, entre com a senha do Assistente e conclua o consentimento em cada provedor. assistente_status confirma o estado sem revelar tokens. A conexão Cloudflare é a usada pelas skills Ponto e Gastos.
+
+## Limites e aceite pendente
+
+- Este Worker tem um único operador; tokens upstream são guardados por provedor, não por usuário final. Para um serviço multiusuário, é necessário separar tokens por identidade OAuth e aplicar autorização por usuário.
+- CI usa provedores simulados. Ainda falta registrar/configurar o OAuth App GitHub, adicionar secrets no Worker, autorizar as duas contas, realizar uma leitura real segura de cada MCP, testar refresh/revogação no ambiente de preview e revisar o deploy. Não executar escrita de teste nem alterar D1.
+- A branch não deve ser promovida a produção até a validação acima. A versão ativa e os bancos D1 não foram alterados.

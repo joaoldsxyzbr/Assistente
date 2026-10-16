@@ -1,34 +1,26 @@
 # Assistente MCPs
 
-Servidor MCP único, hospedado em Cloudflare Worker, desenvolvido em **JavaScript puro (ES Modules)**. Arquivos das skills em Markdown.
+Servidor MCP único em Cloudflare Workers, implementado em JavaScript puro (ES Modules), que oferece as skills Ponto, Gastos e Desenvolvimento e encaminha chamadas aos MCPs oficiais GitHub e Cloudflare.
 
-```text
-ChatGPT
-   └── Assistente MCPs (Worker Cloudflare)
-         ├── GitHub MCP oficial (upstream HTTPS)
-         ├── Cloudflare MCP oficial (upstream HTTPS)
-         └── Skills: ponto, gastos e desenvolvimento
-```
+ChatGPT → Assistente MCPs (Worker Cloudflare) → MCPs GitHub e Cloudflare oficiais + skills locais.
 
-## Estado da evolução
+## Estado
 
-A branch de integração implementa a ponte de transporte MCP com URLs oficiais fixas, ferramentas de descoberta e chamada, e escopo elevado para execução remota. **Ainda não há fluxo OAuth upstream completo.** O Worker aceita access tokens dos provedores como Secrets de ambiente somente depois que a identidade e o consentimento forem configurados por processo separado. Não copiar tokens do ChatGPT, nem criar PATs para simular OAuth. Consulte [docs/OAUTH-UPSTREAM.md](docs/OAUTH-UPSTREAM.md). Sem tokens configurados, ferramentas remotas retornam aviso explícito.
+A branch de integração implementa discovery OAuth upstream, Authorization Code + PKCE, DCR Cloudflare, armazenamento AES-GCM em KV, renovação quando o provedor fornece refresh token, revogação quando disponível, descoberta dinâmica de ferramentas oficiais e testes simulados. O Worker não copia nem redefine ferramentas upstream.
 
-**Não publicar a branch em produção como integração concluída** antes de implementar OAuth end-to-end, revogação, renovação e políticas de autorização/allowlist.
+OAuth upstream exige configuração e consentimento independentes do OAuth do ChatGPT. Os fluxos simulados passam no CI; não há ainda validação real das contas. Não promover a produção antes de concluir as etapas em docs/OAUTH-UPSTREAM.md. Produção e D1 continuam intactos.
 
 ## Componentes
 
-- `server/worker.js`: servidor MCP, OAuth do ChatGPT e roteamento das ferramentas.
-- `server/remote-client.js` e `server/remote-tools.js`: transporte MCP e operações upstream.
-- `skills/ponto/`, `skills/gastos/` e `skills/desenvolvimento/`: instruções.
-- `docs/`: arquitetura, autenticação e limites.
-- `tests/`: verificações locais e CI.
+- server/worker.js: servidor MCP do Assistente, catálogo de skills e ferramentas proxy genéricas.
+- server/upstream-oauth.js: discovery, consentimento, tokens cifrados, refresh e desconexão dos provedores.
+- server/remote-client.js e server/remote-tools.js: cliente MCP HTTPS e encaminhamento dinâmico.
+- skills/: instruções em Markdown sincronizadas com o catálogo do Worker.
+- docs/: arquitetura, autenticação e limites.
 
 ## Desenvolvimento
 
-```sh
-npm ci
-npm run check
-```
+    npm ci
+    npm run check
 
-O GitHub é fonte de verdade. O CI verifica código, testes e build dry-run. Não executar testes de escrita nos bancos D1 reais. A entrega na Cloudflare e a promoção de versão são operações distintas.
+O GitHub é a fonte de verdade deste projeto: joaoldsxyzbr/Assistente-mcps. O CI verifica sintaxe, sincronização de skills, testes e build dry-run. Testes de ponto/gastos nunca escrevem nos bancos D1 reais. Deploy de preview e promoção de produção são operações distintas.
