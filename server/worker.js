@@ -5,7 +5,7 @@ import { oauthSecuritySchemesForTool } from "./shared/oauth-helpers.js";
 import { registerRemoteTools, remoteToolNames } from "./remote-tools.js";
 import { hasUpstreamConnection } from "./upstream-oauth.js";
 
-export async function createAssistenteMcpServer(env = {}) {
+export function createAssistenteMcpServer(env = {}) {
   const server = new McpServer({ name: "assistente", version: "1.1.0" }, { instructions: MCP_SERVER_INSTRUCTIONS });
   server.registerTool("assistente_status", {
     description: "Mostra skills, conexões OAuth e links seguros para conectar ou desconectar provedores, sem revelar segredos.",

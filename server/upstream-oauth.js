@@ -30,9 +30,10 @@ function unbase64url(value) {
 function randomString() {
   return base64url(crypto.getRandomValues(new Uint8Array(32)));
 }
-function providerUrl(provider, value) {
+function providerUrl(provider, value, kind = "auth") {
   const url = new URL(value);
-  const hosts = PROVIDERS[provider]?.authHosts;
+  const config = PROVIDERS[provider];
+  const hosts = kind === "resource" ? config?.resourceHosts : config?.authHosts;
   const allowed = provider === "cloudflare"
     ? [...(hosts ?? [])].some(host => url.hostname === host || url.hostname.endsWith("." + host))
     : hosts?.has(url.hostname);
@@ -41,12 +42,12 @@ function providerUrl(provider, value) {
 }
 function resourceMetadataUrl(endpoint) {
   const url = new URL(endpoint);
-  const suffix = url.pathname.replace(/\\/$/, "");
+  const suffix = url.pathname.endsWith("/") ? url.pathname.slice(0, -1) : url.pathname;
   return url.origin + "/.well-known/oauth-protected-resource" + suffix;
 }
 function authorizationMetadataUrl(issuer) {
   const url = new URL(issuer);
-  const suffix = url.pathname.replace(/\\/$/, "");
+  const suffix = url.pathname.endsWith("/") ? url.pathname.slice(0, -1) : url.pathname;
   return url.origin + "/.well-known/oauth-authorization-server" + suffix;
 }
 async function fetchJson(fetchFn, url, init = {}) {
@@ -75,21 +76,31 @@ async function discover(provider, fetchFn) {
     })
   });
   const challenge = probe.headers.get("www-authenticate") ?? "";
-  const match = /resource_metadata\\s*=\\s*(?:"([^"]+)"|([^,\\s]+))/i.exec(challenge);
-  const metadataUrl = providerUrl(provider, match?.[1] ?? match?.[2] ?? resourceMetadataUrl(config.endpoint));
-  if (probe.status !== 401 && probe.status !== 403 && !match) throw Error("OAUTH_CHALLENGE_MISSING");
+  const marker = challenge.toLowerCase().indexOf("resource_metadata=");
+  let metadataCandidate = null;
+  if (marker >= 0) {
+    const value = challenge.slice(marker + "resource_metadata=".length).trimStart();
+    if (value.startsWith('"')) {
+      const closingQuote = value.indexOf('"', 1);
+      if (closingQuote > 1) metadataCandidate = value.slice(1, closingQuote);
+    } else {
+      metadataCandidate = value.split(",")[0].trim().split(" ")[0];
+    }
+  }
+  const metadataUrl = providerUrl(provider, metadataCandidate ?? resourceMetadataUrl(config.endpoint), "resource");
+  if (probe.status !== 401 && probe.status !== 403 && !metadataCandidate) throw Error("OAUTH_CHALLENGE_MISSING");
   const resource = await fetchJson(fetchFn, metadataUrl, { headers: { accept: "application/json" } });
   if (!Array.isArray(resource.authorization_servers) || resource.authorization_servers.length === 0) throw Error("AUTHORIZATION_SERVER_MISSING");
-  const issuer = providerUrl(provider, resource.authorization_servers[0]);
+  const issuer = providerUrl(provider, resource.authorization_servers[0], "auth");
   const metadata = await fetchJson(fetchFn, authorizationMetadataUrl(issuer), { headers: { accept: "application/json" } });
   for (const name of ["authorization_endpoint", "token_endpoint"]) {
     if (typeof metadata[name] !== "string") throw Error("OAUTH_METADATA_INCOMPLETE");
-    metadata[name] = providerUrl(provider, metadata[name]);
+    metadata[name] = providerUrl(provider, metadata[name], "auth");
   }
   for (const name of ["registration_endpoint", "revocation_endpoint"]) {
-    if (metadata[name]) metadata[name] = providerUrl(provider, metadata[name]);
+    if (metadata[name]) metadata[name] = providerUrl(provider, metadata[name], "auth");
   }
-  if (metadata.issuer && new URL(providerUrl(provider, metadata.issuer)).href !== issuer) throw Error("OAUTH_ISSUER_MISMATCH");
+  if (metadata.issuer && new URL(providerUrl(provider, metadata.issuer, "auth")).href !== issuer) throw Error("OAUTH_ISSUER_MISMATCH");
   return {
     resource: typeof resource.resource === "string" ? resource.resource : config.endpoint,
     scopes: Array.isArray(resource.scopes_supported) ? resource.scopes_supported : (metadata.scopes_supported ?? []),

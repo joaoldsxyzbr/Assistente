@@ -67,7 +67,7 @@ function githubFetch() {
     }
     if (target === "https://api.github.com/applications/github-client/token") {
       assert.equal(init.method, "DELETE");
-      assert.match(init.headers.authorization, /^Basic /);
+      assert.match(init.headers.get("authorization"), /^Basic /);
       return new Response(null, { status: 204 });
     }
     throw Error("Unexpected URL " + target);
