@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { GITHUB_TOOL_CATALOG } from "../src/mcps/github/tools.js";
-import { MCP_TOOL_CATALOG } from "../src/mcps/catalog.js";
-import { MCP_SERVER_CATALOG } from "../src/host/contracts.js";
-import { readMcpConfigurations } from "../src/host/config.js";
-import { GITHUB_REMOTE_TOOLSETS, remoteMcpHeaders } from "../src/host/remote-client.js";
+import { GITHUB_TOOL_CATALOG } from "../mcps/github/tools.js";
+import { MCP_TOOL_CATALOG } from "../mcps/catalog.js";
+import { MCP_SERVER_CATALOG } from "../server/contracts.js";
+import { readMcpConfigurations } from "../server/config.js";
+import { GITHUB_REMOTE_TOOLSETS, remoteMcpHeaders } from "../server/remote-client.js";
 test("GitHub tool contracts use the official MCP names and include workflows", () => {
   assert.equal(GITHUB_TOOL_CATALOG.length, 21);
   assert.deepEqual(

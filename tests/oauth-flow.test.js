@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   handleAuthorizeRequest
-} from "../src/shared/oauth-authorization.js";
+} from "../server/shared/oauth-authorization.js";
 const strongPassword = "0123456789abcdef0123456789abcdef";
 const clientId = "https://chatgpt.example/client.json";
 const redirectUri = "https://client.example/callback";

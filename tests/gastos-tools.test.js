@@ -8,7 +8,7 @@ import {
   centsToStored,
   prepareGastosAction,
   resolveGastosPeriodo
-} from "../src/mcps/gastos/tools.js";
+} from "../mcps/gastos/tools.js";
 const now = /* @__PURE__ */ new Date("2026-10-07T15:00:00Z");
 function make(tool, args = {}) {
   const p = prepareGastosAction(tool, args, now);

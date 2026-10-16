@@ -11,7 +11,7 @@ async function* walk(directory) {
 }
 
 let checked = 0;
-for (const directory of ["src", "tests", "scripts"]) {
+for (const directory of ["server", "mcps", "skills", "tests", "scripts"]) {
   for await (const file of walk(directory)) {
     execFileSync(process.execPath, ["--check", file], { stdio: "pipe" });
     checked++;

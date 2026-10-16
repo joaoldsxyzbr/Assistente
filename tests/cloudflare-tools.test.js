@@ -3,8 +3,8 @@ import test from "node:test";
 import {
   CLOUDFLARE_TOOL_CATALOG,
   withDefaultCloudflareAccount
-} from "../src/mcps/cloudflare/tools.js";
-import { MCP_TOOL_CATALOG } from "../src/mcps/catalog.js";
+} from "../mcps/cloudflare/tools.js";
+import { MCP_TOOL_CATALOG } from "../mcps/catalog.js";
 test("Cloudflare contracts remain unchanged and the hub also registers GitHub", () => {
   assert.deepEqual(CLOUDFLARE_TOOL_CATALOG.map(({ name }) => name), [
     "docs",

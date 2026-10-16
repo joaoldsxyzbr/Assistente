@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { classifyRemoteCallFailure } from "../src/host/remote-failure.js";
+import { classifyRemoteCallFailure } from "../server/remote-failure.js";
 import {
   MCP_CONNECT_TIMEOUT_MS,
   MCP_TOOL_TIMEOUT_MS
-} from "../src/host/remote-client.js";
+} from "../server/remote-client.js";
 test("connection and tool calls have finite, separate deadlines", () => {
   assert.equal(MCP_CONNECT_TIMEOUT_MS, 15e3);
   assert.equal(MCP_TOOL_TIMEOUT_MS, 45e3);

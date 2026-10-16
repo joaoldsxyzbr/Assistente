@@ -3,7 +3,7 @@ import test from "node:test";
 import {
   readSafeOAuthErrorCode,
   recordOAuthBoundary
-} from "../src/shared/oauth-boundary-diagnostics.js";
+} from "../server/shared/oauth-boundary-diagnostics.js";
 function diagnosticStore() {
   const writes = [];
   const store = {

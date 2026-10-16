@@ -2,7 +2,7 @@
 
 ## Objetivo
 
-Este repositório implementa o hub independente Assistente MCPs. O Worker `assistente` autentica o ChatGPT, publica uma allowlist de ferramentas e encaminha cada chamada ao MCP de destino. A migração seletiva das instruções de ponto, gastos e desenvolvimento será feita sem depender do antigo plugin Assistente.
+Este repositório implementa o hub independente Assistente MCPs. O Worker `assistente` autentica o ChatGPT, publica uma allowlist de ferramentas e encaminha cada chamada ao MCP de destino. As instruções de ponto, gastos e desenvolvimento ficam em `skills/` e são oferecidas pelo MCP sem depender do plugin antigo.
 
 A regra estrutural é simples: **um Worker, um endpoint MCP e um módulo local por integração ou domínio**.
 
@@ -12,13 +12,18 @@ A regra estrutural é simples: **um Worker, um endpoint MCP e um módulo local p
 |---|---|
 | ChatGPT | Interpretação do pedido e apresentação dos resultados; instruções do MCP conforme suporte do cliente |
 | Worker `assistente` | OAuth, catálogo allowlist, escopos, ferramentas locais e roteamento MCP |
-| `src/mcps/<nome>/` | Contratos e lógica fixa das ferramentas aprovadas |
+| `mcps/<nome>/` | Contratos e lógica fixa das ferramentas aprovadas |
 | MCP de destino | Execução técnica e aplicação das permissões do token de serviço |
 
-O controle de ponto possui três ferramentas locais no hub, mas **não acessa D1 diretamente**. Elas compõem chamadas fixas ao Cloudflare MCP, que então usa a API Cloudflare para consultar ou escrever no D1. Gastos utiliza cinco ferramentas locais em `src/mcps/gastos/`, encaminhadas exclusivamente ao Cloudflare MCP e ao D1 canônico, sem acesso direto do Worker ao D1.
+O controle de ponto possui três ferramentas locais no hub, mas **não acessa D1 diretamente**. Elas compõem chamadas fixas ao Cloudflare MCP, que então usa a API Cloudflare para consultar ou escrever no D1. Gastos utiliza cinco ferramentas locais em `mcps/gastos/`, encaminhadas exclusivamente ao Cloudflare MCP e ao D1 canônico, sem acesso direto do Worker ao D1.
 
 O **GitHub MCP** também é um destino remoto oficial, separado do Cloudflare, com autenticação própria por PAT. Sua allowlist cobre operações usuais de repositórios, commits, arquivos, issues, PRs e Actions, sem fixar `owner` ou `repo`. A capacidade de acessar um repositório depende do token GitHub e da autorização da tarefa.
 
+## Skills incorporadas
+
+Os arquivos `skills/ponto/SKILL.md`, `skills/gastos/SKILL.md` e `skills/desenvolvimento/SKILL.md` guardam apenas procedimentos, não dados pessoais. `skills/INSTRUCTIONS.md` contém as instruções resumidas enviadas pelo servidor no `initialize`. A ferramenta de leitura `assistente_skill` retorna uma skill completa sob demanda.
+
+O script `scripts/sync-skills.mjs` gera `skills/catalog.js` diretamente do Markdown. O CI verifica sua sincronização. O suporte do cliente determina se as instruções MCP são incorporadas automaticamente ao contexto; não há garantia de carregamento de todos os Markdown em cada chamada.
 ## Fluxo MCP
 
 O catálogo local é a fonte de verdade das ferramentas publicadas. O Worker não descobre nem publica ferramentas remotas dinamicamente.
@@ -59,7 +64,7 @@ Operações que podem escrever não recebem retry automático. Se a chamada já 
 
 O Worker usa o **mesmo cliente MCP remoto**, passando `Authorization: Bearer <MCP_GITHUB_TOKEN>` somente ao GitHub e `X-MCP-Toolsets: context,repos,issues,pull_requests,actions`. O tráfego GitHub não passa pelo Cloudflare MCP. O endpoint GitHub não recebe o token Cloudflare nem o token OAuth do usuário.
 
-As ferramentas são declaradas localmente em `src/mcps/github/tools.js` (não são descobertas automaticamente). Nomes publicados recebem prefixo `mcp_github__`; leitura exige `mcp:read` e escrita exige também `mcp:write`. A conexão só é publicada quando URL e secret estão configurados. Nenhuma ferramenta aceita token, endpoint arbitrário ou SQL em seus parâmetros.
+As ferramentas são declaradas localmente em `mcps/github/tools.js` (não são descobertas automaticamente). Nomes publicados recebem prefixo `mcp_github__`; leitura exige `mcp:read` e escrita exige também `mcp:write`. A conexão só é publicada quando URL e secret estão configurados. Nenhuma ferramenta aceita token, endpoint arbitrário ou SQL em seus parâmetros.
 
 O GitHub MCP **não tem filtro hardcoded por repositório**. Os parâmetros `owner` e `repo` são fornecidos no pedido, e os direitos efetivos são os da credencial GitHub. A regra de trabalhar exclusivamente no repositório `joaoldsxyzbr/Assistente-mcps` aplica-se a este projeto, não ao MCP GitHub multi-projetos.
 
@@ -130,15 +135,15 @@ A configuração continua com `redact_query_string: true`, `invocation_logs: fal
 
 | Caminho | Responsabilidade |
 |---|---|
-| `src/host/config.js` | valida a configuração dos MCPs |
-| `src/host/remote-client.js` | cliente MCP remoto |
-| `src/host/worker.js` | Worker real: servidor MCP, roteamento e catálogo |
-| `src/mcps/cloudflare/` | contratos da integração Cloudflare |
-| `src/mcps/github/` | allowlist de ferramentas da integração GitHub oficial |
-| `src/mcps/ponto/` | ferramentas dedicadas de ponto que usam Cloudflare MCP |
-| `src/mcps/gastos/` | cinco ferramentas de gastos que usam Cloudflare MCP |
-| `src/shared/oauth-authorization.js` | página e fluxo HTTP de autorização |
-| `src/shared/oauth-mcp-worker.js` | OAuthProvider, escopos e proteção do endpoint MCP |
+| `server/config.js` | valida a configuração dos MCPs |
+| `server/remote-client.js` | cliente MCP remoto |
+| `server/worker.js` | Worker real: servidor MCP, roteamento e catálogo |
+| `mcps/cloudflare/` | contratos da integração Cloudflare |
+| `mcps/github/` | allowlist de ferramentas da integração GitHub oficial |
+| `mcps/ponto/` | ferramentas dedicadas de ponto que usam Cloudflare MCP |
+| `mcps/gastos/` | cinco ferramentas de gastos que usam Cloudflare MCP |
+| `server/shared/oauth-authorization.js` | página e fluxo HTTP de autorização |
+| `server/shared/oauth-mcp-worker.js` | OAuthProvider, escopos e proteção do endpoint MCP |
 | `tests/` | testes das regras puras e contratos |
 
 Não existe segunda implementação de host. Novas abstrações só entram quando houver necessidade concreta.

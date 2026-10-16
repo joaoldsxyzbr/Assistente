@@ -5,7 +5,7 @@ import {
   buildPontoRegistrarCode,
   buildPontoHojeCode,
   buildPontoResumoCode
-} from "../src/mcps/ponto/tools.js";
+} from "../mcps/ponto/tools.js";
 function fixture() {
   const db = new DatabaseSync(":memory:");
   db.exec(`
