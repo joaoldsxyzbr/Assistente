@@ -19,4 +19,4 @@ O Worker usa OAuth próprio na conexão com o ChatGPT e mantém um fluxo OAuth s
 
 A integração foi mesclada na `main` e a CI passou com provedores simulados e build dry-run. Isso não comprova consentimento OAuth nem chamadas reais aos provedores.
 
-A validação ponta a ponta depende da etapa do Worker: configurar credenciais, autorizar GitHub e Cloudflare no preview e testar chamadas somente de leitura, renovação e desconexão. Até essa etapa, a integração está implementada no código, mas não confirmada em execução real. Produção e D1 permanecem sem alteração.
+O Worker de produção já foi publicado e suas credenciais estão configuradas. A validação ponta a ponta depende de autorizar as contas GitHub/Cloudflare e confirmar leituras, renovação e revogação. Os testes de navegador simulam os provedores e não substituem o consentimento real. Os bancos D1 pessoais não são usados para escritas de teste. Veja AUDITORIA-2026-10-16.md.

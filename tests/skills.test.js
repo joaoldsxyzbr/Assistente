@@ -12,7 +12,7 @@ test("skills correspondem ao Markdown",async()=>{
  assert.equal(MCP_SERVER_INSTRUCTIONS,(await read("skills/INSTRUCTIONS.md")).trim());
 });
 test("worker publica duas skills, estado e quatro endpoints remotos",async()=>{
- const worker=await read("server/worker.js");
+ const worker=await read("server/mcp-server.js");
  assert.match(worker,/assistente_status/);
  assert.match(worker,/assistente_skill/);
  assert.match(worker,/registerRemoteTools/);

@@ -13,3 +13,4 @@ description: Instruções de gastos pelo MCP oficial Cloudflare, via Assistente 
 - Leitura não cria tabela. Criação de mês só no primeiro registro autorizado, após validar schema. Atualizações e exclusões devem verificar estado anterior e confirmar com `RETURNING`.
 - Após erro ou timeout de escrita, consultar antes de tentar novamente. Se as verificações não puderem ser garantidas no MCP oficial, **não grave**.
 - Esta skill não armazena transações, saldos ou credenciais.
+- Antes de escrever, consultar `EXECUCAO.md` com `assistente_skill` usando `nome: gastos` e `arquivo: EXECUCAO.md`; as referências são publicadas pelo próprio MCP.

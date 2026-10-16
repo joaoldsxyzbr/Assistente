@@ -1,4 +1,5 @@
 import { hasValidOAuthPassword } from "./shared/oauth-helpers.js";
+import { fetchUpstream } from "./shared/upstream-http.js";
 import { githubProvider } from "../mcps/github/index.js";
 import { cloudflareProvider } from "../mcps/cloudflare/index.js";
 
@@ -9,6 +10,7 @@ const PROVIDERS = Object.freeze({
 });
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
+const refreshFlights = new WeakMap();
 
 function base64url(bytes) {
   let raw = "";
@@ -44,13 +46,13 @@ function authorizationMetadataUrl(issuer) {
   return url.origin + "/.well-known/oauth-authorization-server" + suffix;
 }
 async function fetchJson(fetchFn, url, init = {}) {
-  const response = await fetchFn(url, { ...init, redirect: "manual" });
+  const response = await fetchUpstream(fetchFn, url, init);
   if (!response.ok) throw Error("OAUTH_HTTP_" + response.status);
   return response.json();
 }
 async function discover(provider, fetchFn) {
   const config = PROVIDERS[provider];
-  const probe = await fetchFn(config.endpoint, {
+  const probe = await fetchUpstream(fetchFn, config.endpoint, {
     method: "POST",
     redirect: "manual",
     headers: {
@@ -68,7 +70,6 @@ async function discover(provider, fetchFn) {
       }
     })
   });
-  if (probe.status >= 300 && probe.status < 400) throw Error("OAUTH_REDIRECT_REJECTED");
   const challenge = probe.headers.get("www-authenticate") ?? "";
   const marker = challenge.toLowerCase().indexOf("resource_metadata=");
   let metadataCandidate = null;
@@ -86,6 +87,7 @@ async function discover(provider, fetchFn) {
   const resource = await fetchJson(fetchFn, metadataUrl, { headers: { accept: "application/json" } });
   if (!Array.isArray(resource.authorization_servers) || resource.authorization_servers.length === 0) throw Error("AUTHORIZATION_SERVER_MISSING");
   const issuer = providerUrl(provider, resource.authorization_servers[0], "auth");
+  if (new URL(issuer).search) throw Error("OAUTH_ISSUER_INVALID");
   const metadata = await fetchJson(fetchFn, authorizationMetadataUrl(issuer), { headers: { accept: "application/json" } });
   for (const name of ["authorization_endpoint", "token_endpoint"]) {
     if (typeof metadata[name] !== "string") throw Error("OAUTH_METADATA_INCOMPLETE");
@@ -94,10 +96,13 @@ async function discover(provider, fetchFn) {
   for (const name of ["registration_endpoint", "revocation_endpoint"]) {
     if (metadata[name]) metadata[name] = providerUrl(provider, metadata[name], "auth");
   }
-  if (metadata.issuer && new URL(providerUrl(provider, metadata.issuer, "auth")).href !== issuer) throw Error("OAUTH_ISSUER_MISMATCH");
+  if (typeof metadata.issuer !== "string" || providerUrl(provider, metadata.issuer, "auth") !== issuer) throw Error("OAUTH_ISSUER_MISMATCH");
+  if (metadata.code_challenge_methods_supported && !metadata.code_challenge_methods_supported.includes("S256")) throw Error("OAUTH_PKCE_UNSUPPORTED");
+  const protectedResource = providerUrl(provider, resource.resource ?? config.endpoint, "resource");
+  if (protectedResource !== config.endpoint) throw Error("OAUTH_RESOURCE_MISMATCH");
   return {
     ...metadata,
-    resource: typeof resource.resource === "string" ? resource.resource : config.endpoint,
+    resource: protectedResource,
     scopes: Array.isArray(resource.scopes_supported) ? resource.scopes_supported : (metadata.scopes_supported ?? [])
   };
 }
@@ -164,17 +169,32 @@ async function clientOptions(env, provider, fetchFn) {
     callbackUrl: callbackUrl(env, provider)
   });
 }
-function form(provider, operation) {
+function form(provider, operation, message = "") {
   const label = PROVIDERS[provider].label;
   const button = operation === "start" ? "Autorizar" : "Desconectar";
   return "<!doctype html><html lang=\"pt-BR\"><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width\">" +
-    "<title>" + button + " " + label + "</title><main><h1>" + button + " " + label + "</h1>" +
+    "<title>" + button + " " + label + "</title><style>" +
+    "body{font:16px/1.5 system-ui,sans-serif;background:#f5f6f8;color:#17202a;margin:0;padding:24px;box-sizing:border-box}" +
+    "main{max-width:520px;margin:8vh auto;padding:28px;background:white;border:1px solid #dce1e6;border-radius:12px}" +
+    "h1{font-size:1.7rem;margin:0 0 16px}form{display:grid;gap:16px}label{display:grid;gap:8px}" +
+    "input,button{font:inherit;padding:12px;border:1px solid #aab4be;border-radius:6px;box-sizing:border-box;width:100%}" +
+    "button{background:#1649a0;color:white;cursor:pointer;font-weight:600}.error{color:#a32020}" +
+    "</style><main><h1>" + button + " " + label + "</h1>" +
     "<p>Esta autorização é independente do OAuth do ChatGPT e usa a conta atualmente conectada ao provedor.</p>" +
+    (message ? '<p class="error" role="alert">' + message + '</p>' : "") +
     "<form method=\"post\" action=\"/connections/" + provider + "/" + operation + "\">" +
     "<label>Senha do Assistente <input type=\"password\" name=\"password\" required autocomplete=\"current-password\"></label>" +
     "<button type=\"submit\">" + button + "</button></form></main></html>";
 }
-function html(body, status = 200) {
+function html(body, status = 200, formProvider) {
+  // Chromium checks the full POST redirect chain against the submitting page's CSP.
+  // Generate sources only from our static provider allowlist, never request input.
+  const config = PROVIDERS[formProvider];
+  const formSources = ["'self'"];
+  for (const host of config?.authHosts ?? []) {
+    formSources.push("https://" + host);
+    if (config.allowSubdomains) formSources.push("https://*." + host);
+  }
   return new Response(body, {
     status,
     headers: {
@@ -184,7 +204,7 @@ function html(body, status = 200) {
       "referrer-policy": "same-origin",
       "x-content-type-options": "nosniff",
       "x-frame-options": "DENY",
-      "content-security-policy": "default-src 'none'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
+      "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; form-action " + formSources.join(" ") + "; base-uri 'none'; frame-ancestors 'none'"
     }
   });
 }
@@ -230,27 +250,46 @@ async function start(provider, env, fetchFn) {
     token_endpoint_auth_method: config.token_endpoint_auth_method ?? "client_secret_post",
     token_endpoint: config.token_endpoint,
     revocation_endpoint: config.revocation_endpoint ?? null,
-    resource: config.resource
+    resource: config.resource,
+    issuer: config.issuer,
+    require_iss: config.authorization_response_iss_parameter_supported === true,
+    expires_at: Date.now() + 600000
   }, 600);
-  return Response.redirect(url.href, 302);
+  console.info("assistente_oauth_started", { provider, stage: "start", status: 303 });
+  return new Response(null, { status: 303, headers: { location: url.href, "cache-control": "no-store", "referrer-policy": "no-referrer" } });
 }
 function clientAuth(saved, body, headers) {
   body.set("client_id", saved.client_id);
   if (!saved.client_secret) return;
   if (saved.token_endpoint_auth_method === "client_secret_basic") {
-    const bytes = encoder.encode(saved.client_id + ":" + saved.client_secret);
+    const encode = value => new URLSearchParams({ value }).toString().slice("value=".length);
+    const bytes = encoder.encode(encode(saved.client_id) + ":" + encode(saved.client_secret));
     headers.set("authorization", "Basic " + btoa(String.fromCharCode(...bytes)));
   } else if (saved.token_endpoint_auth_method !== "none") {
     body.set("client_secret", saved.client_secret);
   }
 }
-async function exchange(env, provider, state, code, fetchFn) {
-  if (typeof state !== "string" || state.length > 128 || typeof code !== "string" || !code || code.length > 2048) {
+function validateToken(token) {
+  const errors = new Set(["invalid_request", "invalid_client", "invalid_grant", "unauthorized_client", "unsupported_grant_type", "invalid_scope", "bad_verification_code", "incorrect_client_credentials", "redirect_uri_mismatch"]);
+  if (errors.has(token?.error)) throw Error("OAUTH_" + token.error.toUpperCase());
+  if (typeof token?.access_token !== "string" || !token.access_token ||
+      (token.token_type !== undefined && (typeof token.token_type !== "string" || token.token_type.toLowerCase() !== "bearer"))) throw Error("OAUTH_TOKEN_INVALID");
+  return token;
+}
+async function exchange(env, provider, params, fetchFn) {
+  const state = params.get("state");
+  const code = params.get("code");
+  if (params.getAll("state").length !== 1 || params.getAll("code").length > 1 || params.getAll("iss").length > 1 || params.getAll("error").length > 1 ||
+      typeof state !== "string" || !state || state.length > 128) {
     return html("<h1>Estado OAuth inválido.</h1>", 400);
   }
   const saved = await readSealed(env, "state:" + state);
-  if (!saved || saved.provider !== provider) return html("<h1>Autorização expirada. Inicie uma nova conexão.</h1>", 400);
+  if (!saved || saved.provider !== provider || !saved.issuer || saved.expires_at <= Date.now()) return html("<h1>Autorização expirada. Inicie uma nova conexão.</h1>", 400);
+  const issuer = params.get("iss");
+  if ((saved.require_iss && !issuer) || (issuer && issuer !== saved.issuer)) throw Error("OAUTH_CALLBACK_ISSUER_MISMATCH");
   await storage(env).delete(PREFIX + "state:" + state);
+  if (params.has("error")) return html("<h1>Autorização recusada no provedor.</h1>", 400);
+  if (typeof code !== "string" || !code || code.length > 2048) return html("<h1>Código OAuth inválido. Inicie uma nova conexão.</h1>", 400);
   const body = new URLSearchParams({
     grant_type: "authorization_code",
     code,
@@ -263,13 +302,11 @@ async function exchange(env, provider, state, code, fetchFn) {
     accept: "application/json"
   });
   clientAuth(saved, body, headers);
-  const token = await fetchJson(fetchFn, saved.token_endpoint, {
+  const token = validateToken(await fetchJson(fetchFn, saved.token_endpoint, {
     method: "POST",
     headers,
     body: body.toString()
-  });
-  if (typeof token.access_token !== "string" || !token.access_token ||
-      (token.token_type && token.token_type.toLowerCase() !== "bearer")) throw Error("OAUTH_TOKEN_INVALID");
+  }));
   const identityValid = await PROVIDERS[provider].verifyIdentity?.({
     env,
     accessToken: token.access_token,
@@ -291,6 +328,7 @@ async function exchange(env, provider, state, code, fetchFn) {
     revocation_endpoint: saved.revocation_endpoint,
     resource: saved.resource
   });
+  console.info("assistente_oauth_connected", { provider, stage: "callback", status: 200 });
   return html("<!doctype html><html lang=\"pt-BR\"><meta charset=\"utf-8\"><h1>" +
     PROVIDERS[provider].label +
     " conectado.</h1><p>Volte ao ChatGPT e consulte o estado do Assistente MCPs.</p>");
@@ -310,12 +348,11 @@ async function refreshToken(env, current, fetchFn) {
   });
   clientAuth(current, body, headers);
   try {
-    const token = await fetchJson(fetchFn, current.token_endpoint, {
+    const token = validateToken(await fetchJson(fetchFn, current.token_endpoint, {
       method: "POST",
       headers,
       body: body.toString()
-    });
-    if (typeof token.access_token !== "string" || !token.access_token) return null;
+    }));
     const updated = {
       ...current,
       access_token: token.access_token,
@@ -335,7 +372,14 @@ async function tokenFor(env, provider, fetchFn) {
   const current = await readSealed(env, "token:" + provider);
   if (!current) return null;
   current.provider = provider;
-  return refreshToken(env, current, fetchFn);
+  const kv = storage(env);
+  if (!refreshFlights.has(kv)) refreshFlights.set(kv, new Map());
+  const flights = refreshFlights.get(kv);
+  if (!flights.has(provider)) {
+    const pending = refreshToken(env, current, fetchFn).finally(() => flights.delete(provider));
+    flights.set(provider, pending);
+  }
+  return flights.get(provider);
 }
 export async function getUpstreamAccessToken(env, provider, fetchFn = fetch) {
   if (!Object.hasOwn(PROVIDERS, provider)) return null;
@@ -351,7 +395,7 @@ export async function hasUpstreamConnection(env, provider) {
 async function revoke(provider, env, token, fetchFn) {
   try {
     const adapter = PROVIDERS[provider];
-    return adapter ? await adapter.revoke({ env, token, fetchFn, clientAuth }) : false;
+    return adapter ? await adapter.revoke({ env, token, fetchFn: (url, init) => fetchUpstream(fetchFn, url, init), clientAuth }) : false;
   } catch {
     return false;
   }
@@ -379,21 +423,20 @@ export async function handleUpstreamRoutes(request, env, fetchFn = fetch) {
   const operation = parts[3];
   if (operation === "callback") {
     if (request.method !== "GET") return new Response("Method not allowed", { status: 405, headers: { allow: "GET" } });
-    if (url.searchParams.has("error")) return html("<h1>Autorização recusada no provedor.</h1>", 400);
     try {
-      return await exchange(env, provider, url.searchParams.get("state"), url.searchParams.get("code"), fetchFn);
+      return await exchange(env, provider, url.searchParams, fetchFn);
     } catch (error) {
       logOAuthFailure(provider, "callback", error);
       return genericFailure();
     }
   }
-  if (request.method === "GET") return html(form(provider, operation));
+  if (request.method === "GET") return html(form(provider, operation), 200, provider);
   if (request.method !== "POST") return new Response("Method not allowed", { status: 405, headers: { allow: "GET, POST" } });
   if (!formOriginMatches(request, env)) return html("<h1>Origem inválida.</h1>", 403);
   try {
     const data = await request.formData();
     if (!hasValidOAuthPassword(env.ASSISTENTE_OAUTH_PASSWORD, data.get("password"))) {
-      return html("<h1>Senha incorreta ou OAuth não configurado.</h1>", 401);
+      return html(form(provider, operation, "Senha incorreta ou OAuth não configurado. Confira e tente novamente."), 401, provider);
     }
     if (operation === "disconnect") {
       const saved = await readSealed(env, "token:" + provider);

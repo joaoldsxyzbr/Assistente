@@ -25,7 +25,7 @@ async () => {
 const query=async(sql,params=[])=>{
   const resp=await cloudflare.request({method:"POST",path:"/accounts/"+accountId+"/d1/database/"+db+"/query",body:{sql,params}});
   const result=Array.isArray(resp.result)?resp.result[0]:undefined;
-  if(!result||result.success!==true||!Array.isArray(result.results))throw Error("D1_QUERY_FAILED");
+  if(resp.success!==true||!result||result.success!==true||!Array.isArray(result.results))throw Error("D1_QUERY_FAILED");
   return result.results;
 };
 const table=input.tabela;
@@ -49,8 +49,8 @@ const normalizedDescriptionSql=(()=>{
  for(const [upper,lower] of [["Á","á"],["À","à"],["Â","â"],["Ã","ã"],["É","é"],["Ê","ê"],["Í","í"],["Ó","ó"],["Ô","ô"],["Õ","õ"],["Ú","ú"],["Ü","ü"],["Ç","ç"]]) {
    expr="replace("+expr+",'"+upper+"','"+lower+"')";
  }
- for(const whitespace of ["\\u00a0","\\t","\\n","\\r"]) {
-   expr="replace("+expr+",'"+whitespace+"',' ')";
+ for(const codepoint of [160,9,10,13]) {
+   expr="replace("+expr+",char("+codepoint+"),' ')";
  }
  for(let i=0;i<8;i++)expr="replace("+expr+",'  ',' ')";
  return "trim("+expr+")";

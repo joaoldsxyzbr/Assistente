@@ -6,14 +6,15 @@ ChatGPT → Assistente MCPs (Worker Cloudflare) → MCPs GitHub e Cloudflare ofi
 
 ## Estado
 
-A integração está na `main`. O CI passou com testes simulados de OAuth, verificação das skills e build dry-run para produção e preview. O Worker encaminha ferramentas oficiais sem copiá-las ou redefini-las.
+O projeto está na `main` e o Worker está publicado em https://assistente.joaolds.xyz.br/mcp. O Worker encaminha ferramentas oficiais sem copiá-las ou redefini-las.
 
-A validação real de OAuth ainda depende da configuração e do consentimento dos provedores. O código foi integrado, mas a versão ativa de produção não foi promovida; produção e D1 permanecem sem alteração. As etapas para configurar e validar os provedores estão em docs/OAUTH-UPSTREAM.md.
+As credenciais de produção estão configuradas. A autorização das contas e a leitura real de cada MCP dependem do consentimento do operador; testes simulados não comprovam esse consentimento. Veja docs/OAUTH-UPSTREAM.md e docs/AUDITORIA-2026-10-16.md.
 
 ## Componentes
 
 - mcps/github/ e mcps/cloudflare/: configurações e etapas OAuth específicas de cada provedor.
-- server/worker.js: servidor MCP do Assistente, catálogo de skills e ferramentas proxy genéricas.
+- server/worker.js: entrada e configuração OAuth do Worker.
+- server/mcp-server.js: catálogo de skills e ferramentas proxy genéricas.
 - server/upstream-oauth.js: fluxo OAuth compartilhado, discovery, PKCE e tokens cifrados.
 - server/remote-client.js e server/remote-tools.js: cliente MCP HTTPS e encaminhamento dinâmico.
 - skills/: instruções em Markdown sincronizadas com o catálogo do Worker.
@@ -22,6 +23,9 @@ A validação real de OAuth ainda depende da configuração e do consentimento d
 ## Desenvolvimento
 
     npm ci
+    npx playwright install --with-deps chromium
     npm run check
+    npm run test:browser
+    npm run test:runtime
 
-O GitHub é a fonte de verdade deste projeto: joaoldsxyzbr/Assistente-mcps. O CI verifica sintaxe, sincronização de skills, testes e build dry-run. Testes de ponto/gastos nunca escrevem nos bancos D1 reais. A configuração inclui um alvo de preview isolado com KV próprio; OAuth real ainda depende de secrets e consentimento. Deploy de preview e promoção de produção são operações distintas.
+O GitHub é a fonte de verdade deste projeto: joaoldsxyzbr/Assistente-mcps. O CI verifica sintaxe, sincronização de skills, testes de protocolo/OAuth e navegador Chromium, além de build dry-run. Testes de ponto/gastos nunca escrevem nos bancos D1 reais. A configuração inclui um alvo de preview isolado com KV próprio; O preview precisa de suas próprias credenciais e consentimento. Deploy de preview e promoção de produção são operações distintas.

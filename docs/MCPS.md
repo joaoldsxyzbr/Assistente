@@ -22,4 +22,4 @@ O GitHub usa o OAuth App configurado para o projeto. A Cloudflare usa o fluxo of
 
 O código, os testes simulados e o build dry-run estão na `main`. Isso valida a implementação local, mas não comprova login ou chamadas reais aos provedores.
 
-A validação real exige configurar o Worker e suas credenciais OAuth, autorizar GitHub e Cloudflare e testar leituras no ambiente isolado de preview. Essa etapa foi adiada; não promova produção nem faça escritas de teste nos bancos D1.
+O Worker de produção está publicado e suas credenciais configuradas. Ainda é necessário concluir o consentimento GitHub/Cloudflare e confirmar leituras reais. O preview tem KV e credenciais próprios. Os testes automatizados incluem protocolo MCP, referências das skills e clique em Chromium com provedores simulados; não fazem escritas nos bancos D1 pessoais.

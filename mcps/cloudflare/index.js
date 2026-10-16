@@ -6,6 +6,7 @@ async function clientOptions({ env, metadata, fetchJson, readSealed, writeSealed
   let client = await readSealed(env, "client:cloudflare");
   if (!metadata.registration_endpoint) throw Error("CLOUDFLARE_DCR_UNAVAILABLE");
   if (!client || client.registration_endpoint !== metadata.registration_endpoint ||
+      client.issuer !== metadata.issuer || client.redirect_uri !== callbackUrl ||
       (client.client_secret_expires_at && client.client_secret_expires_at * 1000 < Date.now())) {
     const registered = await fetchJson(metadata.registration_endpoint, {
       method: "POST",
@@ -15,6 +16,7 @@ async function clientOptions({ env, metadata, fetchJson, readSealed, writeSealed
         redirect_uris: [callbackUrl],
         grant_types: ["authorization_code", "refresh_token"],
         response_types: ["code"],
+        application_type: "web",
         token_endpoint_auth_method: "none"
       })
     });
@@ -24,6 +26,8 @@ async function clientOptions({ env, metadata, fetchJson, readSealed, writeSealed
       client_secret: registered.client_secret ?? "",
       token_endpoint_auth_method: registered.token_endpoint_auth_method ?? "none",
       registration_endpoint: metadata.registration_endpoint,
+      issuer: metadata.issuer,
+      redirect_uri: callbackUrl,
       client_secret_expires_at: registered.client_secret_expires_at ?? 0
     };
     await writeSealed(env, "client:cloudflare", client);
@@ -31,7 +35,7 @@ async function clientOptions({ env, metadata, fetchJson, readSealed, writeSealed
   return {
     ...metadata,
     ...client,
-    scope: splitScopes(env.CLOUDFLARE_OAUTH_SCOPES)
+    scope: splitScopes(env.CLOUDFLARE_OAUTH_SCOPES || ["offline_access", ...(metadata.scopes ?? [])].join(" "))
   };
 }
 

@@ -13,15 +13,20 @@
     "check": "npm run syntax && npm run skills:check && npm test && npm run build:workers",
     "skills:sync": "node scripts/sync-skills.mjs",
     "skills:check": "node scripts/sync-skills.mjs --check",
-    "deploy:preview": "wrangler deploy --config wrangler.assistente.jsonc --env preview"
+    "deploy:preview": "wrangler deploy --config wrangler.assistente.jsonc --env preview",
+    "test:browser": "node --test tests/browser/*.test.js",
+    "test:runtime": "node --test tests/runtime/*.test.js"
   },
   "dependencies": {
     "@cloudflare/workers-oauth-provider": "^1.2.3",
-    "@modelcontextprotocol/client": "^2.0.0",
-    "@modelcontextprotocol/server": "^2.0.0",
-    "agents": "^0.26.0"
+    "@modelcontextprotocol/client": "^2.3.1",
+    "@modelcontextprotocol/server": "^2.3.1",
+    "agents": "^0.28.1"
   },
   "devDependencies": {
-    "wrangler": "^4.0.0"
+    "esbuild": "0.28.2",
+    "miniflare": "5.20261012.1-beta",
+    "playwright": "1.64.1",
+    "wrangler": "^4.151.1"
   }
 }

@@ -11,5 +11,5 @@ description: Instruções de controle de ponto pelo MCP oficial Cloudflare, via 
 - `ponto hoje`, `ponto ontem`, `ponto DD/MM/AAAA`: consultar a view `banco_horas` na data de America/Sao_Paulo.
 - `ponto de DD/MM/AAAA até DD/MM/AAAA`: consultar até 93 dias por vez. `ponto resumo`: consultar a view `resumo`.
 - `ponto` isolado: se houver controles funcionais, mostrar horário de Brasília com botões ±1 minuto e registrar somente após clique; caso contrário solicitar horário.
-- Antes de escrever, conferir banco, data, horário e ordem. Usar SQL parametrizado com `ON CONFLICT` e `RETURNING`, conforme lógica validada no histórico do repositório. Após timeout, consultar antes de repetir.
+- Antes de escrever, ler `SQL.md` com `assistente_skill` usando `nome: ponto` e `arquivo: SQL.md`; conferir banco, data, horário e ordem. Usar as consultas parametrizadas com `ON CONFLICT` e `RETURNING`. Após timeout, consultar antes de repetir.
 - Esta skill guarda apenas instruções, nunca batidas ou credenciais.

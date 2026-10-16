@@ -2,6 +2,7 @@ import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/cli
 import { getUpstreamAccessToken } from "./upstream-oauth.js";
 import { githubProvider } from "../mcps/github/index.js";
 import { cloudflareProvider } from "../mcps/cloudflare/index.js";
+import { fetchUpstream } from "./shared/upstream-http.js";
 
 const PROVIDERS = Object.freeze({
   github: githubProvider,
@@ -20,7 +21,8 @@ export async function readRemoteConfiguration(env, id) {
 export async function withRemoteClient(config, fn) {
   const client = new Client({ name: "assistente-hub", version: "1.1.0" });
   const transport = new StreamableHTTPClientTransport(new URL(config.endpoint), {
-    requestInit: { headers: { authorization: "Bearer " + config.token } }
+    requestInit: { redirect: "manual", headers: { authorization: "Bearer " + config.token } },
+    fetch: (url, init) => fetchUpstream(fetch, url, init, init?.method === "DELETE" ? 5000 : 45000)
   });
   try {
     await client.connect(transport, { timeout: 15000 });

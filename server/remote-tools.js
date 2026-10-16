@@ -6,15 +6,10 @@ function fail(message) {
   return { isError: true, content: [{ type: "text", text: message }] };
 }
 export function safeResult(response) {
-  const content = (response.content ?? [])
-    .filter(item => item && item.type === "text" && typeof item.text === "string")
-    .map(item => ({ type: "text", text: item.text.slice(0, 200000) }));
-  const result = { isError: response.isError ?? false, content };
-  if (response.structuredContent !== undefined) {
-    const serialized = JSON.stringify(response.structuredContent);
-    if (serialized.length <= 200000) result.structuredContent = response.structuredContent;
-    else result.content.push({ type: "text", text: serialized.slice(0, 200000) });
-  }
+  // The official client already validates MCP content. Preserve its types and JSON.
+  const result = { isError: response.isError ?? false, content: response.content ?? [] };
+  if (response.structuredContent !== undefined) result.structuredContent = response.structuredContent;
+  if (response._meta !== undefined) result._meta = response._meta;
   return result;
 }
 export function registerRemoteTools(server, env, fromJsonSchema, securitySchemes) {
@@ -27,8 +22,8 @@ export function registerRemoteTools(server, env, fromJsonSchema, securitySchemes
       const config = await readRemoteConfiguration(env, provider);
       if (!config) return fail("OAuth upstream não conectado para " + provider + ". Consulte assistente_status.");
       try {
-        const value = await withRemoteClient(config, client => client.listTools());
-        return { content: [{ type: "text", text: JSON.stringify(value.tools).slice(0, 200000) }] };
+        const value = await withRemoteClient(config, client => client.listTools(undefined, { timeout: 15000 }));
+        return { content: [{ type: "text", text: JSON.stringify(value.tools) }] };
       } catch {
         return fail("Não foi possível consultar o MCP oficial " + provider + ". Verifique a conexão OAuth.");
       }
@@ -50,7 +45,7 @@ export function registerRemoteTools(server, env, fromJsonSchema, securitySchemes
       if (!config) return fail("OAuth upstream não conectado para " + provider + ". Consulte assistente_status.");
       try {
         return await withRemoteClient(config, async client => {
-          const tools = (await client.listTools()).tools;
+          const tools = (await client.listTools(undefined, { timeout: 15000 })).tools;
           if (!tools.some(tool => tool.name === name)) return fail("A ferramenta não foi publicada pelo MCP oficial.");
           return safeResult(await client.callTool({ name, arguments: args }, { timeout: 45000 }));
         });
