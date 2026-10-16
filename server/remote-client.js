@@ -1,25 +1,24 @@
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
+import { getUpstreamAccessToken } from "./upstream-oauth.js";
 
 const HOSTS = Object.freeze({
-  github: "https://api.githubcopilot.com/mcp/",
+  github: "https://api.githubcopilot.com/mcp/x/all",
   cloudflare: "https://mcp.cloudflare.com/mcp"
 });
-const GITHUB_TOOLSETS = "context,repos,issues,pull_requests,actions";
-export function endpointFor(id) { return HOSTS[id] ?? null; }
-export function readRemoteConfiguration(env, id) {
+export function endpointFor(id) {
+  return HOSTS[id] ?? null;
+}
+export async function readRemoteConfiguration(env, id) {
   const endpoint = endpointFor(id);
   if (!endpoint) throw Error("UNKNOWN_PROVIDER");
-  const token = id === "github" ? env.GITHUB_OAUTH_ACCESS_TOKEN : env.CLOUDFLARE_OAUTH_ACCESS_TOKEN;
-  if (typeof token !== "string" || token.trim().length === 0) return null;
-  return { id, endpoint, token: token.trim() };
+  const token = await getUpstreamAccessToken(env, id);
+  if (!token) return null;
+  return { id, endpoint, token };
 }
 export async function withRemoteClient(config, fn) {
-  const client = new Client({ name: "assistente-hub", version: "1.0.0" });
+  const client = new Client({ name: "assistente-hub", version: "1.1.0" });
   const transport = new StreamableHTTPClientTransport(new URL(config.endpoint), {
-    requestInit: { headers: {
-      Authorization: "Bearer " + config.token,
-      ...(config.id === "github" ? { "X-MCP-Toolsets": GITHUB_TOOLSETS } : {})
-    }}
+    requestInit: { headers: { authorization: "Bearer " + config.token } }
   });
   try {
     await client.connect(transport, { timeout: 15000 });

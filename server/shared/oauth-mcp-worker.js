@@ -10,9 +10,9 @@ import {
   requiredOAuthScopesForToolCall
 } from "./oauth-helpers.js";
 import { audit } from "./audit.js";
-import {
-  handleAuthorizeRequest
-} from "./oauth-authorization.js";
+import { handleAuthorizeRequest } from "./oauth-authorization.js";
+import { handleUpstreamRoutes } from "../upstream-oauth.js";
+
 function createOAuthMcpWorker(options) {
   const writeToolNames = new Set(options.writeToolNames);
   const apiHandler = {
@@ -20,7 +20,7 @@ function createOAuthMcpWorker(options) {
       const traceId = crypto.randomUUID();
       const startedAt = Date.now();
       const auth = context.auth;
-      if (auth === void 0) {
+      if (auth === undefined) {
         audit("warn", "mcp_authentication_denied", { status: 401, traceId });
         return new Response("Unauthorized", {
           status: 401,
@@ -58,8 +58,9 @@ function createOAuthMcpWorker(options) {
     }
   };
   const defaultHandler = {
-    fetch(request, environment) {
-      return handleAuthorizeRequest(request, environment);
+    async fetch(request, environment) {
+      const upstream = await handleUpstreamRoutes(request, environment);
+      return upstream ?? handleAuthorizeRequest(request, environment);
     }
   };
   const provider = new OAuthProvider({
@@ -79,7 +80,7 @@ function createOAuthMcpWorker(options) {
     },
     clientIdMetadataDocumentEnabled: true,
     onError({ code, status, internal }) {
-      const category = internal === void 0 ? "provider_error" : `${internal.category}.${internal.reason}`;
+      const category = internal === undefined ? "provider_error" : internal.category + "." + internal.reason;
       console.warn(JSON.stringify({
         event: "oauth_provider_failure",
         stage: "oauth_provider",
@@ -91,6 +92,4 @@ function createOAuthMcpWorker(options) {
   });
   return provider;
 }
-export {
-  createOAuthMcpWorker
-};
+export { createOAuthMcpWorker };
