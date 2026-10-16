@@ -1,19 +1,25 @@
-# Conexões MCP oficiais
+# MCPs do Assistente
 
-O Assistente é um Worker MCP hospedado na Cloudflare que disponibiliza apenas as skills `ponto`, `gastos` e `desenvolvimento` por `assistente_skill`.
+## Arquitetura
 
-- **Assistente MCPs**: `https://assistente.joaolds.xyz.br/mcp` — OAuth próprio, armazenamento `OAUTH_KV` e senha `ASSISTENTE_OAUTH_PASSWORD`; publica só `assistente_status` e `assistente_skill`.
-- **GitHub oficial**: conexão direta no ChatGPT por OAuth; executar operações de GitHub nele, não pelo Worker.
-- **Cloudflare oficial**: conexão direta no ChatGPT por OAuth; executar consultas e escritas D1 nele, não pelo Worker.
+O ChatGPT conecta-se a um único servidor MCP: o Worker Assistente MCPs. Esse Worker oferece as skills locais e encaminha as chamadas aos MCPs oficiais do GitHub e da Cloudflare.
 
-A autenticação de cada MCP é independente. O OAuth do Assistente não fornece acesso delegado aos MCPs oficiais. Não precisa configurar `MCP_GITHUB_TOKEN` nem `MCP_CLOUDFLARE_TOKEN` no novo Worker, embora possam existir em versões antigas da produção até sua limpeza operacional.
+`ChatGPT → Assistente MCPs (Worker) → MCP oficial GitHub / MCP oficial Cloudflare + skills`
 
-## Teste seguro
+- **GitHub**: `mcps/github/` configura o endpoint oficial, os domínios permitidos e o OAuth específico do provedor.
+- **Cloudflare**: `mcps/cloudflare/` configura o endpoint oficial, os domínios permitidos e o OAuth específico do provedor.
+- **Skills locais**: `skills/` contém Ponto, Gastos e Desenvolvimento. Ponto e Gastos usam as ferramentas do MCP Cloudflare conforme suas instruções.
 
-1. Autorize as três conexões no ChatGPT.
-2. Peça `assistente_status` e `assistente_skill` para ponto e gastos.
-3. Consulte ponto e gastos em modo somente leitura pelo Cloudflare oficial e confira os IDs D1 antes de operar.
-4. Faça escrita somente quando houver um lançamento real solicitado. Conciliar antes de repetir timeout.
-5. Confira o build GitHub e Cloudflare; `versions upload` não promove produção.
+O Worker descobre as ferramentas remotas e as encaminha. Ele não duplica as ferramentas oficiais.
 
-Arquivos Markdown no Worker são enviados por ferramenta de leitura e não geram chamadas automaticamente. A conexão do ChatGPT deve disponibilizar os MCPs oficiais ao lado do Assistente.
+## Autenticação
+
+Há dois trechos OAuth independentes: ChatGPT → Assistente MCPs e Assistente MCPs → cada provedor. O token do ChatGPT não é repassado ao GitHub nem à Cloudflare. O Worker guarda tokens dos provedores cifrados no KV.
+
+O GitHub usa o OAuth App configurado para o projeto. A Cloudflare usa o fluxo oficial de OAuth com registro dinâmico de cliente. As permissões efetivas continuam limitadas ao consentimento dado em cada provedor.
+
+## Estado e validação
+
+O código, os testes simulados e o build dry-run estão na `main`. Isso valida a implementação local, mas não comprova login ou chamadas reais aos provedores.
+
+A validação real exige configurar o Worker e suas credenciais OAuth, autorizar GitHub e Cloudflare e testar leituras no ambiente isolado de preview. Essa etapa foi adiada; não promova produção nem faça escritas de teste nos bancos D1.
