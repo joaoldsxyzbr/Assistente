@@ -1,5 +1,7 @@
-# Migração OAuth oficial (proposta)
+# Migração para OAuth oficial
 
-A arquitetura de destino e a sequência segura de migração estão em [docs/MIGRACAO-OAUTH-OFICIAL.md](docs/MIGRACAO-OAUTH-OFICIAL.md).
+A arquitetura-alvo corrigida está em [docs/MIGRACAO-OAUTH-OFICIAL.md](docs/MIGRACAO-OAUTH-OFICIAL.md).
 
-**Importante:** os MCPs oficiais GitHub/Cloudflare devem ser conectados diretamente no ChatGPT. O Worker próprio continuará existindo para ponto e gastos; os bindings D1 nativos serão adotados antes de remover o token Cloudflare. Esta branch ainda **não** removeu secrets nem alterou a implantação atual.
+**Ponto e gastos são apenas skills.** O ChatGPT usa o MCP oficial Cloudflare com OAuth para acessar os dois D1. O GitHub também usa o MCP oficial diretamente. Nenhum Worker ou binding D1 personalizado faz parte da arquitetura-alvo.
+
+A implementação legada não foi removida; a transição só pode ser concluída quando conexões, skills e comandos estiverem validados.
