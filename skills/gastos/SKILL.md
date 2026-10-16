@@ -1,31 +1,15 @@
 ---
 name: gastos
-description: Procedimentos de gastos, contas e lançamentos no Assistente MCPs
+description: Instruções de gastos via MCP oficial Cloudflare OAuth
 ---
 
 # Gastos
 
-## Banco D1 canônico
-
-- Banco de gastos: `GASTOS_D1_DATABASE_ID` = `0c6c31c2-f2fd-4f60-9c75-b232019ae63f`.
-- O valor de referência está em `wrangler.assistente.jsonc`; as ferramentas `gastos_*` devem usar exclusivamente esse banco, resolvido e validado pelo servidor.
-- Este ID identifica o destino, **não** é credencial nem autorização para usar SQL genérico.
-- Em alterações excepcionais via Cloudflare, confirme o ID efetivo do banco antes de qualquer escrita. Se a configuração ou o banco identificado divergirem, **não grave**; investigue primeiro. Nunca direcione gastos ao D1 de ponto.
-
-## Comandos e período
-
-- Use `gastos_resumo` para totais mensais e pendências e `gastos_listar` para procurar lançamentos/IDs.
-- Use `gastos_registrar`, `gastos_atualizar` e `gastos_excluir` somente para ações solicitadas. Não substitua as ferramentas dedicadas por SQL.
-- Sem referência de período, **o padrão é o próximo mês**, calculado em `America/Sao_Paulo`. Mês ou ano especificado pelo usuário prevalece.
-- Pedido isolado `gasto`: mostre um formulário funcional, se disponível, com tipo, descrição, valor, categoria opcional, status e período; só grave após confirmar. Pedido completo como `gasto internet 89,90` pode executar diretamente quando inequívoco.
-
-## Integridade financeira
-
-- Valores monetários positivos, finitos, com até duas casas decimais; aceitar vírgula decimal brasileira sem inventar arredondamento.
-- Novo lançamento é saída/pendente, salvo informação explícita em contrário; não confunda entrada com saída nem pago com pendente.
-- Editar ou excluir por descrição exige correspondência inequívoca, preferindo ID; se várias linhas coincidirem, peça identificação.
-- Não force lançamentos duplicados; uma segunda transação idêntica exige confirmação explícita. Após timeout/incerteza, consulte `gastos_listar` antes de repetir escrita.
-- No resumo, separe total, saldo e pendências conforme retorno real. Orçamento, conta bancária, recorrência e parcelas não são presumidos.
-- Esta skill é apenas um procedimento. Não guarde gastos, valores, contas, saldos ou dados pessoais em arquivos.
-
-- Escritas concorrentes de valores/descrições equivalentes são bloqueadas por verificação atômica; o esquema de novos meses é obtido do mês cronologicamente mais recente.
+- Banco canônico: `GASTOS_D1_DATABASE_ID` = `0c6c31c2-f2fd-4f60-9c75-b232019ae63f`. Se divergente, **não grave**. Nunca utilizar o D1 de ponto.
+- Executor: **MCP oficial Cloudflare** conectado diretamente ao ChatGPT via OAuth. Esta skill contém somente procedimentos, não ferramentas próprias.
+- `gastos resumo` e `gastos listar`: consultar registros e totais de `movimentacoes_MM_AAAA`. Padrão: **próximo mês** em America/Sao_Paulo; período explícito prevalece.
+- `gasto descrição valor`: registrar saída pendente por padrão. `gastos atualizar` e `gastos excluir`: exigir pedido e registro inequívoco.
+- Valor armazenado em TEXT: converter BRL válido para centavos inteiros, sem `SUM(valor)` sem validação. Proteger contra duplicatas.
+- Leitura não cria tabela. Criação de mês só no primeiro registro autorizado, após validar schema. Atualizações e exclusões devem verificar estado anterior e confirmar com `RETURNING`.
+- Após erro ou timeout de escrita, consultar antes de tentar novamente. Se as verificações não puderem ser garantidas no MCP oficial, **não grave**.
+- Esta skill não armazena transações, saldos ou credenciais.
