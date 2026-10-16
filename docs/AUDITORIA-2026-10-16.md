@@ -60,3 +60,18 @@ npm audit
 - Cloudflare MCP: https://github.com/cloudflare/mcp
 - SDK MCP OAuth: https://github.com/modelcontextprotocol/typescript-sdk/blob/main/docs/clients/oauth.md
 - Advisory SDK MCP corrigido: https://github.com/advisories/GHSA-6qxp-vccf-f47h
+
+## Incidente posterior: HTTP 429 na descoberta GitHub
+
+A tentativa às 19:39 de 16/10/2026 gerou o evento real `assistente_oauth_failure`, `provider=github`, `stage=start`, `code=OAUTH_HTTP_429`. O erro ocorreu antes de abrir o consentimento, durante a consulta de metadados. Os logs daquela versão não distinguiam qual dos dois documentos retornou 429. Portanto, os testes anteriores e a correção da CSP não comprovavam a conclusão do OAuth real.
+
+Correções adicionais:
+
+- Cache de discovery validado e vinculado ao endpoint: fresco por uma hora; tolerância de até 24 horas para último documento válido somente em 429, 5xx ou timeout. Não esconder erros de domínio/issuer/PKCE nem 4xx de autorização.
+- Respeitar `Retry-After`, inclusive datas HTTP, e impedir nova consulta antes do prazo quando não há cache utilizável.
+- Agrupar consultas simultâneas no mesmo isolate; identificar cliente por User-Agent.
+- Verificar discovery público no GET do formulário, antes de solicitar senha.
+- Mostrar HTTP 429 e espera explícitos, com código seguro de diagnóstico, em vez de erro genérico. Logs identificam a etapa sem URL, senha, client secret ou tokens.
+- Seis testes adicionais cobrem início com cache sem rede, cache anterior durante 429, primeira consulta limitada, prazo absoluto, rejeição de cache/endpoints não confiáveis e concorrência. Total após esta correção: 57 testes Node, quatro Chromium e um Workerd.
+
+Os metadados oficiais também foram consultados de verdade a partir do ambiente de desenvolvimento: desafio MCP 401 esperado, resource metadata 200 e authorization server metadata 200. Isso confirma os documentos públicos; não comprova o comportamento da saída de rede do Worker nem o consentimento da conta.

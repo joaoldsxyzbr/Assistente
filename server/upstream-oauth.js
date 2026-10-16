@@ -6,11 +6,14 @@ import { cloudflareProvider } from "../mcps/cloudflare/index.js";
 const PREFIX = "assistente:upstream:v2:";
 const PROVIDERS = Object.freeze({
   github: githubProvider,
-  cloudflare: cloudflareProvider
+  cloudflare: cloudflareProvider,
 });
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 const refreshFlights = new WeakMap();
+const discoveryFlights = new WeakMap();
+const DISCOVERY_FRESH_MS = 60 * 60 * 1000;
+const DISCOVERY_STALE_MS = 24 * 60 * 60 * 1000;
 
 function base64url(bytes) {
   let raw = "";
@@ -45,9 +48,40 @@ function authorizationMetadataUrl(issuer) {
   const suffix = url.pathname.endsWith("/") ? url.pathname.slice(0, -1) : url.pathname;
   return url.origin + "/.well-known/oauth-authorization-server" + suffix;
 }
-async function fetchJson(fetchFn, url, init = {}) {
-  const response = await fetchUpstream(fetchFn, url, init);
-  if (!response.ok) throw Error("OAUTH_HTTP_" + response.status);
+function retrySeconds(response) {
+  const value = response.headers.get("retry-after");
+  const seconds =
+    value && /^\d+$/.test(value)
+      ? Number(value)
+      : Math.ceil((Date.parse(value) - Date.now()) / 1000);
+  return Number.isFinite(seconds) && seconds > 0
+    ? Math.min(seconds, 86400)
+    : 60;
+}
+function httpFailure(response, endpointKind) {
+  const error = Error("OAUTH_HTTP_" + response.status);
+  error.httpStatus = response.status;
+  error.endpointKind = endpointKind;
+  if (response.status === 429) error.retryAfter = retrySeconds(response);
+  return error;
+}
+async function fetchJson(
+  fetchFn,
+  url,
+  init = {},
+  endpointKind = "provider_api",
+) {
+  const headers = new Headers(init.headers);
+  if (!headers.has("user-agent"))
+    headers.set("user-agent", "assistente-mcps/1.2");
+  let response;
+  try {
+    response = await fetchUpstream(fetchFn, url, { ...init, headers });
+  } catch (error) {
+    error.endpointKind = endpointKind;
+    throw error;
+  }
+  if (!response.ok) throw httpFailure(response, endpointKind);
   return response.json();
 }
 async function discover(provider, fetchFn) {
@@ -56,8 +90,9 @@ async function discover(provider, fetchFn) {
     method: "POST",
     redirect: "manual",
     headers: {
+      "user-agent": "assistente-mcps/1.2",
       accept: "application/json, text/event-stream",
-      "content-type": "application/json"
+      "content-type": "application/json",
     },
     body: JSON.stringify({
       jsonrpc: "2.0",
@@ -66,15 +101,19 @@ async function discover(provider, fetchFn) {
       params: {
         protocolVersion: "2025-06-18",
         capabilities: {},
-        clientInfo: { name: "assistente-mcps", version: "1.0.0" }
-      }
-    })
+        clientInfo: { name: "assistente-mcps", version: "1.0.0" },
+      },
+    }),
   });
+  if (probe.status === 429 || probe.status >= 500)
+    throw httpFailure(probe, "resource_challenge");
   const challenge = probe.headers.get("www-authenticate") ?? "";
   const marker = challenge.toLowerCase().indexOf("resource_metadata=");
   let metadataCandidate = null;
   if (marker >= 0) {
-    const value = challenge.slice(marker + "resource_metadata=".length).trimStart();
+    const value = challenge
+      .slice(marker + "resource_metadata=".length)
+      .trimStart();
     if (value.startsWith('"')) {
       const closingQuote = value.indexOf('"', 1);
       if (closingQuote > 1) metadataCandidate = value.slice(1, closingQuote);
@@ -82,30 +121,194 @@ async function discover(provider, fetchFn) {
       metadataCandidate = value.split(",")[0].trim().split(" ")[0];
     }
   }
-  const metadataUrl = providerUrl(provider, metadataCandidate ?? resourceMetadataUrl(config.endpoint), "resource");
-  if (probe.status !== 401 && probe.status !== 403 && !metadataCandidate) throw Error("OAUTH_CHALLENGE_MISSING");
-  const resource = await fetchJson(fetchFn, metadataUrl, { headers: { accept: "application/json" } });
-  if (!Array.isArray(resource.authorization_servers) || resource.authorization_servers.length === 0) throw Error("AUTHORIZATION_SERVER_MISSING");
-  const issuer = providerUrl(provider, resource.authorization_servers[0], "auth");
+  const metadataUrl = providerUrl(
+    provider,
+    metadataCandidate ?? resourceMetadataUrl(config.endpoint),
+    "resource",
+  );
+  if (probe.status !== 401 && probe.status !== 403 && !metadataCandidate)
+    throw Error("OAUTH_CHALLENGE_MISSING");
+  const resource = await fetchJson(
+    fetchFn,
+    metadataUrl,
+    { headers: { accept: "application/json" } },
+    "resource_metadata",
+  );
+  if (
+    !Array.isArray(resource.authorization_servers) ||
+    resource.authorization_servers.length === 0
+  )
+    throw Error("AUTHORIZATION_SERVER_MISSING");
+  const issuer = providerUrl(
+    provider,
+    resource.authorization_servers[0],
+    "auth",
+  );
   if (new URL(issuer).search) throw Error("OAUTH_ISSUER_INVALID");
-  const metadata = await fetchJson(fetchFn, authorizationMetadataUrl(issuer), { headers: { accept: "application/json" } });
-  for (const name of ["authorization_endpoint", "token_endpoint"]) {
-    if (typeof metadata[name] !== "string") throw Error("OAUTH_METADATA_INCOMPLETE");
-    metadata[name] = providerUrl(provider, metadata[name], "auth");
-  }
-  for (const name of ["registration_endpoint", "revocation_endpoint"]) {
-    if (metadata[name]) metadata[name] = providerUrl(provider, metadata[name], "auth");
-  }
-  if (typeof metadata.issuer !== "string" || providerUrl(provider, metadata.issuer, "auth") !== issuer) throw Error("OAUTH_ISSUER_MISMATCH");
-  if (metadata.code_challenge_methods_supported && !metadata.code_challenge_methods_supported.includes("S256")) throw Error("OAUTH_PKCE_UNSUPPORTED");
-  const protectedResource = providerUrl(provider, resource.resource ?? config.endpoint, "resource");
-  if (protectedResource !== config.endpoint) throw Error("OAUTH_RESOURCE_MISMATCH");
-  return {
+  const metadata = await fetchJson(
+    fetchFn,
+    authorizationMetadataUrl(issuer),
+    { headers: { accept: "application/json" } },
+    "authorization_metadata",
+  );
+  if (
+    typeof metadata.issuer !== "string" ||
+    providerUrl(provider, metadata.issuer, "auth") !== issuer
+  )
+    throw Error("OAUTH_ISSUER_MISMATCH");
+  return validateDiscovery(provider, {
     ...metadata,
-    resource: protectedResource,
-    scopes: Array.isArray(resource.scopes_supported) ? resource.scopes_supported : (metadata.scopes_supported ?? [])
-  };
+    resource: resource.resource ?? config.endpoint,
+    scopes: Array.isArray(resource.scopes_supported)
+      ? resource.scopes_supported
+      : (metadata.scopes_supported ?? []),
+  });
 }
+function validateDiscovery(provider, candidate) {
+  if (!candidate || typeof candidate !== "object" || Array.isArray(candidate))
+    throw Error("OAUTH_METADATA_INCOMPLETE");
+  const metadata = structuredClone(candidate);
+  const config = PROVIDERS[provider];
+  for (const name of ["authorization_endpoint", "token_endpoint", "issuer"]) {
+    if (typeof metadata[name] !== "string")
+      throw Error("OAUTH_METADATA_INCOMPLETE");
+    providerUrl(provider, metadata[name], "auth");
+  }
+  if (new URL(metadata.issuer).search) throw Error("OAUTH_ISSUER_INVALID");
+  for (const name of ["registration_endpoint", "revocation_endpoint"]) {
+    if (metadata[name]) providerUrl(provider, metadata[name], "auth");
+  }
+  if (
+    metadata.code_challenge_methods_supported &&
+    !metadata.code_challenge_methods_supported.includes("S256")
+  )
+    throw Error("OAUTH_PKCE_UNSUPPORTED");
+  if (providerUrl(provider, metadata.resource, "resource") !== config.endpoint)
+    throw Error("OAUTH_RESOURCE_MISMATCH");
+  return metadata;
+}
+export function upstreamDiscoveryCacheKey(provider) {
+  if (!Object.hasOwn(PROVIDERS, provider)) throw Error("UNKNOWN_PROVIDER");
+  return "assistente:discovery:v1:" + provider;
+}
+async function cachedDiscovery(env, provider, fetchFn) {
+  const key = upstreamDiscoveryCacheKey(provider);
+  const kv = storage(env);
+  let cached;
+  let cooldown;
+  try {
+    const raw = await kv.get(key);
+    const value = raw ? JSON.parse(raw) : null;
+    const age = Date.now() - value?.fetchedAt;
+    if (
+      value?.endpoint === PROVIDERS[provider].endpoint &&
+      value?.error?.status === 429 &&
+      value.retryAt > Date.now()
+    )
+      cooldown = value;
+    if (
+      value?.endpoint === PROVIDERS[provider].endpoint &&
+      Number.isFinite(age) &&
+      age >= 0 &&
+      age < DISCOVERY_STALE_MS
+    ) {
+      cached = {
+        ...value,
+        metadata: validateDiscovery(provider, value.metadata),
+        age,
+      };
+    }
+  } catch {
+    // Invalid or unavailable caches cannot bypass live discovery validation.
+  }
+  if (
+    cached &&
+    (cached.age < DISCOVERY_FRESH_MS || cached.retryAt > Date.now())
+  )
+    return cached.metadata;
+  if (cooldown)
+    throw httpFailure(
+      new Response(null, {
+        status: 429,
+        headers: {
+          "retry-after": String(
+            Math.ceil((cooldown.retryAt - Date.now()) / 1000),
+          ),
+        },
+      }),
+      cooldown.error.endpointKind,
+    );
+  try {
+    const metadata = await discover(provider, fetchFn);
+    const record = {
+      endpoint: PROVIDERS[provider].endpoint,
+      fetchedAt: Date.now(),
+      metadata,
+    };
+    try {
+      await kv.put(key, JSON.stringify(record), {
+        expirationTtl: DISCOVERY_STALE_MS / 1000,
+      });
+    } catch {}
+    return metadata;
+  } catch (error) {
+    const transient =
+      error.httpStatus === 429 ||
+      error.httpStatus >= 500 ||
+      error.message === "UPSTREAM_REQUEST_TIMEOUT";
+    if (!cached || !transient) {
+      if (!cached && error.httpStatus === 429) {
+        const record = {
+          endpoint: PROVIDERS[provider].endpoint,
+          retryAt: Date.now() + error.retryAfter * 1000,
+          error: { status: 429, endpointKind: error.endpointKind },
+        };
+        try {
+          await kv.put(key, JSON.stringify(record), {
+            expirationTtl: Math.max(60, error.retryAfter),
+          });
+        } catch {}
+      }
+      throw error;
+    }
+    console.warn("assistente_oauth_discovery_cached", {
+      provider,
+      code: safeOAuthErrorCode(error),
+      endpointKind: error.endpointKind ?? "discovery",
+    });
+    if (error.httpStatus === 429) {
+      const record = {
+        endpoint: cached.endpoint,
+        fetchedAt: cached.fetchedAt,
+        metadata: cached.metadata,
+        retryAt: Date.now() + error.retryAfter * 1000,
+      };
+      const ttl = Math.max(
+        60,
+        Math.ceil((DISCOVERY_STALE_MS - cached.age) / 1000),
+      );
+      try {
+        await kv.put(key, JSON.stringify(record), { expirationTtl: ttl });
+      } catch {}
+    }
+    return cached.metadata;
+  }
+}
+export async function getUpstreamMetadata(env, provider, fetchFn = fetch) {
+  upstreamDiscoveryCacheKey(provider);
+  const kv = storage(env);
+  if (!discoveryFlights.has(kv)) discoveryFlights.set(kv, new Map());
+  const flights = discoveryFlights.get(kv);
+  if (!flights.has(provider))
+    flights.set(
+      provider,
+      cachedDiscovery(env, provider, fetchFn).finally(() =>
+        flights.delete(provider),
+      ),
+    );
+  return flights.get(provider);
+}
+
 function publicOrigin(env) {
   const value = env.PUBLIC_ORIGIN || "https://assistente.joaolds.xyz.br";
   const url = new URL(value);
@@ -157,7 +360,7 @@ async function writeSealed(env, key, value, ttl) {
   );
 }
 async function clientOptions(env, provider, fetchFn) {
-  const metadata = await discover(provider, fetchFn);
+  const metadata = await getUpstreamMetadata(env, provider, fetchFn);
   const adapter = PROVIDERS[provider];
   return adapter.clientOptions({
     env,
@@ -166,7 +369,7 @@ async function clientOptions(env, provider, fetchFn) {
     fetchFn,
     readSealed,
     writeSealed,
-    callbackUrl: callbackUrl(env, provider)
+    callbackUrl: callbackUrl(env, provider),
   });
 }
 function form(provider, operation, message = "") {
@@ -208,8 +411,30 @@ function html(body, status = 200, formProvider) {
     }
   });
 }
-function genericFailure() {
-  return html("<!doctype html><html lang=\"pt-BR\"><meta charset=\"utf-8\"><h1>Não foi possível concluir o OAuth</h1><p>Confira a configuração, autorizações e callback do provedor. Nenhum segredo foi exibido.</p>", 503);
+function genericFailure(error, provider) {
+  const rateLimited = error?.httpStatus === 429;
+  const code = safeOAuthErrorCode(error);
+  const response = html(
+    '<!doctype html><html lang="pt-BR"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><h1>' +
+      (rateLimited
+        ? "O provedor limitou temporariamente as consultas"
+        : "Não foi possível concluir o OAuth") +
+      "</h1><p>" +
+      (rateLimited
+        ? "Aguarde " +
+          error.retryAfter +
+          " segundos antes de tentar novamente. Sua senha não foi enviada ao provedor."
+        : "Confira a configuração e o callback do provedor.") +
+      "</p><p>Código de diagnóstico: <code>" +
+      code +
+      '</code>.</p><p><a href="/connections/' +
+      provider +
+      '/start">Iniciar nova autorização</a></p>',
+    rateLimited ? 429 : 503,
+  );
+  if (rateLimited)
+    response.headers.set("retry-after", String(error.retryAfter));
+  return response;
 }
 
 function safeOAuthErrorCode(error) {
@@ -220,12 +445,26 @@ function safeOAuthErrorCode(error) {
 }
 
 function logOAuthFailure(provider, stage, error) {
-  const safeNames = new Set(["Error", "TypeError", "SyntaxError", "OperationError", "DataError"]);
+  const safeNames = new Set([
+    "Error",
+    "TypeError",
+    "SyntaxError",
+    "OperationError",
+    "DataError",
+  ]);
   console.error("assistente_oauth_failure", {
     provider,
     stage,
     code: safeOAuthErrorCode(error),
-    errorType: safeNames.has(error?.name) ? error.name : "Error"
+    endpointKind: [
+      "resource_challenge",
+      "resource_metadata",
+      "authorization_metadata",
+      "provider_api",
+    ].includes(error?.endpointKind)
+      ? error.endpointKind
+      : "local",
+    errorType: safeNames.has(error?.name) ? error.name : "Error",
   });
 }
 async function start(provider, env, fetchFn) {
@@ -416,41 +655,81 @@ function formOriginMatches(request, env) {
 export async function handleUpstreamRoutes(request, env, fetchFn = fetch) {
   const url = new URL(request.url);
   const parts = url.pathname.split("/");
-  if (parts.length !== 4 || parts[1] !== "connections" ||
-      !Object.hasOwn(PROVIDERS, parts[2]) ||
-      !["start", "callback", "disconnect"].includes(parts[3])) return undefined;
+  if (
+    parts.length !== 4 ||
+    parts[1] !== "connections" ||
+    !Object.hasOwn(PROVIDERS, parts[2]) ||
+    !["start", "callback", "disconnect"].includes(parts[3])
+  )
+    return undefined;
   const provider = parts[2];
   const operation = parts[3];
   if (operation === "callback") {
-    if (request.method !== "GET") return new Response("Method not allowed", { status: 405, headers: { allow: "GET" } });
+    if (request.method !== "GET")
+      return new Response("Method not allowed", {
+        status: 405,
+        headers: { allow: "GET" },
+      });
     try {
       return await exchange(env, provider, url.searchParams, fetchFn);
     } catch (error) {
       logOAuthFailure(provider, "callback", error);
-      return genericFailure();
+      return genericFailure(error, provider);
     }
   }
-  if (request.method === "GET") return html(form(provider, operation), 200, provider);
-  if (request.method !== "POST") return new Response("Method not allowed", { status: 405, headers: { allow: "GET, POST" } });
-  if (!formOriginMatches(request, env)) return html("<h1>Origem inválida.</h1>", 403);
+  if (request.method === "GET") {
+    try {
+      // Check only public discovery documents, never client registration or tokens.
+      if (operation === "start")
+        await getUpstreamMetadata(env, provider, fetchFn);
+      return html(form(provider, operation), 200, provider);
+    } catch (error) {
+      logOAuthFailure(provider, "discovery", error);
+      return genericFailure(error, provider);
+    }
+  }
+  if (request.method !== "POST")
+    return new Response("Method not allowed", {
+      status: 405,
+      headers: { allow: "GET, POST" },
+    });
+  if (!formOriginMatches(request, env))
+    return html("<h1>Origem inválida.</h1>", 403);
   try {
     const data = await request.formData();
-    if (!hasValidOAuthPassword(env.ASSISTENTE_OAUTH_PASSWORD, data.get("password"))) {
-      return html(form(provider, operation, "Senha incorreta ou OAuth não configurado. Confira e tente novamente."), 401, provider);
+    if (
+      !hasValidOAuthPassword(
+        env.ASSISTENTE_OAUTH_PASSWORD,
+        data.get("password"),
+      )
+    ) {
+      return html(
+        form(
+          provider,
+          operation,
+          "Senha incorreta ou OAuth não configurado. Confira e tente novamente.",
+        ),
+        401,
+        provider,
+      );
     }
     if (operation === "disconnect") {
       const saved = await readSealed(env, "token:" + provider);
-      const revoked = saved ? await revoke(provider, env, saved, fetchFn) : true;
+      const revoked = saved
+        ? await revoke(provider, env, saved, fetchFn)
+        : true;
       await storage(env).delete(PREFIX + "token:" + provider);
-      return html("<h1>Conexão local removida.</h1><p>" +
-        (revoked
-          ? "O provedor confirmou a revogação."
-          : "A revogação remota não foi confirmada; revogue o acesso nas configurações da conta do provedor.") +
-        "</p>");
+      return html(
+        "<h1>Conexão local removida.</h1><p>" +
+          (revoked
+            ? "O provedor confirmou a revogação."
+            : "A revogação remota não foi confirmada; revogue o acesso nas configurações da conta do provedor.") +
+          "</p>",
+      );
     }
     return await start(provider, env, fetchFn);
   } catch (error) {
     logOAuthFailure(provider, operation, error);
-    return genericFailure();
+    return genericFailure(error, provider);
   }
 }

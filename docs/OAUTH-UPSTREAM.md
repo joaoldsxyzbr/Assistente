@@ -56,6 +56,10 @@ Os links de consentimento upstream são https://assistente-preview.contato-24f.w
 - Abra novamente o link de autorização após atualizações; uma página já aberta conserva a CSP antiga. No consentimento oficial, confira conta e permissões antes de aceitar.
 - A CSP dos formulários permite o próprio Worker e os hosts oficiais do respectivo provedor. O POST responde 303 para abrir o provedor por GET; a senha não integra a URL nem o corpo enviado ao provedor.
 - Logs `assistente_oauth_started`, `assistente_oauth_connected` e `assistente_oauth_failure` registram somente provedor, etapa, status/código seguro e tipo de erro. Não registrar URL com query, corpo, código OAuth ou token.
+- Antes de exibir o formulário de autorização, o GET verifica apenas os metadados públicos do provedor; ele não registra clientes nem emite tokens.
+- Discovery é compartilhado por chamadas simultâneas no mesmo isolate e guardado no KV por endpoint: uma hora de validade normal, com uso da última versão validada por no máximo 24 horas apenas em HTTP 429, HTTP 5xx ou timeout. Recursos, issuer, hosts oficiais e PKCE continuam validados em leituras do cache. Erros de segurança ou HTTP 4xx diferentes de 429 não aceitam fallback.
+- HTTP 429 respeita `Retry-After`; sem cache utilizável, o formulário informa o limite e a espera, e consultas prematuras não refazem a chamada. O diagnóstico registra a etapa (`resource_challenge`, `resource_metadata`, `authorization_metadata` ou `provider_api`) sem URL ou valores sensíveis.
+- O cache discovery contém apenas documentos públicos. Tokens, estados e credenciais DCR permanecem cifrados separadamente.
 - Requisições OAuth têm timeout de 15 segundos; transporte MCP tem timeout e rejeita redirecionamentos para não encaminhar credenciais a outro destino.
 - `assistente_status` indica disponibilidade local do token (`verification: stored_token`); ele não comprova permissões remotas. Confirme com uma leitura real de cada MCP.
 
