@@ -56,7 +56,7 @@ com autenticação OAuth.
 
 ## Desenvolvimento
 
-**Compatibilidade com as instruções gerais:** o projeto ainda utiliza arquivos TypeScript (`.ts`), fora das linguagens de programação atualmente permitidas. A migração para JavaScript deve ser planejada e validada separadamente, sem alterar a arquitetura Cloudflare/MCP/OAuth e sem misturar com a desativação do Penpot.
+**Stack atual:** JavaScript nativo (ES Modules), Node.js e Cloudflare Workers. Sem TypeScript, React, Vite ou framework de frontend; SDKs oficiais para os protocolos MCP/OAuth.
 
 Requisitos:
 - Node.js 24 ou superior;
@@ -81,7 +81,7 @@ Isso cria uma versão sem trocar o tráfego automaticamente. Depois do CI verde 
 
 ## GitHub MCP oficial
 
-O Assistente conecta o GitHub **por MCP remoto**, sem chamadas diretas à API GitHub, usando apenas ferramentas locais aprovadas em `src/mcps/github/tools.ts`. O servidor oficial recebe o header `X-MCP-Toolsets: context,repos,issues,pull_requests,actions`; a allowlist do Assistente publica apenas um subconjunto estável (leitura e escrita). [Documentação oficial](https://github.com/github/github-mcp-server/blob/main/docs/remote-server.md).
+O Assistente conecta o GitHub **por MCP remoto**, sem chamadas diretas à API GitHub, usando apenas ferramentas locais aprovadas em `src/mcps/github/tools.js`. O servidor oficial recebe o header `X-MCP-Toolsets: context,repos,issues,pull_requests,actions`; a allowlist do Assistente publica apenas um subconjunto estável (leitura e escrita). [Documentação oficial](https://github.com/github/github-mcp-server/blob/main/docs/remote-server.md).
 
 **Nenhum repositório é fixado no código**. Em cada chamada, `owner` e `repo` são passados conforme a tarefa. O acesso real aos repositórios é limitado **pelas permissões do token GitHub**, não pela configuração do MCP. As regras deste projeto exigem trabalhar somente em `joaoldsxyzbr/Assistente-mcps` quando a tarefa for sobre este repositório.
 
