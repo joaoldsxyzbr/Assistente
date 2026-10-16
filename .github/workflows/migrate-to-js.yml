@@ -1,0 +1,28 @@
+name: One-time native JavaScript migration
+on:
+  push:
+    branches: [feat/javascript-nativo]
+permissions:
+  contents: write
+jobs:
+  migrate:
+    if: github.actor == 'joaoldsxyzbr'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - run: npm ci --no-audit --no-fund
+      - run: node scripts/migrate-to-js.mjs
+      - run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - run: npm ci --no-audit --no-fund
+      - run: npm run check
+      - name: Commit migrated JavaScript source
+        run: |
+          rm scripts/migrate-to-js.mjs .github/workflows/migrate-to-js.yml
+          git add -A
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "refactor: migrate MCP hub to native JavaScript"
+          git push origin HEAD:feat/javascript-nativo
