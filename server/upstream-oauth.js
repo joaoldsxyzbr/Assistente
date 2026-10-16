@@ -255,7 +255,7 @@ async function exchange(env, provider, state, code, fetchFn) {
   const identityValid = await PROVIDERS[provider].verifyIdentity?.({
     env,
     accessToken: token.access_token,
-    fetchJson,
+    fetchJson: (url, init) => fetchJson(fetchFn, url, init),
     fetchFn
   });
   if (identityValid === false) {
