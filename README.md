@@ -1,6 +1,6 @@
 # Assistente
 
-O **Assistente** é o hub MCP do plugin **Assistente Geral**. O plugin cuida das skills e regras de conversa; este repositório mantém um único Worker que autentica o ChatGPT e encaminha somente as ferramentas MCP declaradas localmente.
+O **Assistente MCPs** é um hub independente conectado diretamente ao ChatGPT. Este repositório mantém um único Worker que autentica o cliente e encaminha somente as ferramentas MCP declaradas localmente. A futura incorporação de instruções operacionais de ponto, gastos e desenvolvimento não depende do plugin Assistente.
 
 ## Arquitetura
 
@@ -11,7 +11,7 @@ O escopo ativo é exclusivamente **Cloudflare, GitHub, ponto e gastos**. A integ
 - **1 endpoint MCP:** `https://assistente.joaolds.xyz.br/mcp`.
 - **1 módulo por MCP/domínio:** `src/mcps/<nome>`.
 - **Allowlist local:** configurar um MCP não publica ferramentas automaticamente.
-- **Assistente Geral:** usa o app **Assistente MCPs** como sua conexão MCP; não depende diretamente do app Cloudflare.
+- **ChatGPT:** usa diretamente o **Assistente MCPs**, sem exigir o plugin Assistente.
 - **Cloudflare MCP:** integração genérica atrás do hub, com `docs`, `search` e `execute`.
 - **GitHub MCP oficial:** integração remota via PAT separado, com ferramentas de repositório, branches, arquivos, issues, PRs e Actions; **sem restringir o MCP a um repositório fixo**.
 - **Controle de ponto:** ferramentas locais `ponto_registrar`, `ponto_hoje` e `ponto_resumo` usam somente o Cloudflare MCP para consultar/escrever no D1; o Worker não possui binding D1.
@@ -56,6 +56,8 @@ com autenticação OAuth.
 
 ## Desenvolvimento
 
+**Compatibilidade com as instruções gerais:** o projeto ainda utiliza arquivos TypeScript (`.ts`), fora das linguagens de programação atualmente permitidas. A migração para JavaScript deve ser planejada e validada separadamente, sem alterar a arquitetura Cloudflare/MCP/OAuth e sem misturar com a desativação do Penpot.
+
 Requisitos:
 - Node.js 24 ou superior;
 - npm.
@@ -81,7 +83,7 @@ Isso cria uma versão sem trocar o tráfego automaticamente. Depois do CI verde 
 
 O Assistente conecta o GitHub **por MCP remoto**, sem chamadas diretas à API GitHub, usando apenas ferramentas locais aprovadas em `src/mcps/github/tools.ts`. O servidor oficial recebe o header `X-MCP-Toolsets: context,repos,issues,pull_requests,actions`; a allowlist do Assistente publica apenas um subconjunto estável (leitura e escrita). [Documentação oficial](https://github.com/github/github-mcp-server/blob/main/docs/remote-server.md).
 
-**Nenhum repositório é fixado no código**. Em cada chamada, `owner` e `repo` são passados conforme a tarefa. O acesso real aos repositórios é limitado **pelas permissões do token GitHub**, não pela configuração do MCP. As regras deste projeto continuam exigindo trabalhar somente em `joaoldsxyzbr/Assistente` quando a tarefa for sobre este repositório.
+**Nenhum repositório é fixado no código**. Em cada chamada, `owner` e `repo` são passados conforme a tarefa. O acesso real aos repositórios é limitado **pelas permissões do token GitHub**, não pela configuração do MCP. As regras deste projeto exigem trabalhar somente em `joaoldsxyzbr/Assistente-mcps` quando a tarefa for sobre este repositório.
 
 Para ativar:
 1. Crie um **Personal Access Token (fine-grained)** no GitHub para os repositórios que desejar conectar (seleção ampla ou todos os repositórios da conta, se necessário), com permissões proporcionais às operações desejadas: Contents, Issues, Pull requests e Actions.
@@ -101,7 +103,7 @@ Sem secret, o GitHub permanece inativo e não interfere no Cloudflare nem nas fe
 
 ## Controle de gastos (ferramentas dedicadas)
 
-O **Assistente Geral** usa cinco ferramentas do **Assistente MCPs**: `gastos_resumo`, `gastos_listar`, `gastos_registrar`, `gastos_atualizar` e `gastos_excluir`. O período omitido é **o próximo mês** em `America/Sao_Paulo`; `periodo: "MM/AAAA"` prevalece. Não existe binding D1 no Worker: o caminho permanece `Assistente Geral → Assistente MCPs → Cloudflare MCP → D1`.
+O **Assistente MCPs** oferece cinco ferramentas dedicadas: `gastos_resumo`, `gastos_listar`, `gastos_registrar`, `gastos_atualizar` e `gastos_excluir`. O período omitido é **o próximo mês** em `America/Sao_Paulo`; `periodo: "MM/AAAA"` prevalece. Não existe binding D1 no Worker: o caminho é `ChatGPT → Assistente MCPs → Cloudflare MCP → D1`.
 
 - Consulta não cria tabelas. Somente registro autorizado de um novo mês copia um schema mensal existente, sem copiar dados.
 - Valores TEXT são interpretados em centavos inteiros com validação rigorosa, nunca somados via `SUM(valor)`. Registros com valor inválido impedem confirmação de totais.
@@ -109,13 +111,13 @@ O **Assistente Geral** usa cinco ferramentas do **Assistente MCPs**: `gastos_res
 - O status de lançamento novo é `pendente`, salvo pedido explícito de pago. Não há recorrência automática nem migração de dados.
 - `GASTOS_D1_DATABASE_ID` está no Wrangler; testes de escrita usam **somente SQLite em memória**, não valores pessoais.
 
-O especialista **Assistente Pessoal** deve usar diretamente essas ferramentas em pedidos rotineiros; o executor genérico fica reservado às exceções.
+Em pedidos rotineiros, o cliente deve usar diretamente essas ferramentas; o executor genérico fica reservado às exceções autorizadas.
 
 ## Checks de PR e Deploy
 
 O **CI do GitHub** valida `npm run check`. **Workers Builds** é um check externo independente e requer seu próprio token de build válido. O deploy da branch `main` faz upload de uma versão, mas **não promove automaticamente** o tráfego; valide a versão ativa e faça a promoção separadamente quando solicitada.
 
-O projeto configura **dois triggers Cloudflare Builds separados**, vinculados exclusivamente ao repositório `joaoldsxyzbr/Assistente` e com token de build de usuário válido: **produção** para `main` (com `npx wrangler versions upload --config wrangler.assistente.jsonc`) e **prévia** para `*` exceto `main` (com `npx wrangler preview --config wrangler.assistente.jsonc`). A prévia não deve promover tráfego da produção nem acessar D1 real. Os triggers e seus tokens são geridos no painel/API Cloudflare, **nunca em código ou secrets do GitHub**.
+Os triggers Cloudflare Builds devem ser conferidos no painel para apontar exclusivamente ao repositório `joaoldsxyzbr/Assistente-mcps`, com token de build válido: **produção** para `main` (com `npx wrangler versions upload --config wrangler.assistente.jsonc`) e **prévia** para `*` exceto `main` (com `npx wrangler preview --config wrangler.assistente.jsonc`). A prévia não deve promover tráfego da produção nem acessar D1 real. Os triggers e seus tokens são geridos no painel/API Cloudflare, **nunca em código ou secrets do GitHub**.
 
 O bloco `previews: {}` em `wrangler.assistente.jsonc` ativa o build de prévia **isolado e sem bindings/variáveis/secrets de produção**. Isto valida o empacotamento e a publicação de Preview, **não** o login OAuth nem funções que dependam de KV, Cloudflare/GitHub ou D1: tais testes exigiriam recursos e secrets *exclusivamente de desenvolvimento* e autorização própria. Não apontar `previews.kv_namespaces` ao `OAUTH_KV` real nem fornecer secrets reais de produção.
 
@@ -129,14 +131,3 @@ As conexões remotas têm limite de 15 segundos para conectar e 45 segundos por 
 
 Os testes automatizados cobrem timeouts, classificação de falhas e exigência de escopos em operações de leitura e escrita. Um login OAuth totalmente novo e sua renovação no ChatGPT continuam exigindo validação interativa; os testes de código não a substituem.
 
-## Penpot MCP remoto
-
-A integração com o [Penpot MCP oficial](https://help.penpot.app/mcp/) utiliza o mesmo Worker e o cliente MCP HTTP existente; não exige VPS, Docker ou outro Worker.
-
-- Módulo: `src/mcps/penpot/tools.ts`. Ferramentas publicadas (com secret): `mcp_penpot__high_level_overview`, `mcp_penpot__penpot_api_info`, `mcp_penpot__execute_code` e `mcp_penpot__export_shape`.
-- URL oficial fixa em `MCP_PENPOT_URL=https://design.penpot.app/mcp/stream`; a chave deve ser cadastrada **somente** no Worker como secret `MCP_PENPOT_TOKEN`. Use apenas o valor da chave, sem `?userToken=` ou URL completa.
-- O Penpot usa `userToken` na query da conexão ao upstream. O Worker adiciona o parâmetro em memória e **não encaminha o OAuth do ChatGPT**, não usa Bearer para Penpot nem coloca o token em arquivos, respostas de status e logs.
-- `execute_code` é classificado integralmente como **escrita** (`mcp:write`), inclusive quando usado para consulta, pois scripts arbitrários podem alterar ou excluir designs; **nunca** interprete script arbitrário como comprovadamente somente leitura. Outras três ferramentas são leitura.
-- No Penpot: **Your account → Integrations → MCP Server → Enable** e gere a chave. Abra o arquivo e selecione **MCP → Connect**. Se tiver várias abas conectadas, informe `sessionId` para as ferramentas pertinentes. Aba suspensa/desconectada impede execuções.
-- Validação após configurar o secret e promover uma versão: `assistente_status` deve mostrar Penpot `CONFIGURED`; chame `mcp_penpot__high_level_overview` e depois teste um `execute_code` de **consulta** com o arquivo aberto, sem fazer escrita real em produção. Sem secret, a integração fica indisponível sem afetar os outros MCPs.
-- Após merge, o Workers Builds pode fazer **versions upload**, mas promoção para tráfego ativo é separada. Preview não herda secrets. A chave **não** deve ser enviada no chat ou adicionada ao GitHub.

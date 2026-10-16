@@ -12,7 +12,7 @@ export const MCP_CONNECT_TIMEOUT_MS = 15_000;
 export const MCP_TOOL_TIMEOUT_MS = 45_000;
 
 export function remoteMcpHeaders(configuration: ConfiguredMcpServer): Record<string, string> {
-  return configuration.id === "penpot" ? {} : {
+  return {
     Authorization: `Bearer ${configuration.bearerToken}`,
     ...(configuration.id === "github"
       ? { "X-MCP-Toolsets": GITHUB_REMOTE_TOOLSETS }
@@ -20,14 +20,6 @@ export function remoteMcpHeaders(configuration: ConfiguredMcpServer): Record<str
   };
 }
 
-/** The hosted Penpot MCP authenticates by userToken in the URL, not a Bearer header. */
-export function remoteMcpUrl(configuration: ConfiguredMcpServer): URL {
-  const url = new URL(configuration.endpoint);
-  if (configuration.id === "penpot") {
-    url.searchParams.set("userToken", configuration.bearerToken);
-  }
-  return url;
-}
 
 export class RemoteMcpClient {
   readonly #client: Client;
@@ -36,7 +28,7 @@ export class RemoteMcpClient {
   constructor(configuration: ConfiguredMcpServer) {
     this.#client = new Client({ name: "assistente-host", version: "0.1.0" });
     this.#transport = new StreamableHTTPClientTransport(
-      remoteMcpUrl(configuration),
+      new URL(configuration.endpoint),
       {
         requestInit: {
           headers: remoteMcpHeaders(configuration),

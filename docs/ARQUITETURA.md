@@ -2,7 +2,7 @@
 
 ## Objetivo
 
-Este repositório implementa o hub MCP do plugin Assistente Geral. O plugin mantém skills e regras conversacionais; o Worker `assistente` autentica o ChatGPT, publica uma allowlist de ferramentas e encaminha cada chamada ao MCP de destino.
+Este repositório implementa o hub independente Assistente MCPs. O Worker `assistente` autentica o ChatGPT, publica uma allowlist de ferramentas e encaminha cada chamada ao MCP de destino. A migração seletiva das instruções de ponto, gastos e desenvolvimento será feita sem depender do antigo plugin Assistente.
 
 A regra estrutural é simples: **um Worker, um endpoint MCP e um módulo local por integração ou domínio**.
 
@@ -10,7 +10,7 @@ A regra estrutural é simples: **um Worker, um endpoint MCP e um módulo local p
 
 | Camada | Responsabilidade |
 |---|---|
-| Assistente Geral | Skills, regras de domínio, interpretação da intenção e apresentação dos resultados |
+| ChatGPT | Interpretação do pedido e apresentação dos resultados; instruções do MCP conforme suporte do cliente |
 | Worker `assistente` | OAuth, catálogo allowlist, escopos, ferramentas locais e roteamento MCP |
 | `src/mcps/<nome>/` | Contratos e lógica fixa das ferramentas aprovadas |
 | MCP de destino | Execução técnica e aplicação das permissões do token de serviço |
@@ -41,16 +41,16 @@ Para ponto:
 
 `ponto_registrar` usa escrita atômica no D1: segunda a sexta preenche `entrada → ida_intervalo → volta_intervalo → saida`; sábado preenche somente `entrada → saida`. `ponto_hoje` consulta a view `banco_horas`; `ponto_resumo` consulta a view `resumo`.
 
-### Contrato com o Assistente Geral
+### Contrato operacional para o ChatGPT
 
-No fluxo atual do plugin, o roteamento rotineiro de ponto é direto:
+O roteamento rotineiro de ponto é direto:
 - `ponto HHMM` ou `ponto HH:MM` → `ponto_registrar`;
 - `ponto hoje` → `ponto_hoje`;
 - `ponto resumo` → `ponto_resumo`.
 
 Esses três pedidos não usam planilha, memória nem o executor genérico antes da ferramenta dedicada. Em resultado incerto de escrita, a skill reconcilia com `ponto_hoje` e não repete `ponto_registrar` cegamente. Correções, exclusões e consultas de datas específicas continuam podendo usar `mcp_cloudflare__execute`, mas somente através do Assistente MCPs e sempre contra o D1 canônico de ponto.
 
-Gastos dispõe de `gastos_resumo`, `gastos_listar`, `gastos_registrar`, `gastos_atualizar` e `gastos_excluir`. A skill financeira usa essas operações dedicadas para o fluxo comum. Todas chamam o D1 canônico via Assistente MCPs → Cloudflare MCP; o executor genérico fica restrito a exceções autorizadas. O período padrão é o próximo mês em `America/Sao_Paulo`.
+Gastos dispõe de `gastos_resumo`, `gastos_listar`, `gastos_registrar`, `gastos_atualizar` e `gastos_excluir`. O cliente deve usar essas operações dedicadas para o fluxo comum. Todas chamam o D1 canônico via Assistente MCPs → Cloudflare MCP; o executor genérico fica restrito a exceções autorizadas. O período padrão é o próximo mês em `America/Sao_Paulo`.
 
 Operações que podem escrever não recebem retry automático. Se a chamada já começou e falha, o resultado é tratado como potencialmente incerto.
 
@@ -61,7 +61,7 @@ O Worker usa o **mesmo cliente MCP remoto**, passando `Authorization: Bearer <MC
 
 As ferramentas são declaradas localmente em `src/mcps/github/tools.ts` (não são descobertas automaticamente). Nomes publicados recebem prefixo `mcp_github__`; leitura exige `mcp:read` e escrita exige também `mcp:write`. A conexão só é publicada quando URL e secret estão configurados. Nenhuma ferramenta aceita token, endpoint arbitrário ou SQL em seus parâmetros.
 
-O GitHub MCP **não tem filtro hardcoded por repositório**. Os parâmetros `owner` e `repo` são fornecidos no pedido, e os direitos efetivos são os da credencial GitHub. A regra de trabalhar exclusivamente no repositório `joaoldsxyzbr/Assistente` aplica-se a este projeto, não ao MCP multi-projetos.
+O GitHub MCP **não tem filtro hardcoded por repositório**. Os parâmetros `owner` e `repo` são fornecidos no pedido, e os direitos efetivos são os da credencial GitHub. A regra de trabalhar exclusivamente no repositório `joaoldsxyzbr/Assistente-mcps` aplica-se a este projeto, não ao MCP GitHub multi-projetos.
 
 Para conectar, crie PAT com escopo por repositórios conforme sua necessidade e permissões mínimas para as operações que efetivamente serão feitas; armazene-o somente como **secret `MCP_GITHUB_TOKEN`** do Worker. Testar primeiro com `mcp_github__get_me`, sem operações de escrita. Consulte [documentação oficial GitHub MCP](https://github.com/github/github-mcp-server/blob/main/docs/server-configuration.md).
 
@@ -151,7 +151,7 @@ O CI de PR continua validando typecheck, testes unitários/de banco sintético e
 
 ### Gastos — cinco ferramentas dedicadas
 
-O Worker expõe `gastos_resumo` e `gastos_listar` (somente leitura), além de `gastos_registrar`, `gastos_atualizar` e `gastos_excluir` (escopo de escrita). A configuração `GASTOS_D1_DATABASE_ID` aponta para o D1 já usado pelo controle financeiro. O fluxo é `@Assistente Geral → Assistente MCPs → Cloudflare MCP → D1`, sem binding direto do D1 e sem banco paralelo.
+O Worker expõe `gastos_resumo` e `gastos_listar` (somente leitura), além de `gastos_registrar`, `gastos_atualizar` e `gastos_excluir` (escopo de escrita). A configuração `GASTOS_D1_DATABASE_ID` aponta para o D1 já usado pelo controle financeiro. O fluxo é `ChatGPT → Assistente MCPs → Cloudflare MCP → D1`, sem binding direto do D1 e sem banco paralelo.
 
 Sem período explícito, todas as ferramentas usam o **mês seguinte** (timezone America/Sao_Paulo). Os identificadores `movimentacoes_MM_AAAA` são validados e nunca aceitos como SQL livre. A coluna `valor` continua TEXT: o parse estrito converte para centavos inteiros; valores inválidos tornam os totais não confirmáveis. Leituras não criam tabelas; o primeiro registro autorizado de mês novo utiliza esquema verificado da referência persistida, sem copiar registros. Operações por descrição retornam candidatos se ambíguas, e atualizações/exclusões usam condições de estado antigo e `RETURNING` para impedir perda silenciosa de mudanças. Escritas incertas não são repetidas automaticamente. Dado de teste é sintético e não acessa o D1 real.
 
@@ -161,7 +161,7 @@ O cliente remoto estabelece até 15 segundos para handshake e até 45 segundos p
 
 ## Stack escolhida (revisão de 13/10/2026)
 
-- **TypeScript** como linguagem principal para contratos, validações e testes; sem migração injustificada para outras linguagens.
+- **Situação atual:** TypeScript como linguagem principal para contratos, validações e testes. **Não atende integralmente** às instruções gerais atuais, que permitem Python, JavaScript e C# (além de HTML, CSS e SQL). Planejar migração compatível para JavaScript, preservando comportamento e testes.
 - **Cloudflare Workers** para o hub HTTP stateless; **Agents SDK / MCP SDK v2** para transporte MCP; **OAuthProvider** para OAuth 2.1, PKCE e CIMD.
 - **Cloudflare KV** somente para estado OAuth. **D1** segue canônico e acessado pelo MCP Cloudflare para ponto/gastos, sem binding direto no hub.
 - **GitHub** como fonte de verdade, com npm lockfile, CI para typecheck/testes/build e promoção de versão separada.
@@ -169,12 +169,3 @@ O cliente remoto estabelece até 15 segundos para handshake e até 45 segundos p
 
 A descontinuação do módulo de controle remoto do PC foi solicitada em 10/10/2026 e aplicada ao código em 13/10/2026, sem apagar o histórico Git. Pendências antigas desse módulo devem ser encerradas, não implementadas. Testes devem usar dados sintéticos e nunca escrever em D1 real.
 
-## Integração Penpot (2026-10-15)
-
-O catálogo `src/mcps/penpot/tools.ts` publica somente as quatro ferramentas suportadas pelo MCP remoto hospedado: `high_level_overview`, `penpot_api_info`, `execute_code` e `export_shape`. Não publica `import_image` porque depende do modo local. Usa o mesmo fluxo ChatGPT → OAuth Worker → cliente MCP HTTP → Penpot, sem infraestrutura adicional.
-
-**Autenticação distinta:** a URL HTTPS pública fixa `https://design.penpot.app/mcp/stream` é validada por igualdade exata na configuração. O secret independente `MCP_PENPOT_TOKEN` é anexado como `userToken` na URL apenas ao construir o transporte; não é enviado como Authorization Bearer, não aparece em status e nunca é armazenado no repositório. O SDK MCP manipula essa URL em memória. A observabilidade tem query string redigida e erros remotos são normalizados antes de responder ao usuário.
-
-**Escopos:** `execute_code` aceita JavaScript arbitrário no plugin e sempre exige OAuth `mcp:write`, mesmo para consultas. Somente `high_level_overview`, `penpot_api_info` e `export_shape` são leitura. A edição depende de uma aba Penpot conectada em MCP → Connect, e várias abas requerem escolha por `sessionId`. Não tentar mutações reais em CI nem em design de produção para teste.
-
-**Ativação:** cadastrar exclusivamente no Cloudflare Worker o secret `MCP_PENPOT_TOKEN`, implantar e promover versão após validação; testar `assistente_status`, documentação e uma consulta sem mutação em arquivo explicitamente conectado. Sem secret, conexão Penpot é exibida como pendente e suas ferramentas não são publicadas. O CI cobre validação de configuração, limites de endpoint, encoding do token e separação do Bearer, além dos checks anteriores.
