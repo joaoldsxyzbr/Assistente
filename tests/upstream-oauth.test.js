@@ -155,3 +155,40 @@ test("upstream management POSTs reject cross-origin requests", async () => {
   );
   assert.equal(response.status, 403);
 });
+
+test("upstream management accepts same-origin Referer when Origin is absent", async () => {
+  const env = environment();
+  const formResponse = await handleUpstreamRoutes(
+    new Request("https://assistente.example/connections/github/start"),
+    env,
+    githubFetch()
+  );
+  assert.equal(formResponse.status, 200);
+  assert.equal(formResponse.headers.get("referrer-policy"), "same-origin");
+
+  const request = new Request("https://assistente.example/connections/github/start", {
+    method: "POST",
+    headers: {
+      referer: "https://assistente.example/connections/github/start",
+      "content-type": "application/x-www-form-urlencoded"
+    },
+    body: new URLSearchParams({ password: env.ASSISTENTE_OAUTH_PASSWORD })
+  });
+  const response = await handleUpstreamRoutes(request, env, githubFetch());
+  assert.equal(response.status, 302);
+  assert.equal(new URL(response.headers.get("location")).origin, "https://github.com");
+});
+
+test("upstream management rejects missing Origin with cross-origin Referer", async () => {
+  const env = environment();
+  const request = new Request("https://assistente.example/connections/github/start", {
+    method: "POST",
+    headers: {
+      referer: "https://attacker.example/forged",
+      "content-type": "application/x-www-form-urlencoded"
+    },
+    body: new URLSearchParams({ password: env.ASSISTENTE_OAUTH_PASSWORD })
+  });
+  const response = await handleUpstreamRoutes(request, env, githubFetch());
+  assert.equal(response.status, 403);
+});

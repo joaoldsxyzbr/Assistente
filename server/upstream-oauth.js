@@ -180,7 +180,7 @@ function html(body, status = 200) {
       "content-type": "text/html; charset=utf-8",
       "cache-control": "no-store",
       pragma: "no-cache",
-      "referrer-policy": "no-referrer",
+      "referrer-policy": "same-origin",
       "x-content-type-options": "nosniff",
       "x-frame-options": "DENY",
       "content-security-policy": "default-src 'none'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
@@ -339,8 +339,17 @@ async function revoke(provider, env, token, fetchFn) {
   }
 }
 function formOriginMatches(request, env) {
+  const expected = publicOrigin(env);
   const origin = request.headers.get("origin");
-  return origin !== null && origin === publicOrigin(env);
+  if (origin === expected) return true;
+  if (origin !== null && origin !== "null") return false;
+  const referer = request.headers.get("referer");
+  if (referer === null) return false;
+  try {
+    return new URL(referer).origin === expected;
+  } catch {
+    return false;
+  }
 }
 export async function handleUpstreamRoutes(request, env, fetchFn = fetch) {
   const url = new URL(request.url);
