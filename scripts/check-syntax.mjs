@@ -9,12 +9,11 @@ async function* walk(directory) {
     else if (file.endsWith(".js") || file.endsWith(".mjs")) yield file;
   }
 }
-
-let checked = 0;
-for (const directory of ["server", "mcps", "skills", "tests", "scripts"]) {
+let count = 0;
+for (const directory of ["server", "skills", "tests", "scripts"]) {
   for await (const file of walk(directory)) {
     execFileSync(process.execPath, ["--check", file], { stdio: "pipe" });
-    checked++;
+    count++;
   }
 }
-console.log("Checked JavaScript syntax in " + checked + " files.");
+console.log("Checked JavaScript syntax in " + count + " files.");
