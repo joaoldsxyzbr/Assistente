@@ -1,26 +1,25 @@
-# Arquitetura
+# Arquitetura do Assistente MCPs
 
 ```text
-ChatGPT ─── Assistente MCP (Worker Cloudflare, OAuth próprio) ─── skills Markdown
-        ├── GitHub MCP oficial (OAuth direto) ──────────────── GitHub
-        └── Cloudflare MCP oficial (OAuth direto) ──────────── D1/Workers
+ChatGPT ──OAuth próprio──> Worker Assistente MCPs
+                             ├── MCP GitHub oficial (OAuth independente)
+                             ├── MCP Cloudflare oficial (OAuth independente)
+                             └── Skills Markdown: ponto, gastos, desenvolvimento
 ```
 
-## Responsabilidades
+## Implementação atual (branch de evolução)
 
-- **Worker Assistente:** autenticar o cliente ChatGPT, publicar somente `assistente_status` e `assistente_skill`; não encaminhar chamadas, não executar SQL, não gerir OAuth dos outros MCPs.
-- **GitHub oficial:** repositórios, PRs, commits e CI com permissões do OAuth concedido no ChatGPT.
-- **Cloudflare oficial:** D1, Workers e logs com permissões do OAuth concedido no ChatGPT.
-- **Skills:** instruções de ponto, gastos e desenvolvimento. Não executam código, não são credenciais e não guardam dados pessoais.
+- Worker usa SDK MCP com JavaScript puro; OAuthProvider preserva autenticação do cliente ChatGPT.
+- Ponte MCP HTTPS usa `@modelcontextprotocol/client`, hosts permitidos fixos e token upstream separado por provedor.
+- `mcp_github_tools` e `mcp_cloudflare_tools` listam ferramentas no servidor original; `mcp_github_call` e `mcp_cloudflare_call` executam operações identificadas.
+- Para reduzir risco, chamadas remotas exigem escopos do Worker `mcp:read` e `mcp:write`, mesmo operações de leitura. Isso é provisório; implementar autorização refinada antes de produção.
+- Os tokens upstream ainda não têm aquisição, renovação ou revogação automáticas. Nenhum token do ChatGPT é encaminhado ao provedor.
 
-## Autenticação
+## Regras
 
-`ASSISTENTE_OAUTH_PASSWORD` e `OAUTH_KV` permanecem para autenticação do nosso Worker. Não existem secrets de API GitHub ou Cloudflare para o proxy, pois ele foi retirado. OAuth do cliente para cada integração é independente e não pode ser repassado automaticamente para o Worker.
+- Não expor token em respostas ou logs e não aceitar endpoints arbitrários.
+- Não aceitar escrita D1 sem conta/banco canônico, permissão e pedido autorizado.
+- Não repetir escrita incerta; conferir o serviço primeiro.
+- Usar somente `joaoldsxyzbr/Assistente-mcps` neste projeto.
 
-## Regras de segurança
-
-As skills de ponto e gastos registram IDs D1 distintos e especificam banco canônico. Consultas e escritas são feitas somente com o MCP oficial Cloudflare, validando banco, autorização, parâmetros, retorno e duplicidade. Não repetir escritas incertas antes da conciliação.
-
-## Entrega
-
-GitHub é fonte de verdade. Executar `npm run check` e validar CI antes de promover versão no Worker. Não reutilizar D1 real na preview. A nova arquitetura não exige apagar o Worker nem o domínio existente.
+**Bloqueadores para produção:** conferir [OAuth upstream](OAUTH-UPSTREAM.md), implementação de fluxo de consentimento e gerenciamento de tokens, allowlist granular, testes de integração seguros.
