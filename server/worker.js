@@ -1,8 +1,11 @@
 import { fromJsonSchema, McpServer } from "@modelcontextprotocol/server";
 import { MCP_TOOL_CATALOG } from "../mcps/catalog.js";
 import { withDefaultCloudflareAccount } from "../mcps/cloudflare/tools.js";
+import { CLOUDFLARE_READ_TOOL_CATALOG, buildCloudflareReadCode, validCloudflareId } from "../mcps/cloudflare/operations.js";
 import {
   buildPontoHojeCode,
+  buildPontoPeriodoCode,
+  normalizePontoData,
   buildPontoRegistrarCode,
   buildPontoResumoCode,
   currentPontoLocalDate,
@@ -41,9 +44,10 @@ function textContent(result) {
     return { type: "text", text: JSON.stringify(item) ?? String(item) };
   });
 }
-async function callRemoteTool(configuration, remoteName, args, isWrite, defaultCloudflareAccountId) {
+async function callRemoteTool(configuration, remoteName, args, isWrite, defaultCloudflareAccountId, traceId) {
   const client = new RemoteMcpClient(configuration);
   let callStarted = false;
+  const startedAt = Date.now();
   try {
     await client.connect();
     callStarted = true;
@@ -54,10 +58,15 @@ async function callRemoteTool(configuration, remoteName, args, isWrite, defaultC
       server: configuration.id,
       tool: remoteName,
       write: isWrite,
-      outcome: isError ? "remote_error" : "success"
+      outcome: isError ? isWrite ? "uncertain" : "remote_error" : "success",
+      uncertain: isWrite && isError,
+      traceId,
+      durationMs: Date.now() - startedAt
     });
     return {
-      content: textContent(result),
+      content: isError ? [{ type: "text", text: isWrite
+        ? "O serviço de origem retornou erro após iniciar uma escrita. Consulte o registro antes de tentar novamente."
+        : "O MCP de origem rejeitou a consulta. Confira as permissões ou tente novamente." }] : textContent(result),
       isError
     };
   } catch (error) {
@@ -67,7 +76,9 @@ async function callRemoteTool(configuration, remoteName, args, isWrite, defaultC
       tool: remoteName,
       write: isWrite,
       outcome: failure.outcome,
-      uncertain: failure.uncertain
+      uncertain: failure.uncertain,
+      traceId,
+      durationMs: Date.now() - startedAt
     });
     return { isError: true, content: [{ type: "text", text: failure.message }] };
   } finally {
@@ -91,7 +102,7 @@ function pontoConfigurationError(message) {
     content: [{ type: "text", text: message }]
   };
 }
-function createAssistenteMcpServer(environment) {
+function createAssistenteMcpServer(environment, traceId) {
   const configurations = readMcpConfigurations(environment);
   const server = new McpServer({ name: "assistente", version: "0.1.0" }, { instructions: MCP_SERVER_INSTRUCTIONS });
   server.registerTool(
@@ -128,6 +139,23 @@ function createAssistenteMcpServer(environment) {
   const cloudflareConfiguration = configurations.find(
     (configuration) => configuration.id === "cloudflare" && configuration.status === "configured"
   );
+  for (const definition of CLOUDFLARE_READ_TOOL_CATALOG) {
+    server.registerTool(definition.name, {
+      description: definition.description,
+      inputSchema: fromJsonSchema(definition.inputSchema),
+      _meta: { securitySchemes: oauthSecuritySchemesForTool(false) }
+    }, async (args) => {
+      if (!cloudflareConfiguration) return pontoConfigurationError("Cloudflare MCP não configurado.");
+      const accountId = environment.MCP_CLOUDFLARE_ACCOUNT_ID?.trim();
+      if (!accountId || !/^[0-9a-f]{32}$/i.test(accountId)) return pontoConfigurationError("Conta Cloudflare não configurada corretamente.");
+      const code = buildCloudflareReadCode(definition.name, args, {
+        ponto: environment.PONTO_D1_DATABASE_ID?.trim(),
+        gastos: environment.GASTOS_D1_DATABASE_ID?.trim()
+      });
+      if (!code) return pontoConfigurationError("Parâmetros ou banco D1 inválidos.");
+      return callRemoteTool(cloudflareConfiguration, "execute", { code, account_id: accountId }, false, accountId, traceId);
+    });
+  }
   const pontoDatabaseId = environment.PONTO_D1_DATABASE_ID?.trim() ?? "";
   for (const definition of PONTO_TOOL_CATALOG) {
     server.registerTool(
@@ -145,7 +173,7 @@ function createAssistenteMcpServer(environment) {
             "O Cloudflare MCP necess\xE1rio para o controle de ponto n\xE3o est\xE1 configurado."
           );
         }
-        if (pontoDatabaseId.length === 0) {
+        if (!validCloudflareId(pontoDatabaseId) || pontoDatabaseId === environment.GASTOS_D1_DATABASE_ID?.trim()) {
           return pontoConfigurationError(
             "O banco de ponto n\xE3o est\xE1 configurado no Assistente MCP."
           );
@@ -173,7 +201,33 @@ function createAssistenteMcpServer(environment) {
               )
             },
             true,
-            environment.MCP_CLOUDFLARE_ACCOUNT_ID
+            environment.MCP_CLOUDFLARE_ACCOUNT_ID,
+          traceId
+          );
+        }
+        if (definition.name === "ponto_data") {
+          const data = normalizePontoData(args.data);
+          if (!data) return pontoConfigurationError("Data inválida. Use DD/MM/AAAA.");
+          return callRemoteTool(
+            cloudflareConfiguration, "execute",
+            { code: buildPontoHojeCode(pontoDatabaseId, data.data) },
+            false, environment.MCP_CLOUDFLARE_ACCOUNT_ID,
+          traceId
+          );
+        }
+        if (definition.name === "ponto_periodo") {
+          const inicio = normalizePontoData(args.inicio);
+          const fim = normalizePontoData(args.fim);
+          if (!inicio || !fim || inicio.iso > fim.iso) {
+            return pontoConfigurationError("Período inválido. Use DD/MM/AAAA com início anterior ou igual ao fim.");
+          }
+          const elapsedDays = (Date.parse(fim.iso + "T00:00:00Z") - Date.parse(inicio.iso + "T00:00:00Z")) / 86400000;
+          if (elapsedDays > 92) return pontoConfigurationError("O período máximo é de 93 dias.");
+          return callRemoteTool(
+            cloudflareConfiguration, "execute",
+            { code: buildPontoPeriodoCode(pontoDatabaseId, inicio.iso, fim.iso) },
+            false, environment.MCP_CLOUDFLARE_ACCOUNT_ID,
+          traceId
           );
         }
         if (definition.name === "ponto_hoje") {
@@ -183,7 +237,8 @@ function createAssistenteMcpServer(environment) {
             "execute",
             { code: buildPontoHojeCode(pontoDatabaseId, local.data) },
             false,
-            environment.MCP_CLOUDFLARE_ACCOUNT_ID
+            environment.MCP_CLOUDFLARE_ACCOUNT_ID,
+          traceId
           );
         }
         return callRemoteTool(
@@ -191,7 +246,8 @@ function createAssistenteMcpServer(environment) {
           "execute",
           { code: buildPontoResumoCode(pontoDatabaseId) },
           false,
-          environment.MCP_CLOUDFLARE_ACCOUNT_ID
+          environment.MCP_CLOUDFLARE_ACCOUNT_ID,
+          traceId
         );
       }
     );
@@ -209,7 +265,7 @@ function createAssistenteMcpServer(environment) {
         if (!cloudflareConfiguration || cloudflareConfiguration.status !== "configured") {
           return pontoConfigurationError("Cloudflare MCP n\xE3o configurado para gastos.");
         }
-        if (!gastosDatabaseId) {
+        if (!validCloudflareId(gastosDatabaseId) || gastosDatabaseId === pontoDatabaseId) {
           return pontoConfigurationError("Banco D1 de gastos n\xE3o configurado.");
         }
         const prepared = prepareGastosAction(definition.name, args);
@@ -219,11 +275,52 @@ function createAssistenteMcpServer(environment) {
           "execute",
           { code: buildGastosCode(gastosDatabaseId, prepared.action) },
           definition.isWrite,
-          environment.MCP_CLOUDFLARE_ACCOUNT_ID
+          environment.MCP_CLOUDFLARE_ACCOUNT_ID,
+          traceId
         );
       }
     );
   }
+  const githubConfiguration = configurations.find(c => c.id === "github" && c.status === "configured");
+  server.registerTool("github_ci_resumo", {
+    description: "Mostra o estado das últimas execuções do GitHub Actions, sem disparar ou alterar workflows.",
+    inputSchema: fromJsonSchema({
+      type: "object",
+      properties: {
+        owner: { type: "string", minLength: 1 },
+        repo: { type: "string", minLength: 1 },
+        branch: { type: "string", description: "Branch opcional para filtrar o resumo." }
+      },
+      required: ["owner", "repo"],
+      additionalProperties: false
+    }),
+    _meta: { securitySchemes: oauthSecuritySchemesForTool(false) }
+  }, async ({ owner, repo, branch }) => {
+    if (!githubConfiguration) return pontoConfigurationError("GitHub MCP não configurado.");
+    if (!/^[A-Za-z0-9-]{1,39}$/.test(owner) || !/^[A-Za-z0-9_.-]{1,100}$/.test(repo) ||
+        (branch !== undefined && (!branch || branch.length > 150 || !/^[A-Za-z0-9_.\/-]+$/.test(branch)))) {
+      return pontoConfigurationError("Repositório ou branch inválidos.");
+    }
+    const response = await callRemoteTool(githubConfiguration, "actions_list", {
+      owner, repo, method: "list_workflow_runs", perPage: 30
+    }, false, undefined, traceId);
+    if (response.isError) return response;
+    try {
+      const content = response.content.find(c => c.type === "text")?.text;
+      const parsed = JSON.parse(content);
+      const runs = Array.isArray(parsed.workflow_runs) ? parsed.workflow_runs : [];
+      const selected = runs.filter(r => !branch || r.head_branch === branch).slice(0, 5);
+      return { content: [{ type: "text", text: JSON.stringify({
+        repository: owner + "/" + repo, branch: branch ?? null,
+        execucoes: selected.map(r => ({
+          id: r.id, name: r.name, branch: r.head_branch, sha: r.head_sha,
+          status: r.status, conclusion: r.conclusion ?? null, url: r.html_url, created_at: r.created_at
+        }))
+      }) }] };
+    } catch {
+      return pontoConfigurationError("Não foi possível interpretar o resumo do CI.");
+    }
+  });
   const routes = /* @__PURE__ */ new Set();
   for (const configuration of configurations) {
     if (configuration.status !== "configured") continue;
@@ -245,7 +342,8 @@ function createAssistenteMcpServer(environment) {
           definition.name,
           args,
           definition.isWrite,
-          environment.MCP_CLOUDFLARE_ACCOUNT_ID
+          environment.MCP_CLOUDFLARE_ACCOUNT_ID,
+          traceId
         )
       );
     }
@@ -258,7 +356,7 @@ const writeToolNames = [
   ...GASTOS_TOOL_CATALOG.filter((tool) => tool.isWrite).map((tool) => tool.name)
 ];
 const oauthWorker = createOAuthMcpWorker({
-  createServer: (environment) => createAssistenteMcpServer(environment),
+  createServer: (environment, traceId) => createAssistenteMcpServer(environment, traceId),
   resource: "https://assistente.joaolds.xyz.br/mcp",
   resourceName: "Assistente MCP",
   writeToolNames

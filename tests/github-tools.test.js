@@ -6,7 +6,7 @@ import { MCP_SERVER_CATALOG } from "../server/contracts.js";
 import { readMcpConfigurations } from "../server/config.js";
 import { GITHUB_REMOTE_TOOLSETS, remoteMcpHeaders } from "../server/remote-client.js";
 test("GitHub tool contracts use the official MCP names and include workflows", () => {
-  assert.equal(GITHUB_TOOL_CATALOG.length, 21);
+  assert.equal(GITHUB_TOOL_CATALOG.length, 22);
   assert.deepEqual(
     GITHUB_TOOL_CATALOG.map(({ name }) => name),
     [
@@ -30,7 +30,8 @@ test("GitHub tool contracts use the official MCP names and include workflows", (
       "actions_list",
       "actions_get",
       "actions_run_trigger",
-      "get_job_logs"
+      "get_job_logs",
+      "list_releases"
     ]
   );
   assert.ok(MCP_TOOL_CATALOG.some(({ serverId }) => serverId === "github"));

@@ -16,6 +16,8 @@ description: Procedimentos do controle de ponto e banco de horas no Assistente M
 
 - `ponto HHMM` ou `ponto HH:MM`: execute uma vez `ponto_registrar` com o horário escolhido. A ferramenta determina automaticamente a próxima batida válida.
 - `ponto hoje`: chame `ponto_hoje` e mostre somente o que foi confirmado.
+- `ponto ontem` ou `ponto DD/MM/AAAA`: resolva a data em America/Sao_Paulo e chame `ponto_data`; não use SQL genérico.
+- `ponto de DD/MM/AAAA até DD/MM/AAAA`: chame `ponto_periodo`. Intervalo máximo: 93 dias, inclusive; datas inválidas e períodos invertidos são rejeitados. Para intervalos maiores, consulte por partes.
 - `ponto resumo`: chame `ponto_resumo` e diferencie o banco acumulado do saldo diário.
 - `ponto` isolado: quando o ChatGPT oferecer controles funcionais, mostre horário atual de Brasília com ajuste de ±1 minuto e botão de registro. **Não grave antes do clique.** Sem controles funcionais, solicite o horário. Nunca invente a hora.
 

@@ -151,3 +151,26 @@ test("inexist\xEAncia n\xE3o permite apagar ou editar", async () => {
     f.db.close();
   }
 });
+
+test("registro concorrente normalizado evita duplicatas, inclusive com letras acentuadas", async () => {
+  const f = setup();
+  try {
+    const results = await Promise.all([
+      f.call("gastos_registrar", { descricao: "ÁGUA", valor: "10,00", tipo: "saida" }),
+      f.call("gastos_registrar", { descricao: "água", valor: "10.00", tipo: "saida" })
+    ]);
+    assert.deepEqual(results.map(r => r.status).sort(), ["duplicado", "registrado"]);
+    assert.equal((await f.call("gastos_listar")).quantidade, 1);
+  } finally { f.db.close(); }
+});
+test("copia esquema do mês mais recente de verdade, não ordem alfabética", async () => {
+  const f = setup();
+  try {
+    f.db.exec("CREATE TABLE movimentacoes_12_2026 (id INTEGER PRIMARY KEY AUTOINCREMENT,descricao TEXT NOT NULL,tipo TEXT NOT NULL,categoria TEXT DEFAULT 'antigo',valor TEXT NOT NULL,status TEXT NOT NULL,observacao TEXT)");
+    f.db.exec("CREATE TABLE movimentacoes_01_2027 (id INTEGER PRIMARY KEY AUTOINCREMENT,descricao TEXT NOT NULL,tipo TEXT NOT NULL,categoria TEXT DEFAULT 'recente',valor TEXT NOT NULL,status TEXT NOT NULL,observacao TEXT)");
+    const r = await f.call("gastos_registrar", { periodo: "02/2027", descricao: "Teste", valor: "1.00", tipo: "saida" });
+    assert.equal(r.status, "registrado");
+    const row = f.db.prepare("SELECT sql FROM sqlite_master WHERE name='movimentacoes_02_2027'").get();
+    assert.match(row.sql, /recente/);
+  } finally { f.db.close(); }
+});

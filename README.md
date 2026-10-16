@@ -30,9 +30,9 @@ O escopo ativo é exclusivamente **Cloudflare, GitHub, ponto e gastos**. A integ
 - **1 módulo por MCP/domínio:** `mcps/<nome>`.
 - **Allowlist local:** configurar um MCP não publica ferramentas automaticamente.
 - **ChatGPT:** usa diretamente o **Assistente MCPs**, sem exigir o plugin Assistente.
-- **Cloudflare MCP:** integração genérica atrás do hub, com `docs`, `search` e `execute`.
-- **GitHub MCP oficial:** integração remota via PAT separado, com ferramentas de repositório, branches, arquivos, issues, PRs e Actions; **sem restringir o MCP a um repositório fixo**.
-- **Controle de ponto:** ferramentas locais `ponto_registrar`, `ponto_hoje` e `ponto_resumo` usam somente o Cloudflare MCP para consultar/escrever no D1; o Worker não possui binding D1.
+- **Cloudflare MCP:** três ferramentas genéricas (`docs`, `search`, `execute`) e cinco ferramentas locais de consulta (`cloudflare_d1_listar`, `cloudflare_d1_estrutura`, `cloudflare_workers_listar`, `cloudflare_worker_diagnostico`, `cloudflare_build_logs`).
+- **GitHub MCP oficial:** integração remota via PAT separado, com ferramentas de repositório, branches, arquivos, issues, PRs, releases e Actions; **sem restringir o MCP a um repositório fixo**.
+- **Controle de ponto:** ferramentas locais `ponto_registrar`, `ponto_hoje`, `ponto_data`, `ponto_periodo` e `ponto_resumo` usam somente o Cloudflare MCP para consultar/escrever no D1; o Worker não possui binding D1.
 - **Controle de gastos:** cinco ferramentas locais (`gastos_resumo`, `gastos_listar`, `gastos_registrar`, `gastos_atualizar`, `gastos_excluir`) usam o Cloudflare MCP para o D1 canônico, sem binding D1 no Worker.
 
 
@@ -119,6 +119,15 @@ Sem secret, o GitHub permanece inativo e não interfere no Cloudflare nem nas fe
 - Dependabot verifica atualizações npm semanalmente; o CI existente continua o mesmo, enxuto.
 - Proteção de branch `main` foi **explicitamente excluída** desta rodada pelo proprietário.
 
+## Consultas específicas e fluxo de desenvolvimento
+
+- `ponto_data` recebe `data: "DD/MM/AAAA"`. `ponto_periodo` recebe `inicio` e `fim` no mesmo formato, limitado a 93 dias. Ambas usam a view oficial `banco_horas`, não alteram D1 e validam as datas no Worker.
+- `cloudflare_d1_listar` lista bancos da conta fixa; `cloudflare_d1_estrutura` lista nomes de tabelas/views exclusivamente do banco canônico de ponto ou gastos; `cloudflare_workers_listar` lista Workers; `cloudflare_worker_diagnostico` consulta deployments e versões; `cloudflare_build_logs` recupera até 60 linhas e cursor de paginação pelo UUID do build usando o endpoint `/logs`. Não há SQL nem código livre nos parâmetros dessas ferramentas. A conta é validada no servidor.
+- `mcp_github__list_releases` lista releases pelo MCP oficial; `github_ci_resumo` devolve até cinco execuções com status e URL a partir do Actions oficial, opcionalmente filtrando por branch. PRs, checks e logs continuam nas ferramentas existentes. A comparação arbitrária entre branches ainda não é uma ferramenta do MCP oficial; para diffs de PR use `mcp_github__pull_request_read`.
+- Logs de build são consultáveis pela ferramenta dedicada; logs Cloudflare de execução continuam na observabilidade oficial; não foi introduzido tail remoto via WebSocket. Não disparar deploy nem promoção a partir de consultas de diagnóstico.
+- Erros `isError` de escritas remotas são tratados como resultado incerto; detalhes internos não são expostos. Logs operacionais levam `traceId` e `durationMs` sem argumentos e sem dados pessoais. A rotina semanal de `npm audit` fica separada do CI normal.
+- Novas ferramentas são declaradas localmente e requerem recarregar a integração MCP no ChatGPT após a versão ser promovida.
+
 ## Controle de gastos (ferramentas dedicadas)
 
 O **Assistente MCPs** oferece cinco ferramentas dedicadas: `gastos_resumo`, `gastos_listar`, `gastos_registrar`, `gastos_atualizar` e `gastos_excluir`. O período omitido é **o próximo mês** em `America/Sao_Paulo`; `periodo: "MM/AAAA"` prevalece. Não existe binding D1 no Worker: o caminho é `ChatGPT → Assistente MCPs → Cloudflare MCP → D1`.
@@ -149,3 +158,14 @@ As conexões remotas têm limite de 15 segundos para conectar e 45 segundos por 
 
 Os testes automatizados cobrem timeouts, classificação de falhas e exigência de escopos em operações de leitura e escrita. Um login OAuth totalmente novo e sua renovação no ChatGPT continuam exigindo validação interativa; os testes de código não a substituem.
 
+
+### Diagnóstico e correção de Previews (16/10/2026)
+
+O projeto chegou a publicar **dois Builds para o mesmo commit e a mesma branch**:
+
+- O trigger correto vinculado ao Worker de produção `assistente`, selecionando `*` exceto `main`, executou `wrangler preview` com token user-scoped e obteve sucesso.
+- Um trigger antigo, vinculado a um **tag diferente do Worker original**, filtrava exclusivamente `feat/evolucao-mcps-20261016` e continuava usando `assistente build token`. Esse segundo Build falhava com **10000** na criação do Preview e **9109** ao consultar contas.
+
+Correção feita pela API Cloudflare: a variável de Build **não secreta** `CLOUDFLARE_ACCOUNT_ID` foi adicionada somente ao trigger correto de Preview. O trigger duplicado antigo da branch foi excluído após validar ID, nome da branch, token e tag; porém a Cloudflare **o recriou automaticamente no próximo push**, vinculado a um tag de Preview derivado. A tentativa de desativar o filtro do trigger derivado também foi sobrescrita pela Cloudflare no push seguinte. Para a PR #79, a credencial desse trigger derivado foi atualizada para o **mesmo token user-scoped válido** do trigger principal, com `CLOUDFLARE_ACCOUNT_ID` definido no ambiente de Build. **A criação automática de triggers derivados a cada push permanece um comportamento da plataforma e exige acompanhamento em futuros PRs**. Os triggers do Worker principal continuam sendo apenas produção e Preview. Não houve alteração da configuração de deploy da produção, nem desativação de checks, nem escrita no D1.
+
+Após a atualização do código, o GitHub CI e o Workers Builds Preview devem ambos passar **no mesmo commit** antes de fazer merge. A verificação de WAF no `/authorize` e login OAuth fresco continua distinta do check de build.

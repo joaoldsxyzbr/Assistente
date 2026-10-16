@@ -15,7 +15,7 @@ A regra estrutural é simples: **um Worker, um endpoint MCP e um módulo local p
 | `mcps/<nome>/` | Contratos e lógica fixa das ferramentas aprovadas |
 | MCP de destino | Execução técnica e aplicação das permissões do token de serviço |
 
-O controle de ponto possui três ferramentas locais no hub, mas **não acessa D1 diretamente**. Elas compõem chamadas fixas ao Cloudflare MCP, que então usa a API Cloudflare para consultar ou escrever no D1. Gastos utiliza cinco ferramentas locais em `mcps/gastos/`, encaminhadas exclusivamente ao Cloudflare MCP e ao D1 canônico, sem acesso direto do Worker ao D1.
+O controle de ponto possui cinco ferramentas locais no hub, mas **não acessa D1 diretamente**. Elas compõem chamadas fixas ao Cloudflare MCP, que então usa a API Cloudflare para consultar ou escrever no D1. Gastos utiliza cinco ferramentas locais em `mcps/gastos/`, encaminhadas exclusivamente ao Cloudflare MCP e ao D1 canônico, sem acesso direto do Worker ao D1.
 
 O **GitHub MCP** também é um destino remoto oficial, separado do Cloudflare, com autenticação própria por PAT. Sua allowlist cobre operações usuais de repositórios, commits, arquivos, issues, PRs e Actions, sem fixar `owner` ou `repo`. A capacidade de acessar um repositório depende do token GitHub e da autorização da tarefa.
 
@@ -38,20 +38,22 @@ Para ferramentas remotas genéricas:
 5. fecha a conexão.
 
 Para ponto:
-1. `ponto_registrar`, `ponto_hoje` ou `ponto_resumo` recebe somente os dados mínimos do comando;
+1. `ponto_registrar`, `ponto_hoje`, `ponto_data`, `ponto_periodo` ou `ponto_resumo` recebe somente os dados mínimos do comando;
 2. o Worker resolve a data atual em `America/Sao_Paulo` quando necessário;
 3. monta código fixo para `mcp_cloudflare__execute`;
 4. o Cloudflare MCP chama o endpoint D1 da API Cloudflare;
 5. o resultado pequeno e estruturado volta ao ChatGPT.
 
-`ponto_registrar` usa escrita atômica no D1: segunda a sexta preenche `entrada → ida_intervalo → volta_intervalo → saida`; sábado preenche somente `entrada → saida`. `ponto_hoje` consulta a view `banco_horas`; `ponto_resumo` consulta a view `resumo`.
+`ponto_registrar` usa escrita atômica no D1: segunda a sexta preenche `entrada → ida_intervalo → volta_intervalo → saida`; sábado preenche somente `entrada → saida`. `ponto_hoje`, `ponto_data` e `ponto_periodo` consultam a view `banco_horas`; `ponto_resumo` consulta a view `resumo`. Períodos são limitados a 93 dias e usam parâmetros SQL.
 
 ### Contrato operacional para o ChatGPT
 
 O roteamento rotineiro de ponto é direto:
 - `ponto HHMM` ou `ponto HH:MM` → `ponto_registrar`;
 - `ponto hoje` → `ponto_hoje`;
-- `ponto resumo` → `ponto_resumo`.
+- `ponto resumo` → `ponto_resumo`;
+- `ponto ontem` / `ponto DD/MM/AAAA` → `ponto_data`;
+- `ponto de DATA até DATA` → `ponto_periodo`.
 
 Esses três pedidos não usam planilha, memória nem o executor genérico antes da ferramenta dedicada. Em resultado incerto de escrita, a skill reconcilia com `ponto_hoje` e não repete `ponto_registrar` cegamente. Correções, exclusões e consultas de datas específicas continuam podendo usar `mcp_cloudflare__execute`, mas somente através do Assistente MCPs e sempre contra o D1 canônico de ponto.
 
@@ -174,3 +176,20 @@ O cliente remoto estabelece até 15 segundos para handshake e até 45 segundos p
 
 A descontinuação do módulo de controle remoto do PC foi solicitada em 10/10/2026 e aplicada ao código em 13/10/2026, sem apagar o histórico Git. Pendências antigas desse módulo devem ser encerradas, não implementadas. Testes devem usar dados sintéticos e nunca escrever em D1 real.
 
+
+
+## Evolução das operações — 16/10/2026
+
+O hub preserva o executor Cloudflare genérico para exceções, mas publica cinco ferramentas dedicadas de **consulta**, incluindo inspeção de D1 canônico e diagnóstico de versões/deployments. A conta é validada por variável de ambiente; IDs D1 devem ser UUIDs distintos. Essas ferramentas **não** promovem versões nem manipulam dados. Logs de Builds usam a API oficial somente leitura; Cloudflare Tail de execução exigiria transporte próprio e não foram acoplados.
+
+No GitHub, `mcp_github__list_releases` usa o MCP oficial e `github_ci_resumo` consulta o histórico de Actions em uma única operação do cliente. Diffs de PR já são obtidos por `pull_request_read`; comparar branches arbitrárias exige suporte upstream específico e não justificou introduzir API GitHub paralela.
+
+As consultas históricas de ponto usam a view existente `banco_horas`, sem persistência extra. A normalização de datas valida o calendário e a janela máxima; operações de escrita continuam restritas ao registro de hoje.
+
+Logs em `server/shared/audit.js` permitem correlação por `traceId` e `durationMs` sem armazenar parâmetros. Erros após escrita são incertos e requerem reconciliação antes de novo envio. `dependency-security.yml` executa auditoria de pacotes semanalmente sem sobrecarregar o CI principal.
+
+Pendências de infraestrutura da [issue #67](https://github.com/joaoldsxyzbr/Assistente-mcps/issues/67), como WAF do `/authorize` e teste OAuth fresco, exigem validação separada na conta e no cliente. CI verde não comprova essas verificações.
+
+### Correção do Preview duplicado — 16/10/2026
+
+O Cloudflare Builds emitia duas execuções de Preview para um commit: a configuração autorizada do Worker `assistente` passava, enquanto um trigger antigo de branch vinculado a outro tag (não listado como Worker de produção) usava o token legado `assistente build token` e retornava 10000/9109. A simples exclusão do trigger secundário não foi suficiente: a Cloudflare o recriou no push seguinte. Também houve tentativa de atualizar o filtro do trigger derivado, mas a Cloudflare recriou o trigger no próximo push, restaurando branch e token antigos. Para a PR #79, o trigger derivado foi atualizado para o token user-scoped válido e recebeu `CLOUDFLARE_ACCOUNT_ID` apenas como variável de Build. A recorrência de triggers derivados deve ser acompanhada em PRs futuras até correção na origem da integração; não considerar que um PATCH desse trigger impede nova criação. Os triggers legítimos de produção e Preview do Worker de origem foram preservados. A variável pública `CLOUDFLARE_ACCOUNT_ID` foi definida apenas no ambiente do trigger de Preview para explicitar a conta. Não foram alterados tokens, bindings D1 nem o tráfego da produção. Os logs da PR #79 e da issue #67 documentam a validação.

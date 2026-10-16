@@ -27,3 +27,5 @@ description: Procedimentos de gastos, contas e lançamentos no Assistente MCPs
 - Não force lançamentos duplicados; uma segunda transação idêntica exige confirmação explícita. Após timeout/incerteza, consulte `gastos_listar` antes de repetir escrita.
 - No resumo, separe total, saldo e pendências conforme retorno real. Orçamento, conta bancária, recorrência e parcelas não são presumidos.
 - Esta skill é apenas um procedimento. Não guarde gastos, valores, contas, saldos ou dados pessoais em arquivos.
+
+- Escritas concorrentes de valores/descrições equivalentes são bloqueadas por verificação atômica; o esquema de novos meses é obtido do mês cronologicamente mais recente.
