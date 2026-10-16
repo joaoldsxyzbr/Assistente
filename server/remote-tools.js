@@ -5,7 +5,25 @@ export const remoteToolNames = PROVIDERS.map(provider => "mcp_" + provider + "_c
 function fail(message) {
   return { isError: true, content: [{ type: "text", text: message }] };
 }
-function safeResult(response) {
+export function safeResult(response) {
+  const content = (response.content ?? [])
+    .filter(item => item && item.type === "text" && typeof item.text === "string")
+    .map(item => ({ type: "text", text: item.text.slice(0, 200000) }));
+  const result = { isError: response.isError ?? false, content };
+  if (response.structuredContent !== undefined) {
+    const serialized = JSON.stringify(response.structuredContent);
+    if (serialized.length <= 200000) result.structuredContent = response.structuredContent;
+    else result.content.push({ type: "text", text: serialized.slice(0, 200000) });
+  }
+  return result;
+}mport { readRemoteConfiguration, withRemoteClient } from "./remote-client.js";
+
+const PROVIDERS = ["github", "cloudflare"];
+export const remoteToolNames = PROVIDERS.map(provider => "mcp_" + provider + "_call");
+function fail(message) {
+  return { isError: true, content: [{ type: "text", text: message }] };
+}
+export function safeResult(response) {
   return {
     isError: response.isError ?? false,
     content: (response.content ?? [])

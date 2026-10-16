@@ -29,9 +29,9 @@ Secrets do Worker, nunca do GitHub nem da conversa:
 Não guardar nenhum desses valores no repositório. Para configurar secrets pelo Wrangler, execute o comando e informe o valor no prompt seguro:
 
     npx wrangler secret put UPSTREAM_OAUTH_ENCRYPTION_KEY --config wrangler.assistente.jsonc
-    npx wrangler secret put GITHUB_OAUTH_CLIENT_SECRET --config wrangler.assistente.jsonc
+    npx wrangler secret put GITHUB_OAUTH_CLIENT_SECRET --config wrangler.assistente.jsonc\n    npx wrangler secret put GITHUB_OAUTH_CLIENT_ID --config wrangler.assistente.jsonc\n    npx wrangler secret put ASSISTENTE_OAUTH_PASSWORD --config wrangler.assistente.jsonc
 
-O callback precisa estar cadastrado exatamente no GitHub OAuth App. Configure a chave de criptografia antes de iniciar qualquer consentimento; rotacioná-la exige reconectar os provedores.
+Cada ambiente precisa de seu próprio OAuth App GitHub, porque o GitHub OAuth App registra um callback por aplicação. Para preview, configure callback com o domínio workers.dev do Worker de preview; para produção, use o domínio assistente.joaolds.xyz.br. Configure a chave de criptografia antes de iniciar qualquer consentimento; rotacioná-la exige reconectar os provedores.
 
 ## Operação
 
