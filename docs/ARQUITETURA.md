@@ -180,7 +180,7 @@ A descontinuação do módulo de controle remoto do PC foi solicitada em 10/10/2
 
 ## Evolução das operações — 16/10/2026
 
-O hub preserva o executor Cloudflare genérico para exceções, mas publica quatro ferramentas dedicadas de **consulta**, incluindo inspeção de D1 canônico e diagnóstico de versões/deployments. A conta é validada por variável de ambiente; IDs D1 devem ser UUIDs distintos. Essas ferramentas **não** promovem versões nem manipulam dados. Cloudflare Tail/Logs exigiriam contrato próprio e não foram acoplados.
+O hub preserva o executor Cloudflare genérico para exceções, mas publica cinco ferramentas dedicadas de **consulta**, incluindo inspeção de D1 canônico e diagnóstico de versões/deployments. A conta é validada por variável de ambiente; IDs D1 devem ser UUIDs distintos. Essas ferramentas **não** promovem versões nem manipulam dados. Logs de Builds usam a API oficial somente leitura; Cloudflare Tail de execução exigiria transporte próprio e não foram acoplados.
 
 No GitHub, `mcp_github__list_releases` usa o MCP oficial e `github_ci_resumo` consulta o histórico de Actions em uma única operação do cliente. Diffs de PR já são obtidos por `pull_request_read`; comparar branches arbitrárias exige suporte upstream específico e não justificou introduzir API GitHub paralela.
 

@@ -41,6 +41,20 @@ const CLOUDFLARE_READ_TOOL_CATALOG = [
     }
   },
   {
+    "name": "cloudflare_build_logs",
+    "description": "Consulta as últimas linhas e o cursor de logs de um build Cloudflare Workers pelo UUID; somente leitura.",
+    "isWrite": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "build_id": { "type": "string", "description": "UUID do Workers Build." },
+        "cursor": { "type": "string", "description": "Cursor opcional de paginação." }
+      },
+      "required": ["build_id"],
+      "additionalProperties": false
+    }
+  },
+  {
     "name": "cloudflare_worker_diagnostico",
     "description": "Consulta as últimas implantações e versões de um Worker, sem publicar nem alterar tráfego.",
     "isWrite": false,
@@ -111,6 +125,17 @@ function buildCloudflareReadCode(name, args, ids) {
         implantacoes: deployments.slice(0, 5).map(d => ({ id: d.id, created_on: d.created_on, source: d.source, versions: d.versions })),
         versoes: versoes.slice(0, 5).map(v => ({ id: v.id, number: v.number, created_on: v.metadata?.created_on }))
       };
+    }`;
+  }
+  if (name === "cloudflare_build_logs") {
+    if (!validCloudflareId(args.build_id) || (args.cursor !== undefined && (typeof args.cursor !== "string" || args.cursor.length > 2048))) return undefined;
+    const suffix = args.cursor ? "?cursor=" + encodeURIComponent(args.cursor) : "";
+    return `async () => {
+      const response = await cloudflare.request({ method: "GET",
+        path: "/accounts/" + accountId + "/builds/builds/" + ${JSON.stringify(args.build_id)} + ${JSON.stringify(suffix)} });
+      if (response.success !== true) throw new Error("Logs de build indisponíveis");
+      return { build_id: ${JSON.stringify(args.build_id)}, linhas: (response.result?.lines || []).slice(-60),
+        cursor: response.result?.cursor ?? null, truncado: response.result?.truncated ?? false };
     }`;
   }
   return undefined;
