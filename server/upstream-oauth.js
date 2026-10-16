@@ -190,6 +190,23 @@ function html(body, status = 200) {
 function genericFailure() {
   return html("<!doctype html><html lang=\"pt-BR\"><meta charset=\"utf-8\"><h1>Não foi possível concluir o OAuth</h1><p>Confira a configuração, autorizações e callback do provedor. Nenhum segredo foi exibido.</p>", 503);
 }
+
+function safeOAuthErrorCode(error) {
+  const code = error instanceof Error ? error.message : "";
+  return typeof code === "string" && /^[A-Z][A-Z0-9_]{0,63}$/.test(code)
+    ? code
+    : "UNCLASSIFIED";
+}
+
+function logOAuthFailure(provider, stage, error) {
+  const safeNames = new Set(["Error", "TypeError", "SyntaxError", "OperationError", "DataError"]);
+  console.error("assistente_oauth_failure", {
+    provider,
+    stage,
+    code: safeOAuthErrorCode(error),
+    errorType: safeNames.has(error?.name) ? error.name : "Error"
+  });
+}
 async function start(provider, env, fetchFn) {
   const config = await clientOptions(env, provider, fetchFn);
   const state = randomString();
@@ -364,7 +381,8 @@ export async function handleUpstreamRoutes(request, env, fetchFn = fetch) {
     if (url.searchParams.has("error")) return html("<h1>Autorização recusada no provedor.</h1>", 400);
     try {
       return await exchange(env, provider, url.searchParams.get("state"), url.searchParams.get("code"), fetchFn);
-    } catch {
+    } catch (error) {
+      logOAuthFailure(provider, "callback", error);
       return genericFailure();
     }
   }
@@ -387,7 +405,8 @@ export async function handleUpstreamRoutes(request, env, fetchFn = fetch) {
         "</p>");
     }
     return await start(provider, env, fetchFn);
-  } catch {
+  } catch (error) {
+    logOAuthFailure(provider, operation, error);
     return genericFailure();
   }
 }
