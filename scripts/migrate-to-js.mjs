@@ -1,4 +1,4 @@
-import ts from "typescript";
+import { transform } from "esbuild";
 import { readdir, readFile, writeFile, rm, mkdir } from "node:fs/promises";
 import path from "node:path";
 
@@ -26,29 +26,19 @@ for (const location of originals) {
   }
 
   const contents = await readFile(location, "utf8");
-  const output = ts.transpileModule(contents, {
-    fileName: location,
-    reportDiagnostics: true,
-    compilerOptions: {
-      target: ts.ScriptTarget.ES2022,
-      module: ts.ModuleKind.ESNext,
-      isolatedModules: true,
-      removeComments: false,
-    },
+  const output = await transform(contents, {
+    loader: "ts",
+    format: "esm",
+    target: "es2022",
+    sourcefile: location,
+    legalComments: "none",
   });
-  const errors = (output.diagnostics || []).filter(
-    (diagnostic) => diagnostic.category === ts.DiagnosticCategory.Error,
-  );
-  if (errors.length) {
-    throw new Error(location + ": " + errors.map((error) =>
-      ts.flattenDiagnosticMessageText(error.messageText, " ")).join("; "));
-  }
 
   const destination = location === "tests/penpot-tools.test.ts"
     ? "tests/retired-integrations.test.js"
     : location.slice(0, -3) + ".js";
   // Keep file references in assertions and dynamic imports aligned.
-  const javascript = output.outputText.replace(/\.ts\b/g, ".js");
+  const javascript = output.code.replace(/\.ts\b/g, ".js");
   await writeFile(destination, javascript);
   await rm(location);
   migrated++;
