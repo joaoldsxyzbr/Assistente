@@ -1,18 +1,11 @@
 import { hasValidOAuthPassword } from "./shared/oauth-helpers.js";
+import { githubProvider } from "../mcps/github/index.js";
+import { cloudflareProvider } from "../mcps/cloudflare/index.js";
 
 const PREFIX = "assistente:upstream:v2:";
 const PROVIDERS = Object.freeze({
-  github: {
-    endpoint: "https://api.githubcopilot.com/mcp/x/all",
-    resourceHosts: new Set(["api.githubcopilot.com", "github.com"]),
-    authHosts: new Set(["github.com", "api.github.com"]),
-    defaultScopes: "repo read:org read:user user:email read:packages write:packages read:project project gist notifications workflow offline_access"
-  },
-  cloudflare: {
-    endpoint: "https://mcp.cloudflare.com/mcp",
-    resourceHosts: new Set(["mcp.cloudflare.com"]),
-    authHosts: new Set(["cloudflare.com", "cloudflareaccess.com"])
-  }
+  github: githubProvider,
+  cloudflare: cloudflareProvider
 });
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -34,7 +27,7 @@ function providerUrl(provider, value, kind = "auth") {
   const url = new URL(value);
   const config = PROVIDERS[provider];
   const hosts = kind === "resource" ? config?.resourceHosts : config?.authHosts;
-  const allowed = provider === "cloudflare"
+  const allowed = config?.allowSubdomains
     ? [...(hosts ?? [])].some(host => url.hostname === host || url.hostname.endsWith("." + host))
     : hosts?.has(url.hostname);
   if (url.protocol !== "https:" || url.username || url.password || url.hash || !allowed) throw Error("UNTRUSTED_OAUTH_ENDPOINT");
@@ -157,56 +150,21 @@ async function writeSealed(env, key, value, ttl) {
     ttl ? { expirationTtl: ttl } : undefined
   );
 }
-function splitScopes(value) {
-  return String(value ?? "").trim().split(/[ ,]+/).filter(Boolean).join(" ");
-}
 async function clientOptions(env, provider, fetchFn) {
   const metadata = await discover(provider, fetchFn);
-  if (provider === "github") {
-    const clientId = env.GITHUB_OAUTH_CLIENT_ID;
-    const clientSecret = env.GITHUB_OAUTH_CLIENT_SECRET;
-    if (!clientId || !clientSecret) throw Error("GITHUB_OAUTH_APP_UNCONFIGURED");
-    return {
-      ...metadata,
-      client_id: clientId,
-      client_secret: clientSecret,
-      token_endpoint_auth_method: "client_secret_post",
-      scope: splitScopes(env.GITHUB_OAUTH_SCOPES || PROVIDERS.github.defaultScopes)
-    };
-  }
-  let client = await readSealed(env, "client:cloudflare");
-  if (!metadata.registration_endpoint) throw Error("CLOUDFLARE_DCR_UNAVAILABLE");
-  if (!client || client.registration_endpoint !== metadata.registration_endpoint ||
-      (client.client_secret_expires_at && client.client_secret_expires_at * 1000 < Date.now())) {
-    const registered = await fetchJson(fetchFn, metadata.registration_endpoint, {
-      method: "POST",
-      headers: { "content-type": "application/json", accept: "application/json" },
-      body: JSON.stringify({
-        client_name: "Assistente MCPs",
-        redirect_uris: [callbackUrl(env, provider)],
-        grant_types: ["authorization_code", "refresh_token"],
-        response_types: ["code"],
-        token_endpoint_auth_method: "none"
-      })
-    });
-    if (typeof registered.client_id !== "string" || !registered.client_id) throw Error("CLOUDFLARE_DCR_INVALID");
-    client = {
-      client_id: registered.client_id,
-      client_secret: registered.client_secret ?? "",
-      token_endpoint_auth_method: registered.token_endpoint_auth_method ?? "none",
-      registration_endpoint: metadata.registration_endpoint,
-      client_secret_expires_at: registered.client_secret_expires_at ?? 0
-    };
-    await writeSealed(env, "client:cloudflare", client);
-  }
-  return {
-    ...metadata,
-    ...client,
-    scope: splitScopes(env.CLOUDFLARE_OAUTH_SCOPES)
-  };
+  const adapter = PROVIDERS[provider];
+  return adapter.clientOptions({
+    env,
+    metadata,
+    fetchJson,
+    fetchFn,
+    readSealed,
+    writeSealed,
+    callbackUrl: callbackUrl(env, provider)
+  });
 }
 function form(provider, operation) {
-  const label = provider === "github" ? "GitHub" : "Cloudflare";
+  const label = PROVIDERS[provider].label;
   const button = operation === "start" ? "Autorizar" : "Desconectar";
   return "<!doctype html><html lang=\"pt-BR\"><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width\">" +
     "<title>" + button + " " + label + "</title><main><h1>" + button + " " + label + "</h1>" +
@@ -294,18 +252,14 @@ async function exchange(env, provider, state, code, fetchFn) {
   });
   if (typeof token.access_token !== "string" || !token.access_token ||
       (token.token_type && token.token_type.toLowerCase() !== "bearer")) throw Error("OAUTH_TOKEN_INVALID");
-  if (provider === "github") {
-    const identity = await fetchJson(fetchFn, "https://api.github.com/user", {
-      headers: {
-        authorization: "Bearer " + token.access_token,
-        "user-agent": "assistente-mcps",
-        accept: "application/vnd.github+json"
-      }
-    });
-    const expected = env.GITHUB_EXPECTED_LOGIN;
-    if (!identity.login || (expected && identity.login.toLowerCase() !== expected.toLowerCase())) {
-      return html("<h1>A conta GitHub autorizada não corresponde à conta configurada.</h1>", 403);
-    }
+  const identityValid = await PROVIDERS[provider].verifyIdentity?.({
+    env,
+    accessToken: token.access_token,
+    fetchJson,
+    fetchFn
+  });
+  if (identityValid === false) {
+    return html("<h1>" + PROVIDERS[provider].identityFailure + "</h1>", 403);
   }
   await writeSealed(env, "token:" + provider, {
     access_token: token.access_token,
@@ -320,7 +274,7 @@ async function exchange(env, provider, state, code, fetchFn) {
     resource: saved.resource
   });
   return html("<!doctype html><html lang=\"pt-BR\"><meta charset=\"utf-8\"><h1>" +
-    (provider === "github" ? "GitHub" : "Cloudflare") +
+    PROVIDERS[provider].label +
     " conectado.</h1><p>Volte ao ChatGPT e consulte o estado do Assistente MCPs.</p>");
 }
 async function refreshToken(env, current, fetchFn) {
@@ -378,39 +332,8 @@ export async function hasUpstreamConnection(env, provider) {
 }
 async function revoke(provider, env, token, fetchFn) {
   try {
-    if (provider === "github") {
-      const credentials = encoder.encode(token.client_id + ":" + token.client_secret);
-      const response = await fetchFn(
-        "https://api.github.com/applications/" + encodeURIComponent(token.client_id) + "/token",
-        {
-          method: "DELETE",
-          redirect: "error",
-          headers: {
-            authorization: "Basic " + btoa(String.fromCharCode(...credentials)),
-            "content-type": "application/json",
-            "user-agent": "assistente-mcps",
-            accept: "application/vnd.github+json"
-          },
-          body: JSON.stringify({ access_token: token.access_token })
-        }
-      );
-      return response.ok || response.status === 404;
-    }
-    if (!token.revocation_endpoint) return false;
-    let ok = true;
-    for (const value of [token.refresh_token, token.access_token].filter(Boolean)) {
-      const body = new URLSearchParams({ token: value });
-      const headers = new Headers({ "content-type": "application/x-www-form-urlencoded", accept: "application/json" });
-      if (token.client_id) clientAuth(token, body, headers);
-      const response = await fetchFn(token.revocation_endpoint, {
-        method: "POST",
-        redirect: "error",
-        headers,
-        body: body.toString()
-      });
-      ok = ok && (response.ok || response.status === 200);
-    }
-    return ok;
+    const adapter = PROVIDERS[provider];
+    return adapter ? await adapter.revoke({ env, token, fetchFn, clientAuth }) : false;
   } catch {
     return false;
   }

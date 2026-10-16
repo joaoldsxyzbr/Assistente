@@ -10,7 +10,7 @@ async function* walk(directory) {
   }
 }
 let count = 0;
-for (const directory of ["server", "skills", "tests", "scripts"]) {
+for (const directory of ["mcps", "server", "skills", "tests", "scripts"]) {
   for await (const file of walk(directory)) {
     execFileSync(process.execPath, ["--check", file], { stdio: "pipe" });
     count++;

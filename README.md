@@ -12,8 +12,9 @@ A validação real de OAuth ainda depende da configuração e do consentimento d
 
 ## Componentes
 
+- mcps/github/ e mcps/cloudflare/: configurações e etapas OAuth específicas de cada provedor.
 - server/worker.js: servidor MCP do Assistente, catálogo de skills e ferramentas proxy genéricas.
-- server/upstream-oauth.js: discovery, consentimento, tokens cifrados, refresh e desconexão dos provedores.
+- server/upstream-oauth.js: fluxo OAuth compartilhado, discovery, PKCE e tokens cifrados.
 - server/remote-client.js e server/remote-tools.js: cliente MCP HTTPS e encaminhamento dinâmico.
 - skills/: instruções em Markdown sincronizadas com o catálogo do Worker.
 - docs/: arquitetura, autenticação e limites.

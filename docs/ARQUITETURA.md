@@ -9,6 +9,7 @@ ChatGPT conecta-se por OAuth ao único Worker Assistente MCPs. O Worker hospeda 
 ## Implementação
 
 - JavaScript nativo (ES Modules) e SDKs MCP oficiais.
+- `mcps/github/` e `mcps/cloudflare/` guardam os endpoints, domínios permitidos e etapas OAuth específicas; `server/` contém a ponte e a lógica compartilhada.
 - mcp_github_tools e mcp_cloudflare_tools consultam os catálogos oficiais em tempo real. mcp_github_call e mcp_cloudflare_call encaminham nomes e argumentos ao servidor original; o Worker não copia nem redefine cada ferramenta.
 - OAuth do ChatGPT e OAuth upstream são independentes. O Worker descobre os metadados do provedor, usa PKCE e armazena access/refresh tokens cifrados em KV.
 - GitHub usa o MCP remoto oficial com toolset all; a autorização continua limitada à conta, permissões e escopos concedidos ao OAuth App.

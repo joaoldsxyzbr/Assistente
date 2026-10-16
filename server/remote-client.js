@@ -1,12 +1,14 @@
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { getUpstreamAccessToken } from "./upstream-oauth.js";
+import { githubProvider } from "../mcps/github/index.js";
+import { cloudflareProvider } from "../mcps/cloudflare/index.js";
 
-const HOSTS = Object.freeze({
-  github: "https://api.githubcopilot.com/mcp/x/all",
-  cloudflare: "https://mcp.cloudflare.com/mcp"
+const PROVIDERS = Object.freeze({
+  github: githubProvider,
+  cloudflare: cloudflareProvider
 });
 export function endpointFor(id) {
-  return HOSTS[id] ?? null;
+  return PROVIDERS[id]?.endpoint ?? null;
 }
 export async function readRemoteConfiguration(env, id) {
   const endpoint = endpointFor(id);
