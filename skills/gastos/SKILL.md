@@ -5,6 +5,13 @@ description: Procedimentos de gastos, contas e lançamentos no Assistente MCPs
 
 # Gastos
 
+## Banco D1 canônico
+
+- Banco de gastos: `GASTOS_D1_DATABASE_ID` = `0c6c31c2-f2fd-4f60-9c75-b232019ae63f`.
+- O valor de referência está em `wrangler.assistente.jsonc`; as ferramentas `gastos_*` devem usar exclusivamente esse banco, resolvido e validado pelo servidor.
+- Este ID identifica o destino, **não** é credencial nem autorização para usar SQL genérico.
+- Em alterações excepcionais via Cloudflare, confirme o ID efetivo do banco antes de qualquer escrita. Se a configuração ou o banco identificado divergirem, **não grave**; investigue primeiro. Nunca direcione gastos ao D1 de ponto.
+
 ## Comandos e período
 
 - Use `gastos_resumo` para totais mensais e pendências e `gastos_listar` para procurar lançamentos/IDs.
