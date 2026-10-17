@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { enforceRateLimit } from "../server/shared/oauth-mcp-worker.js";
+import { enforceRateLimit } from "../server/shared/rate-limit.js";
 
 test("rate limit supports disabled binding for isolated tests", async () => {
   assert.equal(await enforceRateLimit(undefined, "mcp:owner", "mcp_rate_limit"), null);
