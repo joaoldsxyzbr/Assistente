@@ -81,7 +81,9 @@ function createOAuthMcpWorker(options) {
     async fetch(request, environment) {
       const pathname = new URL(request.url).pathname;
       const passwordForm = request.method === "POST" &&
-        (pathname === "/authorize" || /^\\/connections\\/(github|cloudflare)\\/(start|disconnect)$/.test(pathname));
+        (pathname === "/authorize" || (pathname.startsWith("/connections/") &&
+        ["/start", "/disconnect"].some(suffix => pathname.endsWith(suffix)) &&
+        ["/github/", "/cloudflare/"].some(part => pathname.includes(part))));
       if (passwordForm) {
         // The source address is supplied by Cloudflare at the edge, not by the HTML form.
         const actor = request.headers.get("cf-connecting-ip") ?? "unknown";
