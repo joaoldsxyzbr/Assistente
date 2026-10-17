@@ -14,7 +14,7 @@ import { handleAuthorizeRequest } from "./oauth-authorization.js";
 import { handleUpstreamRoutes } from "../upstream-oauth.js";
 
 // Native Cloudflare rate limiting (per location), never keyed by a bearer token.
-async function enforceRateLimit(binding, key, event) {
+export async function enforceRateLimit(binding, key, event) {
   if (!binding) return null; // Allows isolated unit tests without deployed bindings.
   try {
     const result = await binding.limit({ key });
