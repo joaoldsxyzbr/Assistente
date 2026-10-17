@@ -33,3 +33,7 @@ ChatGPT conecta-se por OAuth ao único Worker Assistente MCPs. O Worker hospeda 
 O limite de resposta normalizada é 64 KiB. Respostas maiores são recusadas com instrução para restringir a consulta, sem truncar silenciosamente. Erros de upstream conservam \`isError\`; chamadas de escrita incertas não são repetidas. A saída apenas textual reduz o risco de anexos emitidos pelo Worker, mas a apresentação/materialização feita pela plataforma ChatGPT é externa ao Worker e depende de verificação prática.
 
 A normalização não altera OAuth, endpoints ou autorização. Para valores estruturados, nenhum dado remoto de recurso/binário deve ser tratado como conteúdo executável. Veja os testes em \`tests/remote-tools.test.js\`.
+
+## Robustez incremental (17/10/2026)
+
+Corpos remotos recebem limite de 2 MiB por stream **antes** do parse; saídas ao ChatGPT continuam limitadas a 64 KiB. A descoberta de ferramentas agora é resumida e paginada por padrão; o schema integral é recuperado com `name`, sem copiar as ferramentas para o Worker. O cliente MCP negocia automaticamente protocolos modernos e legados. Os bindings nativos de rate limiting mantêm cotas separadas em preview/produção, e o proxy registra duração/resultado sem parâmetros nem tokens. Veja [ROBUSTEZ-2026-10-17.md](./ROBUSTEZ-2026-10-17.md) para comportamento, validação e rollback.

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { normalizeRemoteResult } from "../server/remote-tools.js";
+import { normalizeRemoteResult, selectRemoteTools } from "../server/remote-tools.js";
 import { endpointFor } from "../server/remote-client.js";
 
 function onlyText(result) {
@@ -63,4 +63,27 @@ test("remote client selects official MCP endpoints", () => {
   assert.equal(endpointFor("github"), "https://api.githubcopilot.com/mcp/x/all");
   assert.equal(endpointFor("cloudflare"), "https://mcp.cloudflare.com/mcp");
   assert.equal(endpointFor("unknown"), null);
+});
+
+test("official catalog is paginated without sending 95 full schemas", () => {
+  const tools = Array.from({ length: 95 }, (_, index) => ({
+    name: "tool_" + index,
+    description: "Tool number " + index,
+    inputSchema: { type: "object", properties: { body: { type: "string", description: "x".repeat(5000) } } }
+  }));
+  const first = selectRemoteTools(tools);
+  assert.equal(first.total, 95);
+  assert.equal(first.nextCursor, 20);
+  assert.equal(first.tools.length, 20);
+  assert.equal(first.tools[0].inputSchema, undefined);
+  assert.ok(JSON.stringify(first).length < 10000);
+  const last = selectRemoteTools(tools, { cursor: 90, limit: 20 });
+  assert.equal(last.tools.length, 5);
+  assert.equal(last.nextCursor, null);
+  const detail = selectRemoteTools(tools, { name: "tool_37" });
+  assert.deepEqual(detail.tool, tools[37]);
+  assert.deepEqual(selectRemoteTools(tools, { name: "missing" }), { error: "Ferramenta não encontrada no catálogo oficial." });
+  const matches = selectRemoteTools(tools, { query: "number 42" });
+  assert.deepEqual(matches.tools.map(item => item.name), ["tool_42"]);
+  assert.throws(() => selectRemoteTools(null), /INVALID_TOOL_CATALOG/);
 });

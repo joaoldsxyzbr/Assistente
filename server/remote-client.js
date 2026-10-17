@@ -19,7 +19,8 @@ export async function readRemoteConfiguration(env, id) {
   return { id, endpoint, token };
 }
 export async function withRemoteClient(config, fn) {
-  const client = new Client({ name: "assistente-hub", version: "1.1.0" });
+  // Auto-negotiate the modern MCP era, falling back to the legacy initialize handshake.
+  const client = new Client({ name: "assistente-hub", version: "1.1.0" }, { versionNegotiation: { mode: "auto" } });
   const transport = new StreamableHTTPClientTransport(new URL(config.endpoint), {
     requestInit: { redirect: "manual", headers: { authorization: "Bearer " + config.token } },
     fetch: (url, init) => fetchUpstream(fetch, url, init, init?.method === "DELETE" ? 5000 : 45000)

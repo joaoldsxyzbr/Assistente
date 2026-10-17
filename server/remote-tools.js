@@ -1,4 +1,5 @@
 import { readRemoteConfiguration, withRemoteClient } from "./remote-client.js";
+import { audit } from "./shared/audit.js";
 
 const PROVIDERS = ["github", "cloudflare"];
 const MAX_OUTPUT_BYTES = 64 * 1024;
@@ -99,19 +100,51 @@ export function normalizeRemoteResult(response) {
   return { isError: Boolean(response.isError) || (omitted && !hasText && response.structuredContent === undefined), content };
 }
 
+// Return a small, searchable index by default. Retrieve a named tool for its full schema.
+export function selectRemoteTools(tools, { query = "", name, limit = 20, cursor = 0 } = {}) {
+  if (!Array.isArray(tools)) throw Error("INVALID_TOOL_CATALOG");
+  if (name !== undefined) {
+    const tool = tools.find(item => item?.name === name);
+    return tool ? { tool } : { error: "Ferramenta não encontrada no catálogo oficial." };
+  }
+  const needle = query.toLocaleLowerCase();
+  const matches = tools.filter(item => typeof item?.name === "string" &&
+    (!needle || item.name.toLocaleLowerCase().includes(needle) ||
+     String(item.description ?? "").toLocaleLowerCase().includes(needle)));
+  const selection = matches.slice(cursor, cursor + limit).map(item => ({
+    name: item.name,
+    description: typeof item.description === "string" ? item.description.slice(0, 180) : ""
+  }));
+  return { total: matches.length, cursor, nextCursor: cursor + limit < matches.length ? cursor + limit : null, tools: selection };
+}
+
 export function registerRemoteTools(server, env, fromJsonSchema, securitySchemes) {
   for (const provider of PROVIDERS) {
     server.registerTool("mcp_" + provider + "_tools", {
-      description: "Lista, em tempo real, as ferramentas publicadas pelo MCP oficial " + provider + ".",
-      inputSchema: fromJsonSchema({ type: "object", properties: {}, additionalProperties: false }),
+      description: "Pesquisa as ferramentas do MCP oficial " + provider + ". Retorna 20 nomes/resumos por página; use name para obter o schema completo de uma ferramenta.",
+      inputSchema: fromJsonSchema({
+        type: "object",
+        properties: {
+          query: { type: "string", maxLength: 128 },
+          name: { type: "string", minLength: 1, maxLength: 128 },
+          cursor: { type: "integer", minimum: 0 },
+          limit: { type: "integer", minimum: 1, maximum: 50 }
+        },
+        additionalProperties: false
+      }),
       _meta: { securitySchemes: securitySchemes(false) }
-    }, async () => {
+    }, async (options = {}) => {
       const config = await readRemoteConfiguration(env, provider);
       if (!config) return fail("OAuth upstream não conectado para " + provider + ". Consulte assistente_status.");
+      const started = Date.now();
       try {
         const value = await withRemoteClient(config, client => client.listTools(undefined, { timeout: 15000 }));
-        return { content: [{ type: "text", text: JSON.stringify(value.tools) }] };
+        const selected = selectRemoteTools(value.tools, options);
+        audit("info", "remote_discovery", { server: provider, outcome: "ok", durationMs: Date.now() - started });
+        if (selected.error) return fail(selected.error);
+        return normalizeRemoteResult({ content: [{ type: "text", text: JSON.stringify(selected) }] });
       } catch {
+        audit("warn", "remote_discovery", { server: provider, outcome: "error", durationMs: Date.now() - started });
         return fail("Não foi possível consultar o MCP oficial " + provider + ". Verifique a conexão OAuth.");
       }
     });
@@ -130,13 +163,19 @@ export function registerRemoteTools(server, env, fromJsonSchema, securitySchemes
     }, async ({ name, arguments: args }) => {
       const config = await readRemoteConfiguration(env, provider);
       if (!config) return fail("OAuth upstream não conectado para " + provider + ". Consulte assistente_status.");
+      const started = Date.now();
       try {
-        return await withRemoteClient(config, async client => {
+        const result = await withRemoteClient(config, async client => {
           const tools = (await client.listTools(undefined, { timeout: 15000 })).tools;
           if (!tools.some(tool => tool.name === name)) return fail("A ferramenta não foi publicada pelo MCP oficial.");
           return normalizeRemoteResult(await client.callTool({ name, arguments: args }, { timeout: 45000 }));
         });
+        audit(result.isError ? "warn" : "info", "remote_call", {
+          server: provider, outcome: result.isError ? "error" : "ok", durationMs: Date.now() - started
+        });
+        return result;
       } catch {
+        audit("warn", "remote_call", { server: provider, outcome: "uncertain", uncertain: true, durationMs: Date.now() - started });
         return fail("A chamada remota não foi confirmada. Se era escrita, consulte o provedor antes de repetir.");
       }
     });

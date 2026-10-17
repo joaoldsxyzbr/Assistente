@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { fetchUpstream } from "../server/shared/upstream-http.js";
+import { fetchUpstream, MAX_UPSTREAM_BODY_BYTES } from "../server/shared/upstream-http.js";
 import {
   handleUpstreamRoutes,
   getUpstreamAccessToken,
@@ -197,4 +197,22 @@ test("Cloudflare registration is reused only for the same callback and issuer", 
   env.PUBLIC_ORIGIN = "https://preview.example";
   await begin(env, fetchFn, "cloudflare");
   assert.equal(registrations, 2);
+});
+
+test("response body size is rejected before buffering, including incorrect Content-Length", async () => {
+  const exceeds = String(MAX_UPSTREAM_BODY_BYTES + 1);
+  await assert.rejects(
+    fetchUpstream(async () => new Response("small", { headers: { "content-length": exceeds } }), "https://example.com"),
+    /UPSTREAM_RESPONSE_TOO_LARGE/
+  );
+  const response = await fetchUpstream(async () => new Response(new ReadableStream({
+    start(controller) {
+      controller.enqueue(new Uint8Array(MAX_UPSTREAM_BODY_BYTES));
+      controller.enqueue(new Uint8Array(1));
+      controller.close();
+    }
+  })), "https://example.com");
+  await assert.rejects(response.arrayBuffer(), /UPSTREAM_RESPONSE_TOO_LARGE/);
+  const normal = await fetchUpstream(async () => Response.json({ ok: true }), "https://example.com");
+  assert.deepEqual(await normal.json(), { ok: true });
 });
