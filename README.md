@@ -29,3 +29,11 @@ As credenciais de produção estão configuradas. A autorização das contas e a
     npm run test:runtime
 
 O GitHub é a fonte de verdade deste projeto: joaoldsxyzbr/Assistente-mcps. O CI verifica sintaxe, sincronização de skills, testes de protocolo/OAuth e navegador Chromium, além de build dry-run. Testes de ponto/gastos nunca escrevem nos bancos D1 reais. A configuração inclui um alvo de preview isolado com KV próprio; O preview precisa de suas próprias credenciais e consentimento. Deploy de preview e promoção de produção são operações distintas.
+
+## Robustez e publicação
+
+Os catálogos oficiais são paginados por padrão: `mcp_github_tools` e `mcp_cloudflare_tools` retornam 20 ferramentas resumidas; use `query`, `cursor`, `limit` ou `name` (schema de uma ferramenta) conforme necessário. As chamadas remotas continuam textuais (64 KiB), e a leitura HTTP upstream tem limite de 2 MiB por stream.
+
+Rate limiting nativo em Cloudflare: 120 chamadas MCP autenticadas por minuto por operador, 15 tentativas de autorização por minuto por endereço na borda, com namespaces distintos para preview e produção. Eventos de duração e resultado são registrados sem argumentos ou tokens.
+
+Antes de publicar: `npm run check`, `npm run test:browser`, `npm run test:runtime`, validação em preview e promoção explícita da versão pela Cloudflare. Detalhes, limites, checklist e reversão: [docs/ROBUSTEZ-2026-10-17.md](docs/ROBUSTEZ-2026-10-17.md).
