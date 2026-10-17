@@ -24,3 +24,12 @@ ChatGPT conecta-se por OAuth ao único Worker Assistente MCPs. O Worker hospeda 
 - CI cobre discovery, DCR Cloudflare, PKCE, cifragem, renovação e revogação GitHub com respostas simuladas; o build dry-run verifica os ambientes de produção e preview. Isso não comprova consentimento ou chamadas reais aos provedores.
 - O Worker está publicado e suas credenciais configuradas. Consentimento e chamadas reais dependem do operador; o aceite ponta a ponta permanece pendente até confirmar leituras, refresh e revogação reais. Não fazer escritas de teste em D1.
 - Chromium cobre a regressão do clique bloqueado por CSP, o redirecionamento GET para ambos os provedores e a apresentação de erro de senha. As referências das skills são servidas pelo MCP em `assistente_skill` com `arquivo`.
+
+
+## Contrato de saída textual do proxy
+
+\`mcp_github_call\` e \`mcp_cloudflare_call\` normalizam o retorno dos provedores para blocos MCP \`content\` do tipo \`text\` exclusivamente. Textos pequenos são preservados. Resultados \`structuredContent\` são serializados em JSON textual somente se o provedor não fornecer texto; \`_meta\` é descartado. Recursos textuais embutidos viram texto; links HTTPS sem query podem ser indicados como referência; imagens, áudio e dados binários não são encaminhados.
+
+O limite de resposta normalizada é 64 KiB. Respostas maiores são recusadas com instrução para restringir a consulta, sem truncar silenciosamente. Erros de upstream conservam \`isError\`; chamadas de escrita incertas não são repetidas. A saída apenas textual reduz o risco de anexos emitidos pelo Worker, mas a apresentação/materialização feita pela plataforma ChatGPT é externa ao Worker e depende de verificação prática.
+
+A normalização não altera OAuth, endpoints ou autorização. Para valores estruturados, nenhum dado remoto de recurso/binário deve ser tratado como conteúdo executável. Veja os testes em \`tests/remote-tools.test.js\`.
