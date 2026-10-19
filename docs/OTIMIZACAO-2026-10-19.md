@@ -45,3 +45,5 @@ Reforçar o OAuth e eliminar a enumeração redundante de ferramentas por execu�
 - Versão anterior confirmada para rollback: `23746209-3f31-4726-b52f-cf6edf875821`. A nova implementação não foi submetida a benchmark de p95; não afirmar ganho numérico sem medi-lo.
 - Nota operacional: o check externo adicional de Workers Builds em um Preview gerado por integração antiga falhou com token inválido (10000/9109); CI principal e build do Worker `assistente` passaram. A correção desse check não foi feita porque o usuário não quer adicionar/manter fluxo de Preview para este trabalho.
 - Rotação do client secret do GitHub, anteriormente exposto em conversa, **não foi executada nem confirmada**; requer procedimento operacional separado com atualização segura no Worker.
+
+**Estado posterior (19/10/2026):** o gatilho de Preview foi desativado e a configuração de Preview foi retirada na [limpeza operacional](./LIMPEZA-2026-10-19.md). Esta seção acima permanece como registro histórico da publicação do PR #88.

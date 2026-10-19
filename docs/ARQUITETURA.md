@@ -21,7 +21,7 @@ ChatGPT conecta-se por OAuth ao único Worker Assistente MCPs. O Worker hospeda 
 
 - Hosts upstream são fixos; endpoints OAuth descobertos são aceitos apenas nos domínios oficiais de cada provedor e redirecionamentos HTTP são recusados.
 - Estado OAuth com validade explícita e remoção no callback, validação de issuer, PKCE S256, CSP compatível com redirecionamento oficial, validação de origem e criptografia AES-GCM para registros em KV. Os limites de concorrência do KV estão em OAUTH-UPSTREAM.md.
-- CI cobre discovery, DCR Cloudflare, PKCE, cifragem, renovação e revogação GitHub com respostas simuladas; o build dry-run verifica os ambientes de produção e preview. Isso não comprova consentimento ou chamadas reais aos provedores.
+- CI cobre discovery, DCR Cloudflare, PKCE, cifragem, renovação e revogação GitHub com respostas simuladas; o build dry-run verifica a configuração de produção. Isso não comprova consentimento ou chamadas reais aos provedores.
 - O Worker está publicado e suas credenciais configuradas. Consentimento e chamadas reais dependem do operador; o aceite ponta a ponta permanece pendente até confirmar leituras, refresh e revogação reais. Não fazer escritas de teste em D1.
 - Chromium cobre a regressão do clique bloqueado por CSP, o redirecionamento GET para ambos os provedores e a apresentação de erro de senha. As referências das skills são servidas pelo MCP em `assistente_skill` com `arquivo`.
 
@@ -36,4 +36,8 @@ A normalização não altera OAuth, endpoints ou autorização. Para valores est
 
 ## Robustez incremental (17/10/2026)
 
-Corpos remotos recebem limite de 2 MiB por stream **antes** do parse; saídas ao ChatGPT continuam limitadas a 64 KiB. A descoberta de ferramentas agora é resumida e paginada por padrão; o schema integral é recuperado com `name`, sem copiar as ferramentas para o Worker. O cliente MCP negocia automaticamente protocolos modernos e legados. Os bindings nativos de rate limiting mantêm cotas separadas em preview/produção, e o proxy registra duração/resultado sem parâmetros nem tokens. Veja [ROBUSTEZ-2026-10-17.md](./ROBUSTEZ-2026-10-17.md) para comportamento, validação e rollback.
+Corpos remotos recebem limite de 2 MiB por stream **antes** do parse; saídas ao ChatGPT continuam limitadas a 64 KiB. A descoberta de ferramentas agora é resumida e paginada por padrão; o schema integral é recuperado com `name`, sem copiar as ferramentas para o Worker. O cliente MCP negocia automaticamente protocolos modernos e legados. Os bindings nativos de rate limiting mantêm as cotas de produção, e o proxy registra duração/resultado sem parâmetros nem tokens. Veja [ROBUSTEZ-2026-10-17.md](./ROBUSTEZ-2026-10-17.md) para comportamento, validação e rollback.
+
+## Simplificação operacional (19/10/2026)
+
+O projeto mantém somente o Worker de produção: CI e build dry-run antes de publicar, promoção explícita da versão validada e rollback pela Cloudflare. O gatilho de Preview foi removido, e as configurações `env.preview` e `previews` foram retiradas do Wrangler. Veja [LIMPEZA-2026-10-19.md](./LIMPEZA-2026-10-19.md). Registros históricos anteriores de Preview descrevem o estado na época, não uma obrigação atual.
