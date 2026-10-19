@@ -22,7 +22,7 @@ export function classifyRemoteFailure(error) {
       status === 401 || status === 403) return "AUTHORIZATION";
   if (/invalid.param|invalid.argument|unknown.tool|validation/i.test(detail) ||
       status === 400 || status === 404 || status === 422) return "VALIDATION";
-  if (/network|fetch.failed|connection|unavailable|internal.server/i.test(detail) ||
+  if (/network|fetch.failed|connection|unavailable|internal.server|\b(?:500|502|503)\b/i.test(detail) ||
       status >= 500 && status < 600) return "UPSTREAM_UNAVAILABLE";
   return "UNCONFIRMED";
 }
