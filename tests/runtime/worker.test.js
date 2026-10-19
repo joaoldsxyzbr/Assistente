@@ -42,7 +42,7 @@ test(
         result = { content: [{ type: "text", text: "upstream:" + rpc.params.name }] };
         if (rpc.params.name === "sse_read") {
           const rpcResponse = JSON.stringify({ jsonrpc: "2.0", id: rpc.id, result });
-          return new Response("event: message\\ndata: " + rpcResponse + "\\n\\n", {
+          return new Response("event: message\ndata: " + rpcResponse + "\n\n", {
             headers: { "content-type": "text/event-stream" }
           });
         }
