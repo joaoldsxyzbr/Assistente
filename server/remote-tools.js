@@ -9,6 +9,37 @@ export const remoteToolNames = PROVIDERS.map(provider => "mcp_" + provider + "_c
 function fail(message) {
   return { isError: true, content: [{ type: "text", text: message }] };
 }
+
+// Classificacao fechada: jamais incluir mensagens, argumentos ou tokens de terceiros.
+// Um erro de transporte depois da chamada pode significar que a escrita aconteceu.
+export function classifyRemoteFailure(error) {
+  const detail = String(error?.code ?? "") + " " + String(error?.message ?? "");
+  const status = Number(error?.status ?? error?.statusCode);
+  if (/UPSTREAM_RESPONSE_TOO_LARGE/.test(detail) || status === 413) return "RESPONSE_TOO_LARGE";
+  if (/timeout|timed.out|deadline|aborted/i.test(detail) || status === 408 || status === 504) return "TIMEOUT";
+  if (/rate.limit|too.many.requests/i.test(detail) || status === 429) return "RATE_LIMIT";
+  if (/unauthorized|invalid.token|expired.token|forbidden|insufficient.scope/i.test(detail) ||
+      status === 401 || status === 403) return "AUTHORIZATION";
+  if (/invalid.param|invalid.argument|unknown.tool|validation/i.test(detail) ||
+      status === 400 || status === 404 || status === 422) return "VALIDATION";
+  if (/network|fetch.failed|connection|unavailable|internal.server/i.test(detail) ||
+      status >= 500 && status < 600) return "UPSTREAM_UNAVAILABLE";
+  return "UNCONFIRMED";
+}
+export function remoteFailure(error, provider) {
+  const category = classifyRemoteFailure(error);
+  const advice = {
+    RESPONSE_TOO_LARGE: "Restrinja ou pagine a consulta.",
+    TIMEOUT: "A chamada excedeu o prazo.",
+    RATE_LIMIT: "Limite de chamadas atingido. Aguarde antes de consultar novamente.",
+    AUTHORIZATION: "Verifique a autorizacao OAuth e as permissoes do provedor.",
+    VALIDATION: "Confira o nome da ferramenta e os argumentos exigidos.",
+    UPSTREAM_UNAVAILABLE: "O provedor ou a rede nao respondeu corretamente.",
+    UNCONFIRMED: "Nao foi possivel confirmar a resposta remota."
+  }[category];
+  return fail("[" + category + "] " + provider + ": " + advice +
+    " Se era uma escrita, verifique o estado no provedor antes de tentar novamente.");
+}
 function label(value) {
   return typeof value === "string" ? value.replace(/[\x00-\x1f\x7f]/g, " ").slice(0, 160) : "";
 }
@@ -95,7 +126,7 @@ export function normalizeRemoteResult(response) {
     content.push({ type: "text", text: "Operação remota concluída sem conteúdo de resposta." });
   }
   if (encoder.encode(content.map(block => block.text).join("\n")).length > MAX_OUTPUT_BYTES) {
-    return fail("Resposta remota excede 64 KiB. Nenhum trecho foi enviado como resultado completo; faça consulta mais específica ou paginada.");
+    return fail("[RESPONSE_TOO_LARGE] Resposta remota excede 64 KiB. Restrinja ou pagine a consulta. Se era uma escrita, verifique o estado no provedor antes de tentar novamente.");
   }
   return { isError: Boolean(response.isError) || (omitted && !hasText && response.structuredContent === undefined), content };
 }
@@ -157,7 +188,7 @@ export function invokeRemoteTool(client, name, args) {
   return client.callTool({ name, arguments: args }, { timeout: 45000 });
 }
 
-export function registerRemoteTools(server, env, fromJsonSchema, securitySchemes) {
+export function registerRemoteTools(server, env, fromJsonSchema, securitySchemes, traceId) {
   for (const provider of PROVIDERS) {
     server.registerTool("mcp_" + provider + "_tools", {
       description: "Pesquisa as ferramentas do MCP oficial " + provider + " por palavras (query). Lista resumos ordenados por relevância; resultado único inclui inputSchema quando compacto. Use name para o schema completo.",
@@ -173,22 +204,26 @@ export function registerRemoteTools(server, env, fromJsonSchema, securitySchemes
       }),
       _meta: { securitySchemes: securitySchemes(false) }
     }, async (options = {}) => {
-      const config = await readRemoteConfiguration(env, provider);
-      if (!config) return fail("OAuth upstream não conectado para " + provider + ". Consulte assistente_status.");
       const started = Date.now();
       try {
+        const config = await readRemoteConfiguration(env, provider);
+        if (!config) return fail("[AUTHORIZATION] OAuth upstream indisponivel para " + provider + ". Consulte assistente_status.");
         const value = await withRemoteClient(config, client => client.listTools(undefined, { timeout: 15000 }));
         const selected = selectRemoteTools(value.tools, options);
-        audit("info", "remote_discovery", { server: provider, outcome: "ok", durationMs: Date.now() - started });
         if (selected.error) return fail(selected.error);
-        return normalizeRemoteResult({ content: [{ type: "text", text: JSON.stringify(selected) }] });
-      } catch {
-        audit("warn", "remote_discovery", { server: provider, outcome: "error", durationMs: Date.now() - started });
-        return fail("Não foi possível consultar o MCP oficial " + provider + ". Verifique a conexão OAuth.");
+        const result = normalizeRemoteResult({ content: [{ type: "text", text: JSON.stringify(selected) }] });
+        audit(result.isError ? "warn" : "info", "remote_discovery", {
+          server: provider, outcome: result.isError ? "error" : "ok", traceId, durationMs: Date.now() - started
+        });
+        return result;
+      } catch (error) {
+        const category = classifyRemoteFailure(error);
+        audit("warn", "remote_discovery", { server: provider, outcome: "error", category, traceId, durationMs: Date.now() - started });
+        return remoteFailure(error, provider);
       }
     });
     server.registerTool("mcp_" + provider + "_call", {
-      description: "Encaminha uma chamada ao MCP oficial " + provider + " com resposta somente textual, sem anexos. Exige escopo mcp:write por segurança.",
+      description: "Encaminha uma chamada ao MCP oficial " + provider + " com resposta somente textual. Em erro incerto, verifique o estado remoto antes de repetir uma escrita. Exige escopo mcp:write.",
       inputSchema: fromJsonSchema({
         type: "object",
         properties: {
@@ -200,22 +235,27 @@ export function registerRemoteTools(server, env, fromJsonSchema, securitySchemes
       }),
       _meta: { securitySchemes: securitySchemes(true) }
     }, async ({ name, arguments: args }) => {
-      const config = await readRemoteConfiguration(env, provider);
-      if (!config) return fail("OAuth upstream não conectado para " + provider + ". Consulte assistente_status.");
       const started = Date.now();
       try {
+        const config = await readRemoteConfiguration(env, provider);
+        if (!config) return fail("[AUTHORIZATION] OAuth upstream indisponivel para " + provider + ". Consulte assistente_status.");
         const result = await withRemoteClient(config, async client => {
-          // The official MCP server validates the tool name and arguments.
-          // The caller already discovered the schema; do not list 95 tools again.
+          // Nunca repetir automaticamente uma chamada generica; ela pode modificar dados.
           return normalizeRemoteResult(await invokeRemoteTool(client, name, args));
         });
         audit(result.isError ? "warn" : "info", "remote_call", {
-          server: provider, outcome: result.isError ? "error" : "ok", durationMs: Date.now() - started
+          server: provider, outcome: result.isError ? "error" : "ok",
+          category: result.isError ? "upstream_result" : undefined,
+          traceId, durationMs: Date.now() - started
         });
         return result;
-      } catch {
-        audit("warn", "remote_call", { server: provider, outcome: "uncertain", uncertain: true, durationMs: Date.now() - started });
-        return fail("A chamada remota não foi confirmada. Se era escrita, consulte o provedor antes de repetir.");
+      } catch (error) {
+        const category = classifyRemoteFailure(error);
+        audit("warn", "remote_call", {
+          server: provider, outcome: "uncertain", uncertain: true,
+          category, traceId, durationMs: Date.now() - started
+        });
+        return remoteFailure(error, provider);
       }
     });
   }

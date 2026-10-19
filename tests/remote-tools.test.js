@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { invokeRemoteTool, normalizeRemoteResult, selectRemoteTools } from "../server/remote-tools.js";
+import { classifyRemoteFailure, remoteFailure, invokeRemoteTool, normalizeRemoteResult, selectRemoteTools } from "../server/remote-tools.js";
 import { endpointFor } from "../server/remote-client.js";
 
 function onlyText(result) {
@@ -147,4 +147,23 @@ test("remote execution calls the official tool directly without listing its cata
     async callTool() { throw Error("Unknown tool"); },
     listTools() { throw Error("REDUNDANT_LIST_TOOLS"); }
   }, "not_available", {}), /Unknown tool/);
+});
+test("categorizes errors without leaking upstream secrets or lying about writes", () => {
+  const scenarios = [
+    [new Error("UPSTREAM_RESPONSE_TOO_LARGE"), "RESPONSE_TOO_LARGE"],
+    [new Error("request timed out"), "TIMEOUT"],
+    [{ status: 429 }, "RATE_LIMIT"],
+    [{ status: 401 }, "AUTHORIZATION"],
+    [{ status: 422 }, "VALIDATION"],
+    [{ status: 503 }, "UPSTREAM_UNAVAILABLE"],
+    [new Error("unexpected PRIVATE_ACCESS_TOKEN_987"), "UNCONFIRMED"]
+  ];
+  for (const [error, code] of scenarios) {
+    assert.equal(classifyRemoteFailure(error), code);
+    const result = remoteFailure(error, "github");
+    assert.equal(result.isError, true);
+    assert.match(result.content[0].text, new RegExp("^\\\\[" + code + "\\\\]"));
+    assert.match(result.content[0].text, /verifique o estado/i);
+    assert.doesNotMatch(JSON.stringify(result), /PRIVATE_ACCESS_TOKEN_987/);
+  }
 });
