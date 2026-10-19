@@ -3,6 +3,7 @@ import { SKILL_NAMES, SKILL_CONTENTS, SKILL_REFERENCES, MCP_SERVER_INSTRUCTIONS 
 import { oauthSecuritySchemesForTool } from "./shared/oauth-helpers.js";
 import { registerRemoteTools } from "./remote-tools.js";
 import { registerGithubRelocation } from "./github-relocation.js";
+import { registerGithubExactEdit } from "./github-exact-edit.js";
 import { hasUpstreamConnection } from "./upstream-oauth.js";
 
 export function createAssistenteMcpServer(env = {}, traceId) {
@@ -44,5 +45,6 @@ export function createAssistenteMcpServer(env = {}, traceId) {
   });
   registerRemoteTools(server, env, fromJsonSchema, oauthSecuritySchemesForTool, traceId);
   registerGithubRelocation(server, env, fromJsonSchema, oauthSecuritySchemesForTool, traceId);
+  registerGithubExactEdit(server, env, fromJsonSchema, oauthSecuritySchemesForTool, traceId);
   return server;
 }

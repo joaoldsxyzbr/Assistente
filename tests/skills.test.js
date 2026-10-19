@@ -17,7 +17,8 @@ test("worker publica skills, estado, MCPs oficiais e relocacao GitHub",async()=>
  assert.match(worker,/assistente_skill/);
  assert.match(worker,/registerRemoteTools/);
  assert.match(worker,/registerGithubRelocation/);
- assert.deepEqual(remoteToolNames,["mcp_github_call","mcp_cloudflare_call","github_relocate_directory"]);
+ assert.match(worker,/registerGithubExactEdit/);
+ assert.deepEqual(remoteToolNames,["mcp_github_call","mcp_cloudflare_call","github_relocate_directory","github_edit_file"]);
  assert.equal((worker.match(/server\.registerTool\(/g)||[]).length,2);
 });
 test("endpoints oficiais fixos e configuração OAuth lida do KV",async()=>{
