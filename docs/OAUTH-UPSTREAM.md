@@ -28,27 +28,19 @@ Credenciais do Worker (já configuradas em produção; não publicar valores):
 
 A configuração raiz usa `secrets.required` para exigir a presença dos quatro nomes no deploy de produção. Somente os nomes são versionados; os valores continuam protegidos na Cloudflare. A alteração não substitui nem rotaciona secrets existentes.
 
-Não guardar nenhum desses valores no repositório. A configuração tem um ambiente isolado de preview com namespace KV próprio e URL https://assistente-preview.contato-24f.workers.dev; não use os comandos abaixo sem a flag --env preview, pois a configuração raiz aponta para produção.
+Não guardar nenhum desses valores no repositório. A publicação usa apenas o Worker de produção e os secrets já cadastrados na Cloudflare. Uma nova versão deve manter todos os bindings existentes.
 
-Para configurar secrets apenas no preview, execute cada comando e informe o valor no prompt seguro:
+## Rotação segura do segredo OAuth GitHub
 
-    npx wrangler secret put ASSISTENTE_OAUTH_PASSWORD --config wrangler.assistente.jsonc --env preview
-    npx wrangler secret put UPSTREAM_OAUTH_ENCRYPTION_KEY --config wrangler.assistente.jsonc --env preview
-    npx wrangler secret put GITHUB_OAUTH_CLIENT_ID --config wrangler.assistente.jsonc --env preview
-    npx wrangler secret put GITHUB_OAUTH_CLIENT_SECRET --config wrangler.assistente.jsonc --env preview
+O client secret do OAuth App foi compartilhado anteriormente em uma conversa e sua rotação **ainda não está comprovada**. A criação de um novo client secret é feita pelo proprietário no [GitHub Developer Settings](https://github.com/settings/developers), em **OAuth Apps → aplicativo do Assistente → Generate a new client secret**. O conector GitHub disponível para o projeto não tem operação para gerar esse segredo.
 
-Crie um OAuth App GitHub separado para preview, com callback https://assistente-preview.contato-24f.workers.dev/connections/github/callback. O Worker de preview usa o KV assistente-oauth-preview e não tem rota customizada nem binding D1. Rotacionar a chave de criptografia exige reconectar os provedores.
-## Operação
+1. Gere um novo secret no GitHub, mantendo o antigo temporariamente durante a transição.
+2. Atualize **GITHUB_OAUTH_CLIENT_SECRET** diretamente na aba Settings/Variables and Secrets do Worker `assistente` na Cloudflare (sem enviá-lo ao chat ou ao GitHub). Se usar Wrangler, execute `npx wrangler secret put GITHUB_OAUTH_CLIENT_SECRET --config wrangler.assistente.jsonc` em um terminal local autenticado.
+3. Confira qual versão ficou publicada, teste uma **nova autorização OAuth GitHub** e uma leitura real `get_me`. Se a troca do secret invalidar a autorização atual, reconecte pelo fluxo OAuth oficial.
+4. Só depois de verificar a autenticação com o novo valor, remova/revogue o segredo antigo nas configurações do OAuth App. Não troque `UPSTREAM_OAUTH_ENCRYPTION_KEY` nessa operação.
 
-Para testar sem tocar produção:
+A criação e inclusão do novo valor são ações externas que exigem o usuário autenticado à UI do OAuth App GitHub; **não considere a rotação executada** apenas pela presença de secrets no Worker.
 
-1. Crie um OAuth App GitHub separado para preview, com callback https://assistente-preview.contato-24f.workers.dev/connections/github/callback.
-2. Faça o primeiro deploy do Worker isolado com npm run deploy:preview. Ele usa o KV assistente-oauth-preview, o domínio workers.dev e não tem rota customizada nem binding D1.
-3. Configure as quatro secrets listadas acima com --env preview. O password e a chave de criptografia do preview devem ser distintos dos de produção.
-4. Conecte o MCP preview no ChatGPT pela URL https://assistente-preview.contato-24f.workers.dev/mcp e autorize GitHub/Cloudflare em conexões separadas.
-5. Use somente leituras no smoke test. O MCP Cloudflare pode alcançar D1 pela autorização OAuth, então não faça escrita de teste nos bancos pessoais.
-
-Os links de consentimento upstream são https://assistente-preview.contato-24f.workers.dev/connections/github/start e https://assistente-preview.contato-24f.workers.dev/connections/cloudflare/start. assistente_status confirma o estado sem revelar tokens.
 ## Produção e diagnóstico
 
 - MCP: https://assistente.joaolds.xyz.br/mcp
@@ -71,7 +63,7 @@ Os links de consentimento upstream são https://assistente-preview.contato-24f.w
 - KV tem consistência eventual e não oferece consumo atômico de estado. A remoção impede replay sequencial, mas não é uma garantia global contra callbacks simultâneos. PKCE e o código de uso único do provedor permanecem obrigatórios. Garantia global exigiria armazenamento transacional, por exemplo Durable Objects.
 - Renovações simultâneas são agrupadas no mesmo isolate. Isolates distintos ainda podem disputar um refresh token rotativo; nesse caso pode ser necessário reconectar. Para volume concorrente, migrar o refresh para coordenação transacional.
 - CI usa provedores simulados, incluindo clique real em Chromium e callback. Ainda falta confirmar consentimento, leitura real, renovação e revogação das contas do operador. Não fazer escritas de teste nos bancos pessoais.
-- O preview usa KV e credenciais próprios. Publicar código não concede autorização upstream automaticamente.
+- O antigo ambiente de Preview foi descontinuado; tokens OAuth e registros do Worker de produção não são compartilhados com outro ambiente. Publicar código não concede autorização upstream automaticamente.
 
 ## Fontes oficiais
 
