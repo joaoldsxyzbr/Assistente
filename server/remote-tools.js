@@ -113,15 +113,22 @@ export function selectRemoteTools(tools, { query = "", name, limit = 20, cursor 
   }
   const needle = searchable(query);
   const terms = needle ? needle.split(" ") : [];
-  const matches = tools.map((tool, index) => {
+  const candidates = tools.map((tool, index) => {
     const toolName = searchable(tool?.name);
     const description = searchable(tool?.description);
-    if (!toolName || !terms.every(term => toolName.includes(term) || description.includes(term))) return null;
+    if (!toolName) return null;
     const score = !terms.length ? 0
       : (toolName === needle ? 1000 : toolName.startsWith(needle) ? 100 : 0)
         + terms.reduce((sum, term) => sum + (toolName.includes(term) ? 10 : 1), 0);
-    return { tool, index, score };
+    return { tool, index, toolName, description, score };
   }).filter(Boolean);
+  // Prefer tools whose names match every search term; use descriptions only
+  // when no name matches. This keeps "get file" focused on get_file_contents.
+  const nameMatches = terms.length
+    ? candidates.filter(item => terms.every(term => item.toolName.includes(term))) : [];
+  const matches = nameMatches.length ? nameMatches
+    : candidates.filter(item => terms.every(term =>
+      item.toolName.includes(term) || item.description.includes(term)));
   if (terms.length) matches.sort((a, b) => b.score - a.score || a.index - b.index);
   const selection = matches.slice(cursor, cursor + limit).map(({ tool }) => ({
     name: tool.name,

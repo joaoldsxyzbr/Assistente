@@ -95,9 +95,16 @@ test("focused discovery matches words, ranks names and loads only relevant schem
     { name: "get_issue", description: "Read issue data", inputSchema: { type: "object" } }
   ];
   const ranked = selectRemoteTools(tools, { query: "FILE contents" });
-  assert.equal(ranked.total, 2);
-  assert.deepEqual(ranked.tools.map(item => item.name), ["get_file_contents", "run_secret_scanning"]);
-  assert.ok(ranked.tools.every(item => item.inputSchema === undefined));
+  assert.equal(ranked.total, 1);
+  assert.deepEqual(ranked.tools.map(item => item.name), ["get_file_contents"]);
+  assert.deepEqual(ranked.tools[0].inputSchema, schema);
+
+  const broad = selectRemoteTools(tools, { query: "read" });
+  assert.deepEqual(broad.tools.map(item => item.name), ["get_file_contents", "get_issue"]);
+  assert.ok(broad.tools.every(item => item.inputSchema === undefined));
+  const fallback = selectRemoteTools(tools, { query: "scan secrets" });
+  assert.deepEqual(fallback.tools.map(item => item.name), ["run_secret_scanning"]);
+  assert.ok(fallback.tools[0].inputSchema);
 
   const focused = selectRemoteTools(tools, { query: "get file" });
   assert.equal(focused.total, 1);
