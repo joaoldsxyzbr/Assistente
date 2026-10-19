@@ -100,28 +100,54 @@ export function normalizeRemoteResult(response) {
   return { isError: Boolean(response.isError) || (omitted && !hasText && response.structuredContent === undefined), content };
 }
 
-// Return a small, searchable index by default. Retrieve a named tool for its full schema.
+// Keep broad discovery compact; load the input schema only for a focused match.
+function searchable(value) {
+  return String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase().replace(/[_./-]+/g, " ").replace(/\s+/g, " ").trim();
+}
 export function selectRemoteTools(tools, { query = "", name, limit = 20, cursor = 0 } = {}) {
   if (!Array.isArray(tools)) throw Error("INVALID_TOOL_CATALOG");
   if (name !== undefined) {
     const tool = tools.find(item => item?.name === name);
     return tool ? { tool } : { error: "Ferramenta não encontrada no catálogo oficial." };
   }
-  const needle = query.toLocaleLowerCase();
-  const matches = tools.filter(item => typeof item?.name === "string" &&
-    (!needle || item.name.toLocaleLowerCase().includes(needle) ||
-     String(item.description ?? "").toLocaleLowerCase().includes(needle)));
-  const selection = matches.slice(cursor, cursor + limit).map(item => ({
-    name: item.name,
-    description: typeof item.description === "string" ? item.description.slice(0, 180) : ""
+  const needle = searchable(query);
+  const terms = needle ? needle.split(" ") : [];
+  const matches = tools.map((tool, index) => {
+    const toolName = searchable(tool?.name);
+    const description = searchable(tool?.description);
+    if (!toolName || !terms.every(term => toolName.includes(term) || description.includes(term))) return null;
+    const score = !terms.length ? 0
+      : (toolName === needle ? 1000 : toolName.startsWith(needle) ? 100 : 0)
+        + terms.reduce((sum, term) => sum + (toolName.includes(term) ? 10 : 1), 0);
+    return { tool, index, score };
+  }).filter(Boolean);
+  if (terms.length) matches.sort((a, b) => b.score - a.score || a.index - b.index);
+  const selection = matches.slice(cursor, cursor + limit).map(({ tool }) => ({
+    name: tool.name,
+    description: typeof tool.description === "string" ? tool.description.slice(0, 180) : ""
   }));
-  return { total: matches.length, cursor, nextCursor: cursor + limit < matches.length ? cursor + limit : null, tools: selection };
+
+  // A single precise search can go straight to mcp_*_call without an extra
+  // round trip for "name". Large schemas still require explicit detail lookup.
+  if (terms.length && matches.length === 1 && selection.length === 1) {
+    const schema = matches[0].tool.inputSchema;
+    if (schema && typeof schema === "object" &&
+        encoder.encode(JSON.stringify(schema)).length <= 16 * 1024) {
+      selection[0].inputSchema = schema;
+    }
+  }
+  return {
+    total: matches.length, cursor,
+    nextCursor: cursor + limit < matches.length ? cursor + limit : null,
+    tools: selection
+  };
 }
 
 export function registerRemoteTools(server, env, fromJsonSchema, securitySchemes) {
   for (const provider of PROVIDERS) {
     server.registerTool("mcp_" + provider + "_tools", {
-      description: "Pesquisa as ferramentas do MCP oficial " + provider + ". Retorna 20 nomes/resumos por página; use name para obter o schema completo de uma ferramenta.",
+      description: "Pesquisa as ferramentas do MCP oficial " + provider + " por palavras (query). Lista resumos ordenados por relevância; resultado único inclui inputSchema quando compacto. Use name para o schema completo.",
       inputSchema: fromJsonSchema({
         type: "object",
         properties: {

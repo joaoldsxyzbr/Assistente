@@ -87,3 +87,36 @@ test("official catalog is paginated without sending 95 full schemas", () => {
   assert.deepEqual(matches.tools.map(item => item.name), ["tool_42"]);
   assert.throws(() => selectRemoteTools(null), /INVALID_TOOL_CATALOG/);
 });
+test("focused discovery matches words, ranks names and loads only relevant schemas", () => {
+  const schema = { type: "object", properties: { path: { type: "string" } }, required: ["path"] };
+  const tools = [
+    { name: "run_secret_scanning", description: "Scan file contents for secrets", inputSchema: { type: "object" } },
+    { name: "get_file_contents", description: "Read repository file", inputSchema: schema, icons: [{ src: "PRIVATE_ICON" }] },
+    { name: "get_issue", description: "Read issue data", inputSchema: { type: "object" } }
+  ];
+  const ranked = selectRemoteTools(tools, { query: "FILE contents" });
+  assert.equal(ranked.total, 2);
+  assert.deepEqual(ranked.tools.map(item => item.name), ["get_file_contents", "run_secret_scanning"]);
+  assert.ok(ranked.tools.every(item => item.inputSchema === undefined));
+
+  const focused = selectRemoteTools(tools, { query: "get file" });
+  assert.equal(focused.total, 1);
+  assert.deepEqual(focused.tools[0].inputSchema, schema);
+  assert.ok(!JSON.stringify(focused).includes("PRIVATE_ICON"));
+  assert.deepEqual(selectRemoteTools(tools, { query: "GET_FILE_CONTENTS" }).tools[0].inputSchema, schema);
+  assert.deepEqual(selectRemoteTools(tools, { query: "not present" }).tools, []);
+
+  const accented = selectRemoteTools([{ name: "visao_geral", inputSchema: schema }], { query: "VISÃO" });
+  assert.deepEqual(accented.tools[0].inputSchema, schema);
+});
+
+test("large or broad discovery never loads unrelated full schemas", () => {
+  const hugeSchema = { type: "object", properties: { text: { description: "x".repeat(17000) } } };
+  const tools = [{ name: "big_tool", inputSchema: hugeSchema }, { name: "small_tool", inputSchema: { type: "object" } }];
+  const focused = selectRemoteTools(tools, { query: "big tool" });
+  assert.equal(focused.total, 1);
+  assert.equal(focused.tools[0].inputSchema, undefined);
+  const broad = selectRemoteTools(tools);
+  assert.ok(broad.tools.every(item => item.inputSchema === undefined));
+  assert.deepEqual(selectRemoteTools(tools, { name: "big_tool" }).tool.inputSchema, hugeSchema);
+});

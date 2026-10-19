@@ -32,7 +32,7 @@ O GitHub é a fonte de verdade deste projeto: joaoldsxyzbr/Assistente-mcps. O CI
 
 ## Robustez e publicação
 
-Os catálogos oficiais são paginados por padrão: `mcp_github_tools` e `mcp_cloudflare_tools` retornam 20 ferramentas resumidas; use `query`, `cursor`, `limit` ou `name` (schema de uma ferramenta) conforme necessário. As chamadas remotas continuam textuais (64 KiB), e a leitura HTTP upstream tem limite de 2 MiB por stream.
+Os catálogos oficiais são paginados por padrão: `mcp_github_tools` e `mcp_cloudflare_tools` retornam 20 ferramentas resumidas. Use `query` com palavras do nome ou descrição (ex.: `get file`); se houver uma única correspondência, um `inputSchema` compacto já é incluído, evitando a consulta separada por `name`. `cursor` e `limit` paginam; `name` continua disponível para obter o schema completo. As chamadas remotas continuam textuais (64 KiB), e a leitura HTTP upstream tem limite de 2 MiB por stream.
 
 Rate limiting nativo em Cloudflare: 120 chamadas MCP autenticadas por minuto por operador, 15 tentativas de autorização por minuto por endereço na borda, com namespaces distintos para preview e produção. Eventos de duração e resultado são registrados sem argumentos ou tokens.
 
