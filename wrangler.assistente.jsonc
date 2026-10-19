@@ -30,6 +30,14 @@
       "id": "5a3768dfe8a7431c953f5ed0720825d6"
     }
   ],
+  "secrets": {
+    "required": [
+      "ASSISTENTE_OAUTH_PASSWORD",
+      "UPSTREAM_OAUTH_ENCRYPTION_KEY",
+      "GITHUB_OAUTH_CLIENT_ID",
+      "GITHUB_OAUTH_CLIENT_SECRET"
+    ]
+  },
   "vars": {
     "MCP_CLOUDFLARE_URL": "https://mcp.cloudflare.com/mcp",
     "MCP_CLOUDFLARE_ACCOUNT_ID": "924f32dc9eeb8946dc033801c0c17c42",

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { normalizeRemoteResult, selectRemoteTools } from "../server/remote-tools.js";
+import { invokeRemoteTool, normalizeRemoteResult, selectRemoteTools } from "../server/remote-tools.js";
 import { endpointFor } from "../server/remote-client.js";
 
 function onlyText(result) {
@@ -126,4 +126,25 @@ test("large or broad discovery never loads unrelated full schemas", () => {
   const broad = selectRemoteTools(tools);
   assert.ok(broad.tools.every(item => item.inputSchema === undefined));
   assert.deepEqual(selectRemoteTools(tools, { name: "big_tool" }).tool.inputSchema, hugeSchema);
+});
+
+test("remote execution calls the official tool directly without listing its catalog", async () => {
+  const calls = [];
+  const client = {
+    listTools() { throw Error("REDUNDANT_LIST_TOOLS"); },
+    async callTool(request, options) {
+      calls.push({ request, options });
+      return { content: [{ type: "text", text: "ok" }] };
+    }
+  };
+  const result = normalizeRemoteResult(await invokeRemoteTool(client, "get_file_contents", { path: "README.md" }));
+  assert.equal(result.content[0].text, "ok");
+  assert.deepEqual(calls, [{
+    request: { name: "get_file_contents", arguments: { path: "README.md" } },
+    options: { timeout: 45000 }
+  }]);
+  await assert.rejects(invokeRemoteTool({
+    async callTool() { throw Error("Unknown tool"); },
+    listTools() { throw Error("REDUNDANT_LIST_TOOLS"); }
+  }, "not_available", {}), /Unknown tool/);
 });

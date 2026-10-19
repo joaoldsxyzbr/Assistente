@@ -4,7 +4,7 @@
 
 O OAuth de ChatGPT → Assistente MCP é independente do OAuth de Assistente → provedor. O Worker não encaminha o token de ChatGPT ao GitHub ou Cloudflare.
 
-Para cada provedor, o Worker consulta o desafio WWW-Authenticate, busca OAuth Protected Resource Metadata e Authorization Server Metadata, valida os domínios oficiais, inicia Authorization Code + PKCE S256 e troca o código no callback. O estado é aleatório, validado com prazo explícito de 10 minutos e removido ao processar o callback. O issuer retornado é conferido quando o provedor anuncia esse suporte. Veja os limites de concorrência do KV abaixo.
+Para cada provedor, o Worker consulta o desafio WWW-Authenticate, busca OAuth Protected Resource Metadata e Authorization Server Metadata, valida os domínios oficiais, **exige que o metadata anuncie explicitamente PKCE S256**, inicia Authorization Code + PKCE S256 e troca o código no callback. O estado é aleatório, validado com prazo explícito de 10 minutos e removido ao processar o callback. O issuer retornado é conferido quando o provedor anuncia esse suporte. Veja os limites de concorrência do KV abaixo.
 
 - **GitHub**: MCP remoto oficial https://api.githubcopilot.com/mcp/x/all. O servidor GitHub não oferece Dynamic Client Registration; precisa de um OAuth App próprio do projeto. O callback registrado deve ser https://assistente.joaolds.xyz.br/connections/github/callback. A conta é comparada a GITHUB_EXPECTED_LOGIN (configurada como joaoldsxyzbr).
 - **Cloudflare**: MCP oficial https://mcp.cloudflare.com/mcp. O Worker registra um cliente público por Dynamic Client Registration e guarda o client ID no KV cifrado. A conta e os escopos são escolhidos no consentimento oficial Cloudflare.
@@ -25,6 +25,8 @@ Credenciais do Worker (já configuradas em produção; não publicar valores):
 2. UPSTREAM_OAUTH_ENCRYPTION_KEY: chave AES de 32 bytes codificada em base64url sem padding.
 3. GITHUB_OAUTH_CLIENT_SECRET: secret do OAuth App GitHub.
 4. GITHUB_OAUTH_CLIENT_ID: ID público do OAuth App, disponível como secret ou var de ambiente.
+
+A configuração raiz usa `secrets.required` para exigir a presença dos quatro nomes no deploy de produção. Somente os nomes são versionados; os valores continuam protegidos na Cloudflare. A alteração não substitui nem rotaciona secrets existentes.
 
 Não guardar nenhum desses valores no repositório. A configuração tem um ambiente isolado de preview com namespace KV próprio e URL https://assistente-preview.contato-24f.workers.dev; não use os comandos abaixo sem a flag --env preview, pois a configuração raiz aponta para produção.
 
