@@ -96,7 +96,7 @@ export async function githubJson(token, url, { method = "GET", body, fetchFn = f
       accept: "application/vnd.github+json",
       "content-type": "application/json",
       "user-agent": "assistente-mcps",
-      "x-github-api-version": "2022-11-28"
+      "x-github-api-version": "2026-03-10"
     },
     ...(body !== undefined ? { body: JSON.stringify(body) } : {})
   });
