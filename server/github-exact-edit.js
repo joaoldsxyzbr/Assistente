@@ -106,6 +106,25 @@ export async function editGithubFile(input, { token, request = githubJson } = {}
   // Read by immutable commit hash, never a mutable branch name.
   const encodedPath = path.split("/").map(encodeURIComponent).join("/");
   const file = await request(token, base + "/contents/" + encodedPath + "?ref=" + headSha);
+  // Inspect the immutable tree to retain executable bits and reject symlinks/submodules.
+  let treeSha = commit.tree.sha;
+  let fileMode;
+  const parts = path.split("/");
+  for (let index = 0; index < parts.length; index++) {
+    const level = await request(token, base + "/git/trees/" + treeSha);
+    if (!Array.isArray(level?.tree) || level.truncated) throw Error("INVALID_FILE_TREE");
+    const entry = level.tree.find(item => item.path === parts[index]);
+    if (!entry) throw Error("FILE_NOT_IN_TREE");
+    if (index < parts.length - 1) {
+      if (entry.type !== "tree" || !HASH.test(entry.sha ?? ""))
+        throw Error("UNSUPPORTED_FILE");
+      treeSha = entry.sha;
+    } else {
+      if (entry.type !== "blob" || !["100644", "100755"].includes(entry.mode) ||
+          entry.sha !== file?.sha) throw Error("UNSUPPORTED_FILE");
+      fileMode = entry.mode;
+    }
+  }
   const original = decodeGithubText(file);
   if (!dryRun && file.sha !== input.expectedBlobSha)
     throw Error("STALE_BLOB");
@@ -128,7 +147,7 @@ export async function editGithubFile(input, { token, request = githubJson } = {}
   const tree = await request(token, base + "/git/trees", {
     method: "POST", body: {
       base_tree: commit.tree.sha,
-      tree: [{ path, mode: file.executable ? "100755" : "100644", type: "blob", sha: blob.sha }]
+      tree: [{ path, mode: fileMode, type: "blob", sha: blob.sha }]
     }
   });
   if (!HASH.test(tree?.sha ?? "")) throw Error("INVALID_CREATED_TREE");
@@ -152,7 +171,7 @@ const allowedErrors = new Set([
   "INVALID_FILE_SIZE", "UNSUPPORTED_BINARY_FILE", "GITHUB_NOT_CONNECTED",
   "INVALID_HEAD", "STALE_HEAD", "INVALID_BASE_TREE", "STALE_BLOB",
   "INVALID_CREATED_BLOB", "INVALID_CREATED_TREE", "INVALID_CREATED_COMMIT",
-  "COMMIT_UNCONFIRMED"
+  "COMMIT_UNCONFIRMED", "INVALID_FILE_TREE", "FILE_NOT_IN_TREE"
 ]);
 
 export function registerGithubExactEdit(server, env, fromJsonSchema, securitySchemes, traceId) {

@@ -3,7 +3,7 @@ import test from "node:test";
 import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 import { createAssistenteMcpServer } from "../server/mcp-server.js";
 
-test("MCP clients can discover seven tools, load complete references and cannot traverse paths", async () => {
+test("MCP clients can discover eight tools, load complete references and cannot traverse paths", async () => {
   const server = createAssistenteMcpServer({
     PUBLIC_ORIGIN: "https://assistente.example",
   });
@@ -14,7 +14,8 @@ test("MCP clients can discover seven tools, load complete references and cannot 
     await server.connect(serverTransport);
     await client.connect(clientTransport);
     const tools = (await client.listTools()).tools;
-    assert.equal(tools.length, 7);
+    assert.equal(tools.length, 8);
+    assert.ok(tools.some(tool => tool.name === "github_edit_file"));
     assert.ok(tools.some(tool => tool.name === "github_relocate_directory"));
     for (const [nome, arquivo, expected] of [
       ["ponto", "SQL.md", "WEEKDAY_REGISTER_SQL"],
