@@ -162,7 +162,7 @@ test("categorizes errors without leaking upstream secrets or lying about writes"
     assert.equal(classifyRemoteFailure(error), code);
     const result = remoteFailure(error, "github");
     assert.equal(result.isError, true);
-    assert.match(result.content[0].text, new RegExp("^\\\\[" + code + "\\\\]"));
+    assert.ok(result.content[0].text.startsWith("[" + code + "]"));
     assert.match(result.content[0].text, /verifique o estado/i);
     assert.doesNotMatch(JSON.stringify(result), /PRIVATE_ACCESS_TOKEN_987/);
   }
