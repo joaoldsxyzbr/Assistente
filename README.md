@@ -17,6 +17,7 @@ As credenciais de produção estão configuradas. A autorização das contas e a
 - server/mcp-server.js: catálogo de skills e ferramentas proxy genéricas.
 - server/upstream-oauth.js: fluxo OAuth compartilhado, discovery, PKCE e tokens cifrados.
 - server/remote-client.js e server/remote-tools.js: cliente MCP HTTPS e encaminhamento dinâmico.
+- server/github-relocation.js: cópia ou movimentação de diretórios com Git Trees, sem transferir conteúdo pelo chat.
 - skills/: instruções em Markdown sincronizadas com o catálogo do Worker.
 - docs/: arquitetura, autenticação e limites.
 
@@ -45,3 +46,9 @@ Os catálogos oficiais são paginados por padrão: `mcp_github_tools` e `mcp_clo
 Rate limiting nativo em Cloudflare: 120 chamadas MCP autenticadas por minuto por operador, 15 tentativas de autorização por minuto por endereço na borda, em produção. Eventos de duração e resultado são registrados sem argumentos ou tokens.
 
 Antes de publicar: `npm run check`, `npm run test:browser`, `npm run test:runtime`, verificação de bindings e promoção explícita da versão pela Cloudflare. Detalhes, limites, checklist e reversão: [docs/ROBUSTEZ-2026-10-17.md](docs/ROBUSTEZ-2026-10-17.md).
+
+## Reorganização de pastas sem lotes grandes
+
+A ferramenta `github_relocate_directory` copia ou move diretórios na branch usando a API Git Database oficial do GitHub e o **mesmo OAuth já conectado**. Reaproveita o SHA dos arquivos sem reenviar seu conteúdo. Faça uma prévia (`dryRun: true`) e depois confirme com `dryRun: false`, `expectedHeadSha` e `message`. Não sobrescreve arquivos diferentes, não grava diretamente na `main` e não edita imports. As ferramentas oficiais MCP continuam responsáveis pelas edições comuns.
+
+Guia: [docs/RELOCACAO-GITHUB-2026-10-19.md](docs/RELOCACAO-GITHUB-2026-10-19.md).
