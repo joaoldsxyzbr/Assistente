@@ -178,8 +178,10 @@ function validateDiscovery(provider, candidate) {
   for (const name of ["registration_endpoint", "revocation_endpoint"]) {
     if (metadata[name]) providerUrl(provider, metadata[name], "auth");
   }
+  // MCP requires explicit S256 support in authorization-server metadata.
+  // Missing or malformed PKCE metadata must fail closed, including cached data.
   if (
-    metadata.code_challenge_methods_supported &&
+    !Array.isArray(metadata.code_challenge_methods_supported) ||
     !metadata.code_challenge_methods_supported.includes("S256")
   )
     throw Error("OAUTH_PKCE_UNSUPPORTED");

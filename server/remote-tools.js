@@ -151,6 +151,12 @@ export function selectRemoteTools(tools, { query = "", name, limit = 20, cursor 
   };
 }
 
+// A direct call avoids fetching the whole catalog again before every operation.
+// Unknown tools and invalid arguments are handled by the official MCP server.
+export function invokeRemoteTool(client, name, args) {
+  return client.callTool({ name, arguments: args }, { timeout: 45000 });
+}
+
 export function registerRemoteTools(server, env, fromJsonSchema, securitySchemes) {
   for (const provider of PROVIDERS) {
     server.registerTool("mcp_" + provider + "_tools", {
@@ -199,9 +205,9 @@ export function registerRemoteTools(server, env, fromJsonSchema, securitySchemes
       const started = Date.now();
       try {
         const result = await withRemoteClient(config, async client => {
-          const tools = (await client.listTools(undefined, { timeout: 15000 })).tools;
-          if (!tools.some(tool => tool.name === name)) return fail("A ferramenta não foi publicada pelo MCP oficial.");
-          return normalizeRemoteResult(await client.callTool({ name, arguments: args }, { timeout: 45000 }));
+          // The official MCP server validates the tool name and arguments.
+          // The caller already discovered the schema; do not list 95 tools again.
+          return normalizeRemoteResult(await invokeRemoteTool(client, name, args));
         });
         audit(result.isError ? "warn" : "info", "remote_call", {
           server: provider, outcome: result.isError ? "error" : "ok", durationMs: Date.now() - started

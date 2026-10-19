@@ -5,7 +5,7 @@ import {
   upstreamDiscoveryCacheKey,
   handleUpstreamRoutes,
 } from "../server/upstream-oauth.js";
-import { environment, githubFetch } from "./helpers/upstream-fixtures.js";
+import { environment, githubFetch, cloudflareFetch } from "./helpers/upstream-fixtures.js";
 const authMetadata =
   "https://github.com/.well-known/oauth-authorization-server/login/oauth";
 const startUrl = "https://assistente.example/connections/github/start";
@@ -165,4 +165,47 @@ test("simultaneous cold discovery calls share one HTTP sequence", async () => {
     ),
   );
   assert.equal(requests, 3);
+});
+
+test("both official OAuth providers require explicit S256 metadata", async () => {
+  for (const [provider, baseFetch, authorizationMetadata] of [
+    ["github", githubFetch, "https://github.com/.well-known/oauth-authorization-server/login/oauth"],
+    ["cloudflare", cloudflareFetch, "https://mcp.cloudflare.com/.well-known/oauth-authorization-server"]
+  ]) {
+    for (const invalid of [undefined, [], ["plain"], "S256", null]) {
+      const env = environment();
+      const originalFetch = baseFetch();
+      const fetchWithoutPkce = async (url, init) => {
+        const response = await originalFetch(url, init);
+        if (String(url) !== authorizationMetadata) return response;
+        const data = await response.json();
+        if (invalid === undefined) delete data.code_challenge_methods_supported;
+        else data.code_challenge_methods_supported = invalid;
+        return Response.json(data);
+      };
+      await assert.rejects(getUpstreamMetadata(env, provider, fetchWithoutPkce),
+        /OAUTH_PKCE_UNSUPPORTED/, provider + " should reject unsupported PKCE metadata");
+      assert.equal(await env.OAUTH_KV.get(upstreamDiscoveryCacheKey(provider)), null,
+        "unsupported PKCE metadata must not be cached");
+    }
+    const valid = await getUpstreamMetadata(environment(), provider, baseFetch());
+    assert.ok(valid.code_challenge_methods_supported.includes("S256"));
+  }
+});
+
+test("cached OAuth metadata without PKCE cannot bypass fresh validation", async () => {
+  const env = environment();
+  const normal = githubFetch();
+  await getUpstreamMetadata(env, "github", normal);
+  const key = upstreamDiscoveryCacheKey("github");
+  const record = JSON.parse(await env.OAUTH_KV.get(key));
+  delete record.metadata.code_challenge_methods_supported;
+  await env.OAUTH_KV.put(key, JSON.stringify(record));
+  let requests = 0;
+  const validated = await getUpstreamMetadata(env, "github", (url, init) => {
+    requests++;
+    return normal(url, init);
+  });
+  assert.equal(requests, 3);
+  assert.ok(validated.code_challenge_methods_supported.includes("S256"));
 });
