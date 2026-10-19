@@ -1,5 +1,6 @@
 import { readRemoteConfiguration, withRemoteClient } from "./remote-client.js";
 import { audit } from "./shared/audit.js";
+import { remoteCallMetrics, remoteCallTimeout, MAX_PUSH_BYTES, MAX_PUSH_FILES } from "./shared/batch-policy.js";
 
 const PROVIDERS = ["github", "cloudflare"];
 const MAX_OUTPUT_BYTES = 64 * 1024;
@@ -184,8 +185,8 @@ export function selectRemoteTools(tools, { query = "", name, limit = 20, cursor 
 
 // A direct call avoids fetching the whole catalog again before every operation.
 // Unknown tools and invalid arguments are handled by the official MCP server.
-export function invokeRemoteTool(client, name, args) {
-  return client.callTool({ name, arguments: args }, { timeout: 45000 });
+export function invokeRemoteTool(client, name, args, timeoutMs = 45000) {
+  return client.callTool({ name, arguments: args }, { timeout: timeoutMs });
 }
 
 export function registerRemoteTools(server, env, fromJsonSchema, securitySchemes, traceId) {
@@ -223,7 +224,7 @@ export function registerRemoteTools(server, env, fromJsonSchema, securitySchemes
       }
     });
     server.registerTool("mcp_" + provider + "_call", {
-      description: "Encaminha uma chamada ao MCP oficial " + provider + " com resposta somente textual. Em erro incerto, verifique o estado remoto antes de repetir uma escrita. Exige escopo mcp:write.",
+      description: "Encaminha uma chamada ao MCP oficial " + provider + ". No GitHub, push_files aceita ate 8 arquivos/128 KiB por commit; lotes maiores devem ser divididos antes da chamada. Nunca repita escrita incerta. Exige mcp:write.",
       inputSchema: fromJsonSchema({
         type: "object",
         properties: {
@@ -236,24 +237,36 @@ export function registerRemoteTools(server, env, fromJsonSchema, securitySchemes
       _meta: { securitySchemes: securitySchemes(true) }
     }, async ({ name, arguments: args }) => {
       const started = Date.now();
+      const metrics = remoteCallMetrics(provider, name, args);
+      const details = { inputBytes: metrics.inputBytes, fileCount: metrics.fileCount, batch: metrics.batch };
+      if (metrics.tooLarge) {
+        audit("warn", "remote_call", {
+          server: provider, outcome: "rejected", category: "BATCH_TOO_LARGE",
+          traceId, durationMs: Date.now() - started, ...details
+        });
+        return fail("[BATCH_TOO_LARGE] Lote GitHub acima do limite seguro: " +
+          MAX_PUSH_FILES + " arquivos e " + (MAX_PUSH_BYTES / 1024) + " KiB por chamada. " +
+          "Divida em commits menores, confirme cada commit no GitHub e nao repita escritas incertas.");
+      }
+      const timeoutMs = remoteCallTimeout(provider, name);
       try {
         const config = await readRemoteConfiguration(env, provider);
         if (!config) return fail("[AUTHORIZATION] OAuth upstream indisponivel para " + provider + ". Consulte assistente_status.");
         const result = await withRemoteClient(config, async client => {
           // Nunca repetir automaticamente uma chamada generica; ela pode modificar dados.
-          return normalizeRemoteResult(await invokeRemoteTool(client, name, args));
-        });
+          return normalizeRemoteResult(await invokeRemoteTool(client, name, args, timeoutMs));
+        }, { callTimeoutMs: timeoutMs });
         audit(result.isError ? "warn" : "info", "remote_call", {
           server: provider, outcome: result.isError ? "error" : "ok",
           category: result.isError ? "upstream_result" : undefined,
-          traceId, durationMs: Date.now() - started
+          traceId, durationMs: Date.now() - started, ...details
         });
         return result;
       } catch (error) {
         const category = classifyRemoteFailure(error);
         audit("warn", "remote_call", {
           server: provider, outcome: "uncertain", uncertain: true,
-          category, traceId, durationMs: Date.now() - started
+          category, traceId, durationMs: Date.now() - started, ...details
         });
         return remoteFailure(error, provider);
       }

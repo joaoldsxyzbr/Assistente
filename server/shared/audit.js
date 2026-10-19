@@ -12,7 +12,10 @@ const ALLOWED_FIELDS = /* @__PURE__ */ new Set([
   "bytes",
   "transport",
   "phase",
-  "category"
+  "category",
+  "inputBytes",
+  "fileCount",
+  "batch"
 ]);
 function audit(level, event, fields = {}) {
   const record = { event };
