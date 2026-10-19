@@ -10,6 +10,7 @@ import {
   requiredOAuthScopesForToolCall
 } from "./oauth-helpers.js";
 import { audit } from "./audit.js";
+import { observeMcpResponse } from "./response-observer.js";
 import { enforceRateLimit } from "./rate-limit.js";
 import { handleAuthorizeRequest } from "./oauth-authorization.js";
 import { handleUpstreamRoutes } from "../upstream-oauth.js";
@@ -58,7 +59,7 @@ function createOAuthMcpWorker(options) {
         traceId,
         durationMs: Date.now() - startedAt
       });
-      return response;
+      return observeMcpResponse(response, { traceId, write: isWriteCall, startedAt });
     }
   };
   const defaultHandler = {

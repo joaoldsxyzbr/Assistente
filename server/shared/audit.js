@@ -8,7 +8,11 @@ const ALLOWED_FIELDS = /* @__PURE__ */ new Set([
   "uncertain",
   "scopes",
   "traceId",
-  "durationMs"
+  "durationMs",
+  "bytes",
+  "transport",
+  "phase",
+  "category"
 ]);
 function audit(level, event, fields = {}) {
   const record = { event };
