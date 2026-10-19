@@ -26,7 +26,7 @@ test(
     const upstreamUrl = "https://api.githubcopilot.com/mcp/x/all";
     const mockUpstream = async (request) => {
       // Requests to a real GitHub MCP go through OAuth-backed Streamable HTTP.
-      if (request.url !== upstreamUrl || request.method !== "POST") return null;
+      if (request.url !== upstreamUrl || request.method !== "POST" || !request.headers.has("authorization")) return null;
       const rpc = await request.json();
       if (rpc.method === "notifications/initialized") return new Response(null, { status: 202 });
       let result;
