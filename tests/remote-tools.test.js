@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { classifyRemoteFailure, remoteFailure, invokeRemoteTool, normalizeRemoteResult, selectRemoteTools } from "../server/remote-tools.js";
-import { endpointFor } from "../server/remote-client.js";
+import { endpointFor, upstreamFetchTimeoutMs } from "../server/remote-client.js";
+import { MAX_PUSH_BYTES, MAX_PUSH_FILES, remoteCallMetrics, remoteCallTimeout } from "../server/shared/batch-policy.js";
 
 function onlyText(result) {
   assert.ok(result.content.every(item => item.type === "text" && typeof item.text === "string"));
@@ -166,4 +167,42 @@ test("categorizes errors without leaking upstream secrets or lying about writes"
     assert.match(result.content[0].text, /verifique o estado/i);
     assert.doesNotMatch(JSON.stringify(result), /PRIVATE_ACCESS_TOKEN_987/);
   }
+});
+test("longer budgets are restricted to GitHub writes and upstream transport", async () => {
+  assert.equal(remoteCallTimeout("github", "push_files"), 90000);
+  assert.equal(remoteCallTimeout("github", "create_or_update_file"), 90000);
+  assert.equal(remoteCallTimeout("github", "get_file_contents"), 45000);
+  assert.equal(remoteCallTimeout("cloudflare", "execute"), 45000);
+  assert.equal(upstreamFetchTimeoutMs("POST", 90000), 100000);
+  assert.equal(upstreamFetchTimeoutMs("POST"), 55000);
+  assert.equal(upstreamFetchTimeoutMs("DELETE", 90000), 5000);
+  let captured;
+  await invokeRemoteTool({
+    async callTool(request, options) {
+      captured = { request, options };
+      return { content: [{ type: "text", text: "ok" }] };
+    }
+  }, "push_files", { files: [] }, remoteCallTimeout("github", "push_files"));
+  assert.equal(captured.options.timeout, 90000);
+});
+
+test("GitHub batch preflight is UTF-8 aware and never leaks source content", () => {
+  const args = { files: [{ path: "one.js", content: "ç".repeat(20000) }] };
+  const result = remoteCallMetrics("github", "push_files", args);
+  assert.equal(result.batch, true);
+  assert.equal(result.fileCount, 1);
+  assert.equal(result.tooLarge, false);
+  assert.equal(result.inputBytes, new TextEncoder().encode(JSON.stringify(args)).length);
+  assert.deepEqual(Object.keys(result).sort(), ["batch", "fileCount", "inputBytes", "tooLarge"]);
+  assert.equal(JSON.stringify(result).includes("ç"), false);
+  assert.equal(MAX_PUSH_BYTES, 128 * 1024);
+  assert.equal(MAX_PUSH_FILES, 8);
+
+  const tooMany = { files: Array.from({ length: 9 }, (_, n) => ({ path: n + ".js", content: "x" })) };
+  assert.equal(remoteCallMetrics("github", "push_files", tooMany).tooLarge, true);
+  assert.equal(remoteCallMetrics("github", "push_files", { files: [{ content: "a".repeat(140000) }] }).tooLarge, true);
+  assert.equal(remoteCallMetrics("github", "push_files", { files: [{ content: "a".repeat(1000) }] }).tooLarge, false);
+  assert.equal(remoteCallMetrics("github", "push_files", { files: Array(8).fill({ content: "a" }) }).tooLarge, false);
+  assert.equal(remoteCallMetrics("github", "push_files", {}).tooLarge, false);
+  assert.equal(remoteCallMetrics("cloudflare", "execute", tooMany).tooLarge, false);
 });

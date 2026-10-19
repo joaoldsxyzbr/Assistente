@@ -206,6 +206,23 @@ test(
           assert.equal(forwarded.isError, false, JSON.stringify(forwarded));
           assert.equal(forwarded.content[0].text, expected);
         }
+        const validBatch = await client.callTool({
+          name: "mcp_github_call", arguments: { name: "push_files", arguments: {
+            owner: "test", repo: "test", branch: "test", message: "test only",
+            files: [{ path: "one.js", content: "hello" }, { path: "two.js", content: "world" }]
+          } }
+        });
+        assert.equal(validBatch.isError, false, JSON.stringify(validBatch));
+        assert.match(validBatch.content[0].text, /upstream:push_files/);
+        const beforeOversized = calls.length;
+        const oversizedBatch = await client.callTool({
+          name: "mcp_github_call", arguments: { name: "push_files", arguments: {
+            files: Array.from({ length: 9 }, (_, i) => ({ path: i + ".js", content: "x" }))
+          } }
+        });
+        assert.equal(oversizedBatch.isError, true);
+        assert.match(oversizedBatch.content[0].text, /BATCH_TOO_LARGE/);
+        assert.equal(calls.length, beforeOversized, "oversized batch must not reach GitHub");
         const failure = await client.callTool({
           name: "mcp_github_call", arguments: { name: "fail_write", arguments: {} }
         });
