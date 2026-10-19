@@ -30,3 +30,11 @@ https://docs.github.com/en/rest/guides/using-the-rest-api-to-interact-with-your-
 
 ## Validacao
 `npm run check`, `npm run test:browser` e `npm run test:runtime`, com testes unitarios para previa, idempotencia, conflitos, SHA, concorrencia, copia/movimentacao e rejeicoes. Validar bindings e chamadas somente de leitura antes de qualquer publicacao. Registrar os resultados da entrega aqui.
+
+## Resultado da entrega
+- PR [#92](https://github.com/joaoldsxyzbr/Assistente-mcps/pull/92) integrado na `main`: `ad76b1df5ccc05b9cf941970a267df4d6e47b066`.
+- CI da branch [39300304576](https://github.com/joaoldsxyzbr/Assistente-mcps/actions/runs/39300304576) e CI da `main` [39300457929](https://github.com/joaoldsxyzbr/Assistente-mcps/actions/runs/39300457929) aprovados: Node, testes de seguranca, navegador Chromium, Workerd e build dry-run.
+- Cloudflare Worker `assistente`: versao `c7f17e7f-59f0-4ef5-b1a4-8e1fab546bf0` promovida em 19/10/2026 às 18:12 UTC, deploy `ef64883a-62c4-4e41-b948-561eafcac962`, **100% do trafego**. Versao anterior para rollback: `2ed2b7e4-4855-4930-b495-9af0b9a43485`.
+- Os 15 bindings foram comparados por nome e tipo, sem alteracoes. OAuth e leitura `get_me` / `get_file_contents` reais confirmados. O bundle produtivo contem `github_relocate_directory`, validacoes de SHA e acesso Git Trees.
+- A nova ferramenta ainda requer renovacao do catalogo MCP no ChatGPT para ser descoberta nesta conversa. Portanto, **nao foi feita uma chamada real `dryRun` pelo novo endpoint**, apenas testes simulados via CI. Recomendado executar previa somente de leitura em branch conhecida apos atualizar o plugin; nao fazer movimentacao real sem previa.
+- A origem das falhas externas intermitentes de `push_files` nao foi comprovada ou totalmente eliminada. A ferramenta oferece um caminho mais eficiente para realocar arquivos existentes e nao substitui edicoes de conteudo.
