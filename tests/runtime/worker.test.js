@@ -22,6 +22,35 @@ test(
       logLevel: "silent",
     });
     const fake = githubFetch();
+    const calls = [];
+    const upstreamUrl = "https://api.githubcopilot.com/mcp/x/all";
+    const mockUpstream = async (request) => {
+      // Requests to a real GitHub MCP go through OAuth-backed Streamable HTTP.
+      if (request.url !== upstreamUrl || request.method !== "POST" || !request.headers.has("authorization")) return null;
+      const rpc = await request.json();
+      if (rpc.method === "notifications/initialized") return new Response(null, { status: 202 });
+      let result;
+      if (rpc.method === "initialize") {
+        result = {
+          protocolVersion: rpc.params.protocolVersion,
+          capabilities: { tools: {} },
+          serverInfo: { name: "mock-github", version: "1.0" }
+        };
+      } else if (rpc.method === "tools/call") {
+        calls.push(rpc.params.name);
+        if (rpc.params.name === "fail_write") return new Response("temporarily unavailable", { status: 503 });
+        result = { content: [{ type: "text", text: "upstream:" + rpc.params.name }] };
+        if (rpc.params.name === "sse_read") {
+          const rpcResponse = JSON.stringify({ jsonrpc: "2.0", id: rpc.id, result });
+          return new Response("event: message\ndata: " + rpcResponse + "\n\n", {
+            headers: { "content-type": "text/event-stream" }
+          });
+        }
+      } else {
+        result = { tools: [{ name: "get_me", description: "Read identity", inputSchema: { type: "object" } }] };
+      }
+      return Response.json({ jsonrpc: "2.0", id: rpc.id, result });
+    };
     const mf = new Miniflare(
       convertV4MiniflareOptions({
         workers: [
@@ -40,13 +69,19 @@ test(
               GITHUB_OAUTH_CLIENT_SECRET: "github-secret",
               GITHUB_EXPECTED_LOGIN: "joaoldsxyzbr",
             },
-            outboundService: async (r) =>
-              fake(r.url, {
+            outboundService: async (r) => {
+              const matched = await mockUpstream(r);
+              if (matched) return matched;
+              if (r.url === upstreamUrl && r.method === "GET" && r.headers.has("authorization")) {
+                return new Response(null, { status: 405 });
+              }
+              return fake(r.url, {
                 method: r.method,
                 headers: r.headers,
                 redirect: "manual",
                 body: r.method === "POST" ? await r.text() : undefined,
-              }),
+              });
+            },
           },
         ],
       }),
@@ -164,6 +199,20 @@ test(
           arguments: { nome: "ponto", arquivo: "SQL.md" },
         });
         assert.ok(skill.content[0].text.includes("WEEKDAY_REGISTER_SQL"));
+        for (const [toolName, expected] of [["json_read", "upstream:json_read"], ["sse_read", "upstream:sse_read"]]) {
+          const forwarded = await client.callTool({
+            name: "mcp_github_call", arguments: { name: toolName, arguments: {} }
+          });
+          assert.equal(forwarded.isError, false, JSON.stringify(forwarded));
+          assert.equal(forwarded.content[0].text, expected);
+        }
+        const failure = await client.callTool({
+          name: "mcp_github_call", arguments: { name: "fail_write", arguments: {} }
+        });
+        assert.equal(failure.isError, true);
+        assert.match(failure.content[0].text, /UPSTREAM_UNAVAILABLE/);
+        assert.equal(calls.filter(name => name === "fail_write").length, 1,
+          "writes must never be automatically retried");
       } finally {
         await client.close();
       }
