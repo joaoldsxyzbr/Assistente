@@ -47,4 +47,11 @@ Uma implementação geral de unified diff requer análise de hunks, deslocamento
 
 ## Resultado da implementação
 
-Preencher após CI, merge e publicação.
+## Resultado da publicação — 19/10/2026
+
+- PR [#93](https://github.com/joaoldsxyzbr/Assistente-mcps/pull/93) integrado à `main`: commit `39f576a6e36752333cf788845dd7db008ec7681e`.
+- CI do PR [39305049284](https://github.com/joaoldsxyzbr/Assistente-mcps/actions/runs/39305049284) e da `main` [39305225079](https://github.com/joaoldsxyzbr/Assistente-mcps/actions/runs/39305225079) aprovados: sintaxe, skills, testes Node, navegador Chromium, Workerd e build dry-run.
+- Worker Cloudflare `assistente`: versão `bb8aba65-0b57-4033-818a-32bab9481208` promovida explicitamente a **100% do tráfego** no deployment `58031762-06cc-42f7-9464-dcf348f746b0`.
+- Bindings: 15 entradas com nomes/tipos idênticos à versão anterior `c7f17e7f-59f0-4ef5-b1a4-8e1fab546bf0` (disponível para rollback).
+- Pós-publicação: `assistente_status` e leitura GitHub `get_me` confirmados; bundle remoto contém `github_edit_file` e `applyExactEdits`. Nenhuma alteração em segredos, autenticação, D1 ou escopos.
+- **Pendente:** atualizar/recarregar as ações do Assistente MCPs no ChatGPT e executar `github_edit_file` com `dryRun:true` em branch de teste para validar o comportamento real ponta a ponta. Não foi realizado commit de teste com a ferramenta, portanto não afirmar que escritas reais de patch foram validadas em produção.
