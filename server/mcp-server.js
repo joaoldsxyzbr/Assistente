@@ -2,6 +2,7 @@ import { fromJsonSchema, McpServer } from "@modelcontextprotocol/server";
 import { SKILL_NAMES, SKILL_CONTENTS, SKILL_REFERENCES, MCP_SERVER_INSTRUCTIONS } from "../skills/catalog.js";
 import { oauthSecuritySchemesForTool } from "./shared/oauth-helpers.js";
 import { registerRemoteTools } from "./remote-tools.js";
+import { registerGithubRelocation } from "./github-relocation.js";
 import { hasUpstreamConnection } from "./upstream-oauth.js";
 
 export function createAssistenteMcpServer(env = {}, traceId) {
@@ -42,5 +43,6 @@ export function createAssistenteMcpServer(env = {}, traceId) {
     return { content: [{ type: "text", text: SKILL_CONTENTS[nome] + (names.length ? "\n\nReferências disponíveis via assistente_skill com o mesmo nome e arquivo: " + names.join(", ") : "") }] };
   });
   registerRemoteTools(server, env, fromJsonSchema, oauthSecuritySchemesForTool, traceId);
+  registerGithubRelocation(server, env, fromJsonSchema, oauthSecuritySchemesForTool, traceId);
   return server;
 }

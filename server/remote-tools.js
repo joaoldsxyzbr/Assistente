@@ -5,7 +5,7 @@ import { remoteCallMetrics, remoteCallTimeout, MAX_PUSH_BYTES, MAX_PUSH_FILES } 
 const PROVIDERS = ["github", "cloudflare"];
 const MAX_OUTPUT_BYTES = 64 * 1024;
 const encoder = new TextEncoder();
-export const remoteToolNames = PROVIDERS.map(provider => "mcp_" + provider + "_call");
+export const remoteToolNames = [...PROVIDERS.map(provider => "mcp_" + provider + "_call"), "github_relocate_directory"];
 
 function fail(message) {
   return { isError: true, content: [{ type: "text", text: message }] };

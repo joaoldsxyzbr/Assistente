@@ -1,25 +1,28 @@
-# MCPs do Assistente
+# MCPs e recursos do Assistente
 
 ## Arquitetura
 
-O ChatGPT conecta-se a um único servidor MCP: o Worker Assistente MCPs. Esse Worker oferece as skills locais e encaminha as chamadas aos MCPs oficiais do GitHub e da Cloudflare.
+O ChatGPT conecta-se ao Worker Assistente MCPs em **JavaScript puro (ES Modules)**. O Worker publica três skills locais (Ponto, Gastos e Desenvolvimento) e encaminha as chamadas aos MCPs oficiais GitHub e Cloudflare, preservando as ferramentas oficiais.
 
-`ChatGPT → Assistente MCPs (Worker) → MCP oficial GitHub / MCP oficial Cloudflare + skills`
+- `mcp_github_tools` e `mcp_github_call`: descoberta e execução das ferramentas MCP oficiais do GitHub.
+- `mcp_cloudflare_tools` e `mcp_cloudflare_call`: descoberta e execução das ferramentas MCP oficiais da Cloudflare.
+- `github_relocate_directory`: operação específica para **cópia/movimentação de diretórios**, via API Git Database oficial com o mesmo token OAuth GitHub; não envia conteúdo dos arquivos pelo ChatGPT.
+- `assistente_status` e `assistente_skill`: conexões e instruções locais.
 
-- **GitHub**: `mcps/github/` configura o endpoint oficial, os domínios permitidos e o OAuth específico do provedor.
-- **Cloudflare**: `mcps/cloudflare/` configura o endpoint oficial, os domínios permitidos e o OAuth específico do provedor.
-- **Skills locais**: `skills/` contém Ponto, Gastos e Desenvolvimento. Ponto e Gastos usam as ferramentas do MCP Cloudflare conforme suas instruções.
+Ponto e Gastos usam exclusivamente o MCP oficial Cloudflare para as consultas D1. A ferramenta GitHub adicional não acessa D1.
 
-O Worker descobre as ferramentas remotas e as encaminha. Ele não duplica as ferramentas oficiais.
+## OAuth e privacidade
 
-## Autenticação
+São dois trechos OAuth: ChatGPT → Worker e Worker → GitHub/Cloudflare. O Worker guarda tokens dos provedores cifrados no KV. `github_relocate_directory` reutiliza o token GitHub e não exige credencial, serviço ou permissão nova. Não registrar tokens, caminhos de arquivos ou conteúdo nos logs.
 
-Há dois trechos OAuth independentes: ChatGPT → Assistente MCPs e Assistente MCPs → cada provedor. O token do ChatGPT não é repassado ao GitHub nem à Cloudflare. O Worker guarda tokens dos provedores cifrados no KV.
+## Operações GitHub confiáveis
 
-O GitHub usa o OAuth App configurado para o projeto. A Cloudflare usa o fluxo oficial de OAuth com registro dinâmico de cliente. As permissões efetivas continuam limitadas ao consentimento dado em cada provedor.
+Para mudanças de conteúdo, o `push_files` oficial continua com limite preventivo de 8 arquivos/128 KiB por chamada e timeout seletivo. Conferir o estado após erros incertos, sem repetição automática.
 
-## Estado e validação
+Para reorganizações, usar `github_relocate_directory`: prévia obrigatória, `expectedHeadSha`, cópia/movimentação em um commit, sem `force` e sem sobrescrever arquivos distintos. Branch `main` e `master` são protegidas contra escrita nessa ferramenta. Alterar imports separadamente e executar CI antes do merge.
 
-O código, os testes simulados e o build dry-run estão na `main`. Isso valida a implementação local, mas não comprova login ou chamadas reais aos provedores.
+Veja [docs/RELOCACAO-GITHUB-2026-10-19.md](RELOCACAO-GITHUB-2026-10-19.md) e [docs/LOTES-2026-10-19.md](LOTES-2026-10-19.md).
 
-O Worker de produção está publicado e suas credenciais configuradas. Ainda é necessário concluir o consentimento GitHub/Cloudflare e confirmar leituras reais. O preview tem KV e credenciais próprios. Os testes automatizados incluem protocolo MCP, referências das skills e clique em Chromium com provedores simulados; não fazem escritas nos bancos D1 pessoais.
+## Produção
+
+Há um único Worker de produção; **não existe Preview mantido**. CI Node/Chromium/Workerd e build dry-run são obrigatórios antes da promoção explícita de versão. Verificar os bindings, realizar testes de leitura e manter a versão anterior para rollback. Nenhum teste deve gravar nos bancos D1 reais.

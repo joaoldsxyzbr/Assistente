@@ -11,12 +11,13 @@ test("skills correspondem ao Markdown",async()=>{
  for(const name of SKILL_NAMES)assert.equal(SKILL_CONTENTS[name],await read("skills/"+name+"/SKILL.md"));
  assert.equal(MCP_SERVER_INSTRUCTIONS,(await read("skills/INSTRUCTIONS.md")).trim());
 });
-test("worker publica duas skills, estado e quatro endpoints remotos",async()=>{
+test("worker publica skills, estado, MCPs oficiais e relocacao GitHub",async()=>{
  const worker=await read("server/mcp-server.js");
  assert.match(worker,/assistente_status/);
  assert.match(worker,/assistente_skill/);
  assert.match(worker,/registerRemoteTools/);
- assert.deepEqual(remoteToolNames,["mcp_github_call","mcp_cloudflare_call"]);
+ assert.match(worker,/registerGithubRelocation/);
+ assert.deepEqual(remoteToolNames,["mcp_github_call","mcp_cloudflare_call","github_relocate_directory"]);
  assert.equal((worker.match(/server\.registerTool\(/g)||[]).length,2);
 });
 test("endpoints oficiais fixos e configuração OAuth lida do KV",async()=>{

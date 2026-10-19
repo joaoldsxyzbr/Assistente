@@ -193,7 +193,8 @@ test(
       try {
         await client.connect(transport);
         const list = await client.listTools();
-        assert.equal(list.tools.length, 6);
+        assert.equal(list.tools.length, 7);
+        assert.ok(list.tools.some(tool => tool.name === "github_relocate_directory"));
         const skill = await client.callTool({
           name: "assistente_skill",
           arguments: { nome: "ponto", arquivo: "SQL.md" },
