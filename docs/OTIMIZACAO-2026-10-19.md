@@ -36,4 +36,12 @@ Reforçar o OAuth e eliminar a enumeração redundante de ferramentas por execu�
 
 ## Registro de publicação
 
-A completar após CI, build e verificação efetivos.
+- PR [#88](https://github.com/joaoldsxyzbr/Assistente-mcps/pull/88) integrado à `main` no commit `58dd2c57b308d2446a416eac5172443a2a5de69d`.
+- CI da `main`: [concluído com sucesso](https://github.com/joaoldsxyzbr/Assistente-mcps/actions/runs/39239215801) (sintaxe, skills, testes Node, Chromium, Workerd, build dry-run).
+- Cloudflare Workers Build da `main`: `success`, versão carregada `eababc9c-d833-42fb-9c73-cf0ff9370282`.
+- Deploy de produção `ce2e75a3-a3df-4e61-a7c8-65f9a90f6956`: versão nova **100% do tráfego**, confirmado por leitura da API Cloudflare.
+- Bindings: **15 idênticos** aos da versão anterior, inclusive `OAUTH_KV`, rate limiters e quatro nomes de secrets, sem divulgar valores.
+- Testes pós-publicação: `assistente_status` confirmou três skills e ambos os OAuth conectados; busca GitHub `get file` retornou `get_file_contents` com schema; busca Cloudflare `whoami` retornou uma ferramenta; leituras reais `get_me`, `get_file_contents` e `whoami` executadas com êxito **já na versão nova**.
+- Versão anterior confirmada para rollback: `23746209-3f31-4726-b52f-cf6edf875821`. A nova implementação não foi submetida a benchmark de p95; não afirmar ganho numérico sem medi-lo.
+- Nota operacional: o check externo adicional de Workers Builds em um Preview gerado por integração antiga falhou com token inválido (10000/9109); CI principal e build do Worker `assistente` passaram. A correção desse check não foi feita porque o usuário não quer adicionar/manter fluxo de Preview para este trabalho.
+- Rotação do client secret do GitHub, anteriormente exposto em conversa, **não foi executada nem confirmada**; requer procedimento operacional separado com atualização segura no Worker.
