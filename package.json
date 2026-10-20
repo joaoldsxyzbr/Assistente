@@ -12,7 +12,7 @@
     "build:workers": "wrangler deploy --dry-run --outdir .wrangler-build/assistente --config wrangler.assistente.jsonc",
     "check": "npm run syntax && npm test && npm run build:workers",
     "test:browser": "node --test tests/browser/*.test.js",
-    "test:runtime": "node --test tests/runtime/*.test.js"
+    "test:runtime": "npm run build:workers && node --test tests/runtime/*.test.js"
   },
   "dependencies": {
     "@cloudflare/workers-oauth-provider": "^1.2.3",
@@ -21,10 +21,8 @@
     "agents": "^0.28.1"
   },
   "devDependencies": {
-    "esbuild": "0.28.2",
     "miniflare": "5.20261012.1-beta",
     "playwright": "1.64.1",
     "wrangler": "^4.151.1"
   }
 }
-
