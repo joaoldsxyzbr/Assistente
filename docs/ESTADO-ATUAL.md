@@ -22,5 +22,5 @@ Ao aparecer `Tool assistente_skill not found`, há defasagem no catálogo do cli
 ## Manutenção
 - Registros em `docs/*-2026-10-*.md` são históricos: podem mencionar skills, Preview e integrações aposentadas; **este documento e o README descrevem o estado vigente**.
 - PRs e branches antigas de arquitetura anterior não devem ser mesclados sem comparação com a `main`.
-- Excluir branches somente depois de verificar commits exclusivos relevantes e registrar os SHAs; o histórico permanece no Git.
+- Limpeza de branches via workflow manual `cleanup-merged-branches.yml` (primeiro `apply=false`, depois `apply=true` se a prévia estiver adequada). O script `scripts/cleanup-merged-branches.mjs` verifica PR mesclado, SHA igual e ausência de PR aberto. Branches não mescladas ou com commits novos são preservadas e o histórico permanece no Git.
 - Proteger `main` contra exclusão e force-push; exigir PR e o status do CI, conforme suporte e permissões do GitHub.

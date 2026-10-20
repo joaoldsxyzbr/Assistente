@@ -38,7 +38,7 @@ A validação OAuth exige PKCE S256 explícito no metadata oficial e a configura
 
 ## Manutenção (19/10/2026)
 
-Apenas `ci.yml` e `dependency-security.yml` continuam versionados em `.github/workflows/`. O Preview foi desativado e seu trigger de builds removido, sem modificar a autenticação, o serviço produtivo ou os bancos D1. A [limpeza operacional](docs/LIMPEZA-2026-10-19.md) registra o que foi executado, o que permanece no histórico e o procedimento de rotação segura do segredo GitHub, caso ainda necessário.
+Os workflows permanentes são `ci.yml`, `dependency-security.yml` e `cleanup-merged-branches.yml` (manual, diagnóstico por padrão). A limpeza conservadora de branches usa somente JavaScript nativo, verifica PR mesclado e SHA atual e preserva branches sem merge ou com PR aberto. O Preview foi desativado e seu trigger de builds removido, sem modificar a autenticação, o serviço produtivo ou os bancos D1. A [limpeza operacional](docs/LIMPEZA-2026-10-19.md) registra o que foi executado, o que permanece no histórico e o procedimento de rotação segura do segredo GitHub, caso ainda necessário.
 
 ## Robustez e publicação
 
