@@ -8,6 +8,8 @@ Cliente MCP (ChatGPT, Vibe Work) → Assistente MCPs (Worker Cloudflare) → MCP
 
 O projeto está na `main` e o Worker está publicado em https://assistente.joaolds.xyz.br/mcp. O Worker encaminha ferramentas oficiais sem copiá-las ou redefini-las. As skills locais (ponto, gastos, desenvolvimento) foram removidas em 20/10/2026 por decisão do operador; o Vibe Work é o consumidor principal e o histórico permanece no Git.
 
+**Catálogo de ferramentas:** o Worker publica sete ferramentas MCP. A remoção intencional de `assistente_skill` em 20/10/2026 pode exigir atualizar/reconectar o app no ChatGPT ou Vibe Work para recarregar o catálogo. Não restaure skills ou bancos D1 por causa de uma ferramenta antiga no cliente. Veja [estado atual](docs/ESTADO-ATUAL.md).
+
 As credenciais de produção estão configuradas. A autorização das contas e a leitura real de cada MCP dependem do consentimento do operador; testes simulados não comprovam esse consentimento. Veja docs/OAUTH-UPSTREAM.md e docs/AUDITORIA-2026-10-16.md.
 
 ## Componentes

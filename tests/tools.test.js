@@ -32,5 +32,9 @@ test("skills foram removidas por decisão do operador (20/10/2026)", async () =>
   const pkg = JSON.parse(await read("package.json"));
   assert.equal(pkg.scripts["skills:sync"], undefined);
   assert.equal(pkg.scripts["skills:check"], undefined);
+  assert.equal(pkg.devDependencies.esbuild, undefined);
+  assert.match(pkg.scripts["test:runtime"], /build:workers/);
+  const runtimeTest = await read("tests/runtime/worker.test.js");
+  assert.doesNotMatch(runtimeTest, /from ["']esbuild["']/);
+  assert.match(runtimeTest, /wrangler-build\/assistente/);
 });
-

@@ -1,4 +1,4 @@
-import { build } from "esbuild";
+import { readdir, readFile } from "node:fs/promises";
 import { Miniflare, convertV4MiniflareOptions } from "miniflare";
 import { githubFetch } from "../helpers/upstream-fixtures.js";
 import test from "node:test";
@@ -11,16 +11,11 @@ test(
   "Workerd handles OAuth, PKCE and authenticated MCP without Node-only APIs",
   { timeout: 30000 },
   async () => {
-    const bundle = await build({
-      entryPoints: ["server/worker.js"],
-      bundle: true,
-      write: false,
-      format: "esm",
-      platform: "browser",
-      conditions: ["workerd", "worker", "browser"],
-      external: ["cloudflare:*", "node:*"],
-      logLevel: "silent",
-    });
+    // Test the Worker bundle produced by official Cloudflare Wrangler.
+    const bundleDirectory = new URL("../../.wrangler-build/assistente/", import.meta.url);
+    const scripts = (await readdir(bundleDirectory)).filter(name => name.endsWith(".js"));
+    assert.equal(scripts.length, 1, "Wrangler must generate exactly one Worker bundle");
+    const bundle = await readFile(new URL(scripts[0], bundleDirectory), "utf8");
     const fake = githubFetch();
     const calls = [];
     const upstreamUrl = "https://api.githubcopilot.com/mcp/x/all";
@@ -57,7 +52,7 @@ test(
           {
             name: "audit",
             modules: true,
-            script: bundle.outputFiles[0].text,
+            script: bundle,
             compatibilityDate: "2026-10-07",
             compatibilityFlags: ["global_fetch_strictly_public"],
             kvNamespaces: ["OAUTH_KV"],
