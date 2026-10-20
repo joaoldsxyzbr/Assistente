@@ -1,0 +1,28 @@
+name: Limpeza segura de branches mescladas
+
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: "Excluir branches elegiveis? (desmarcado = apenas diagnostico)"
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - name: Verificar e opcionalmente excluir branches mescladas
+        run: node scripts/cleanup-merged-branches.mjs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CLEANUP_APPLY: ${{ inputs.apply }}
