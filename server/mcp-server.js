@@ -1,15 +1,16 @@
 import { fromJsonSchema, McpServer } from "@modelcontextprotocol/server";
-import { SKILL_NAMES, SKILL_CONTENTS, SKILL_REFERENCES, MCP_SERVER_INSTRUCTIONS } from "../skills/catalog.js";
 import { oauthSecuritySchemesForTool } from "./shared/oauth-helpers.js";
 import { registerRemoteTools } from "./remote-tools.js";
 import { registerGithubRelocation } from "./github-relocation.js";
 import { registerGithubExactEdit } from "./github-exact-edit.js";
 import { hasUpstreamConnection } from "./upstream-oauth.js";
 
+const MCP_SERVER_INSTRUCTIONS = "Assistente MCPs é um único Worker com uma ponte dinâmica para os MCPs oficiais GitHub e Cloudflare. Use mcp_github_tools e mcp_cloudflare_tools para descobrir as ferramentas publicadas em tempo real e mcp_github_call / mcp_cloudflare_call para encaminhar chamadas sem copiar ou redefinir ferramentas. As conexões upstream exigem OAuth independente e podem estar indisponíveis até a autorização; não peça ao usuário para colar tokens no chat. Consulte assistente_status para estado e links de conexão. Toda chamada remota genérica exige escopo mcp:write do Assistente, mesmo quando apenas leitura. Nunca repita escrita incerta sem reconciliação.";
+
 export function createAssistenteMcpServer(env = {}, traceId) {
   const server = new McpServer({ name: "assistente", version: "1.1.0" }, { instructions: MCP_SERVER_INSTRUCTIONS });
   server.registerTool("assistente_status", {
-    description: "Mostra skills, conexões OAuth e links seguros para conectar ou desconectar provedores, sem revelar segredos.",
+    description: "Mostra conexões OAuth upstream e links seguros para conectar ou desconectar provedores, sem revelar segredos.",
     inputSchema: fromJsonSchema({ type: "object", properties: {}, additionalProperties: false }),
     _meta: { securitySchemes: oauthSecuritySchemesForTool(false) }
   }, async () => {
@@ -20,31 +21,11 @@ export function createAssistenteMcpServer(env = {}, traceId) {
       connect_url: (env.PUBLIC_ORIGIN || "https://assistente.joaolds.xyz.br") + "/connections/" + id + "/start",
       disconnect_url: (env.PUBLIC_ORIGIN || "https://assistente.joaolds.xyz.br") + "/connections/" + id + "/disconnect"
     })));
-    return { content: [{ type: "text", text: JSON.stringify({ skills: SKILL_NAMES, connections }) }] };
-  });
-  server.registerTool("assistente_skill", {
-    description: "Consulta instruções e referências de ponto, gastos e desenvolvimento. Informe arquivo para ler uma referência publicada.",
-    inputSchema: fromJsonSchema({
-      type: "object",
-      properties: {
-        nome: { type: "string", enum: SKILL_NAMES },
-        arquivo: { type: "string", minLength: 1, maxLength: 80 }
-      },
-      required: ["nome"],
-      additionalProperties: false
-    }),
-    _meta: { securitySchemes: oauthSecuritySchemesForTool(false) }
-  }, async ({ nome, arquivo }) => {
-    const references = SKILL_REFERENCES[nome] ?? {};
-    if (arquivo !== undefined) {
-      const text = Object.hasOwn(references, arquivo) ? references[arquivo] : null;
-      return { isError: text === null, content: [{ type: "text", text: text ?? "Referência indisponível. Consulte a skill sem arquivo para ver a lista." }] };
-    }
-    const names = Object.keys(references);
-    return { content: [{ type: "text", text: SKILL_CONTENTS[nome] + (names.length ? "\n\nReferências disponíveis via assistente_skill com o mesmo nome e arquivo: " + names.join(", ") : "") }] };
+    return { content: [{ type: "text", text: JSON.stringify({ connections }) }] };
   });
   registerRemoteTools(server, env, fromJsonSchema, oauthSecuritySchemesForTool, traceId);
   registerGithubRelocation(server, env, fromJsonSchema, oauthSecuritySchemesForTool, traceId);
   registerGithubExactEdit(server, env, fromJsonSchema, oauthSecuritySchemesForTool, traceId);
   return server;
 }
+

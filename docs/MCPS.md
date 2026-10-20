@@ -2,14 +2,14 @@
 
 ## Arquitetura
 
-O ChatGPT conecta-se ao Worker Assistente MCPs em **JavaScript puro (ES Modules)**. O Worker publica três skills locais (Ponto, Gastos e Desenvolvimento) e encaminha as chamadas aos MCPs oficiais GitHub e Cloudflare, preservando as ferramentas oficiais.
+O Worker Assistente MCPs, em **JavaScript puro (ES Modules)**, encaminha as chamadas aos MCPs oficiais GitHub e Cloudflare, preservando as ferramentas oficiais.
 
 - `mcp_github_tools` e `mcp_github_call`: descoberta e execução das ferramentas MCP oficiais do GitHub.
 - `mcp_cloudflare_tools` e `mcp_cloudflare_call`: descoberta e execução das ferramentas MCP oficiais da Cloudflare.
 - `github_relocate_directory`: operação específica para **cópia/movimentação de diretórios**, via API Git Database oficial com o mesmo token OAuth GitHub; não envia conteúdo dos arquivos pelo ChatGPT.
-- `assistente_status` e `assistente_skill`: conexões e instruções locais.
+- `assistente_status`: estado das conexões upstream e links seguros para conectar/desconectar provedores.
 
-Ponto e Gastos usam exclusivamente o MCP oficial Cloudflare para as consultas D1. A ferramenta GitHub adicional não acessa D1.
+O Worker não tem binding D1 nem ferramentas D1 próprias; acessos a D1, quando necessários, usam o MCP oficial Cloudflare.
 
 ## OAuth e privacidade
 
