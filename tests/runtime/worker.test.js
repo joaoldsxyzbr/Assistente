@@ -196,7 +196,7 @@ test(
         assert.equal(list.tools.length, 7);
         assert.ok(list.tools.some(tool => tool.name === "github_edit_file"));
         assert.ok(list.tools.some(tool => tool.name === "github_relocate_directory"));
-                for (const [toolName, expected] of [["json_read", "upstream:json_read"], ["sse_read", "upstream:sse_read"]]) {
+        for (const [toolName, expected] of [["json_read", "upstream:json_read"], ["sse_read", "upstream:sse_read"]]) {
           const forwarded = await client.callTool({
             name: "mcp_github_call", arguments: { name: toolName, arguments: {} }
           });
