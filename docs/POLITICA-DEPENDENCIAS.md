@@ -24,7 +24,9 @@ A origem da dependência importa, mas nenhuma empresa ou projeto oferece garanti
 | `wrangler` | Ferramenta oficial Cloudflare | Manter |
 | `miniflare` | Ferramenta mantida pela Cloudflare | Manter para testes |
 | `playwright` | Projeto mantido pela Microsoft | Manter para testes |
-| `esbuild` | Projeto independente de Evan Wallace, amplamente utilizado | **Auditar separadamente**; não remover ou atualizar sem avaliar impacto, testes e consentimento |
+| `esbuild` | Projeto independente presente transitivamente no Wrangler | **Sem dependência direta** no projeto; testes Workerd usam bundle gerado pelo Wrangler |
+
+Em 20/10/2026 foi removido o `esbuild` direto dos devDependencies; `npm run test:runtime` agora executa o build oficial do Wrangler e testa seu bundle. O Wrangler ainda utiliza `esbuild` transitivamente, portanto não se afirma ausência total de pacotes independentes. Nenhuma nova dependência foi adicionada.
 
 Nenhuma dependência nova foi instalada ao estabelecer esta política. Esta lista contém somente as dependências **diretas**, conforme `package.json`; as dependências transitivas do `package-lock.json` precisam ser verificadas de acordo com a necessidade.
 
