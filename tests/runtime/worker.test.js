@@ -193,15 +193,10 @@ test(
       try {
         await client.connect(transport);
         const list = await client.listTools();
-        assert.equal(list.tools.length, 8);
+        assert.equal(list.tools.length, 7);
         assert.ok(list.tools.some(tool => tool.name === "github_edit_file"));
         assert.ok(list.tools.some(tool => tool.name === "github_relocate_directory"));
-        const skill = await client.callTool({
-          name: "assistente_skill",
-          arguments: { nome: "ponto", arquivo: "SQL.md" },
-        });
-        assert.ok(skill.content[0].text.includes("WEEKDAY_REGISTER_SQL"));
-        for (const [toolName, expected] of [["json_read", "upstream:json_read"], ["sse_read", "upstream:sse_read"]]) {
+                for (const [toolName, expected] of [["json_read", "upstream:json_read"], ["sse_read", "upstream:sse_read"]]) {
           const forwarded = await client.callTool({
             name: "mcp_github_call", arguments: { name: toolName, arguments: {} }
           });
@@ -236,7 +231,7 @@ test(
         await client.close();
       }
       console.log(
-        "Workerd OAuth upstream start303/callback200; MCP401; full client registration, consent, PKCE token exchange, authenticated initialize, six tools and SQL reference verified",
+        "Workerd OAuth upstream start303/callback200; MCP401; full client registration, consent, PKCE token exchange, authenticated initialize and seven tools verified",
       );
     } finally {
       await mf.dispose();

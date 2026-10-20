@@ -1,12 +1,12 @@
 # Assistente MCPs
 
-Servidor MCP único em Cloudflare Workers, implementado em JavaScript puro (ES Modules), que oferece as skills Ponto, Gastos e Desenvolvimento e encaminha chamadas aos MCPs oficiais GitHub e Cloudflare.
+Servidor MCP único em Cloudflare Workers, implementado em JavaScript puro (ES Modules), que encaminha chamadas aos MCPs oficiais GitHub e Cloudflare.
 
-ChatGPT → Assistente MCPs (Worker Cloudflare) → MCPs GitHub e Cloudflare oficiais + skills locais.
+Cliente MCP (ChatGPT, Vibe Work) → Assistente MCPs (Worker Cloudflare) → MCPs GitHub e Cloudflare oficiais.
 
 ## Estado
 
-O projeto está na `main` e o Worker está publicado em https://assistente.joaolds.xyz.br/mcp. O Worker encaminha ferramentas oficiais sem copiá-las ou redefini-las.
+O projeto está na `main` e o Worker está publicado em https://assistente.joaolds.xyz.br/mcp. O Worker encaminha ferramentas oficiais sem copiá-las ou redefini-las. As skills locais (ponto, gastos, desenvolvimento) foram removidas em 20/10/2026 por decisão do operador; o Vibe Work é o consumidor principal e o histórico permanece no Git.
 
 As credenciais de produção estão configuradas. A autorização das contas e a leitura real de cada MCP dependem do consentimento do operador; testes simulados não comprovam esse consentimento. Veja docs/OAUTH-UPSTREAM.md e docs/AUDITORIA-2026-10-16.md.
 
@@ -14,11 +14,10 @@ As credenciais de produção estão configuradas. A autorização das contas e a
 
 - mcps/github/ e mcps/cloudflare/: configurações e etapas OAuth específicas de cada provedor.
 - server/worker.js: entrada e configuração OAuth do Worker.
-- server/mcp-server.js: catálogo de skills e ferramentas proxy genéricas.
+- server/mcp-server.js: ferramenta de estado das conexões e ferramentas proxy genéricas.
 - server/upstream-oauth.js: fluxo OAuth compartilhado, discovery, PKCE e tokens cifrados.
 - server/remote-client.js e server/remote-tools.js: cliente MCP HTTPS e encaminhamento dinâmico.
-- server/github-relocation.js: cópia ou movimentação de diretórios com Git Trees, sem transferir conteúdo pelo chat.
-- skills/: instruções em Markdown sincronizadas com o catálogo do Worker.
+- server/github-relocation.js e server/github-exact-edit.js: reorganização e edição segura de repositórios, sem transferir conteúdo pelo chat.
 - docs/: arquitetura, autenticação e limites.
 
 ## Desenvolvimento
@@ -29,7 +28,7 @@ As credenciais de produção estão configuradas. A autorização das contas e a
     npm run test:browser
     npm run test:runtime
 
-O GitHub é a fonte de verdade deste projeto: joaoldsxyzbr/Assistente-mcps. O CI verifica sintaxe, sincronização de skills, testes de protocolo/OAuth e navegador Chromium, além de build dry-run. Testes de ponto/gastos nunca escrevem nos bancos D1 reais. Não há ambiente de Preview: a validação ocorre no CI e em build dry-run, seguida de publicação controlada com rollback. O upload de uma versão **não** a coloca em produção automaticamente.
+O GitHub é a fonte de verdade deste projeto: joaoldsxyzbr/Assistente-mcps. O CI verifica sintaxe, testes de protocolo/OAuth e navegador Chromium, além de build dry-run. Não há ambiente de Preview: a validação ocorre no CI e em build dry-run, seguida de publicação controlada com rollback. O upload de uma versão **não** a coloca em produção automaticamente.
 
 ## Otimização de segurança e chamadas MCP
 
