@@ -1,9 +1,4 @@
 {
-  "apps": "./.app.json",
-  "author": {
-    "name": "App developer"
-  },
-  "description": "Assistente",
   "interface": {
     "capabilities": [],
     "category": "Other",
@@ -13,6 +8,13 @@
     "longDescription": "Assistente",
     "shortDescription": "Assistente"
   },
+  "apps": "./.app.json",
   "name": "dev-6ad8b78e1d9881919055627f45ecc43a",
-  "version": "1.0.1"
+  "version": "1.0.4",
+  "description": "Assistente",
+  "author": {
+    "name": "App developer"
+  },
+  "keywords": [],
+  "skills": "./skills"
 }
