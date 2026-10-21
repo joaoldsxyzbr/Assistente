@@ -141,7 +141,16 @@ export function selectRemoteTools(tools, { query = "", name, limit = 20, cursor 
   if (!Array.isArray(tools)) throw Error("INVALID_TOOL_CATALOG");
   if (name !== undefined) {
     const tool = tools.find(item => item?.name === name);
-    return tool ? { tool } : { error: "Ferramenta não encontrada no catálogo oficial." };
+    if (!tool) return { error: "Ferramenta não encontrada no catálogo oficial." };
+    // A consulta exata precisa do schema de entrada, nao de icones base64,
+    // descritores de interface ou metadados opcionais do provedor.
+    const details = { name: tool.name };
+    if (typeof tool.description === "string") details.description = tool.description.slice(0, 180);
+    if (tool.inputSchema !== undefined) details.inputSchema = tool.inputSchema;
+    if (encoder.encode(JSON.stringify({ tool: details })).length > MAX_OUTPUT_BYTES - 1024) {
+      return { error: "Schema MCP grande demais para resposta textual; consulte a documentacao oficial da ferramenta." };
+    }
+    return { tool: details };
   }
   const needle = searchable(query);
   const terms = needle ? needle.split(" ") : [];
@@ -183,6 +192,27 @@ export function selectRemoteTools(tools, { query = "", name, limit = 20, cursor 
   };
 }
 
+// MCP allows a provider to paginate tools/list. Never interpret the first
+// page as the complete catalog; stop on repeated cursors or excessive pages.
+export async function listAllRemoteTools(client, { timeoutMs = 15000, maxPages = 25 } = {}) {
+  const tools = [];
+  const cursors = new Set();
+  let cursor;
+  for (let page = 0; page < maxPages; page++) {
+    const response = await client.listTools(cursor === undefined ? undefined : { cursor }, { timeout: timeoutMs });
+    if (!response || !Array.isArray(response.tools)) throw Error("INVALID_TOOL_CATALOG");
+    tools.push(...response.tools);
+    const nextCursor = response.nextCursor;
+    if (nextCursor == null) return tools;
+    if (typeof nextCursor !== "string" || !nextCursor || cursors.has(nextCursor)) {
+      throw Error("INVALID_TOOL_CATALOG_CURSOR");
+    }
+    cursors.add(nextCursor);
+    cursor = nextCursor;
+  }
+  throw Error("CATALOG_PAGINATION_LIMIT");
+}
+
 // A direct call avoids fetching the whole catalog again before every operation.
 // Unknown tools and invalid arguments are handled by the official MCP server.
 export function invokeRemoteTool(client, name, args, timeoutMs = 45000) {
@@ -209,8 +239,8 @@ export function registerRemoteTools(server, env, fromJsonSchema, securitySchemes
       try {
         const config = await readRemoteConfiguration(env, provider);
         if (!config) return fail("[AUTHORIZATION] OAuth upstream indisponivel para " + provider + ". Consulte assistente_status.");
-        const value = await withRemoteClient(config, client => client.listTools(undefined, { timeout: 15000 }));
-        const selected = selectRemoteTools(value.tools, options);
+        const tools = await withRemoteClient(config, client => listAllRemoteTools(client));
+        const selected = selectRemoteTools(tools, options);
         if (selected.error) return fail(selected.error);
         const result = normalizeRemoteResult({ content: [{ type: "text", text: JSON.stringify(selected) }] });
         audit(result.isError ? "warn" : "info", "remote_discovery", {

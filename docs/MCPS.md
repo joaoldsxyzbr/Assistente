@@ -11,6 +11,10 @@ O Worker Assistente MCPs, em **JavaScript puro (ES Modules)**, encaminha as cham
 
 O Worker não tem binding D1 nem ferramentas D1 próprias; acessos a D1, quando necessários, usam o MCP oficial Cloudflare.
 
+## Descoberta otimizada e completa
+
+O catálogo `mcp_*_tools` é consultado no provedor a cada pesquisa, preservando atualidade e isolamento. A listagem percorre páginas `nextCursor` até o fim, rejeitando cursores repetidos e catálogos incompletos. Consultas exatas por `name` devolvem nome, descrição curta e `inputSchema`, sem ícones, metadados visuais e esquemas de saída volumosos. Esquemas de entrada que excedem o limite textual de 64 KiB geram erro controlado; resultados privados não são armazenados em cache.
+
 ## OAuth e privacidade
 
 São dois trechos OAuth: ChatGPT → Worker e Worker → GitHub/Cloudflare. O Worker guarda tokens dos provedores cifrados no KV. `github_relocate_directory` reutiliza o token GitHub e não exige credencial, serviço ou permissão nova. Não registrar tokens, caminhos de arquivos ou conteúdo nos logs.
