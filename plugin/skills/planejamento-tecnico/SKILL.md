@@ -1,18 +1,20 @@
 ---
 name: planejamento-tecnico
-description: Use quando o usuário pedir um plano de implementação de software, arquitetura nova, migração ou funcionalidade técnica complexa, especialmente antes de começar a codificar. Não use em ajustes triviais, tarefas já planejadas ou pedidos não técnicos.
+description: Use quando o usuário pedir planejar uma funcionalidade complexa, migração, arquitetura ou implementação em várias etapas com dependências e riscos. Para solução ainda ambígua, prefira descoberta-de-requisitos. Não use para ajustes triviais.
 ---
 
-# Planejamento técnico
+# Planejamento técnico executável
 
-Use esta skill para decisões e etapas de engenharia que precisam de planejamento real. Não transforme toda correção pequena em projeto.
+Um plano serve para **ser executado e verificado**, não para aumentar burocracia. Preserve restrições e decisões anteriores, evitando perguntas já respondidas.
 
-## Fluxo
+1. **Estado atual:** identifique repositório, branch, ambientes, arquivos relevantes, código e testes existentes. Confirme fatos com ferramentas quando necessário.
+2. **Objetivo e limites:** registre comportamento esperado, o que fica fora do escopo, riscos de segurança/dados e critérios mensuráveis de aceitação.
+3. **Alternativas:** compare opções somente se uma decisão importante estiver em aberto; escolha a de menor complexidade que atende os requisitos.
+4. **Divisão:** produza tarefas pequenas com caminhos de arquivo reais, dependências, entrada/saída e validação independente.
+5. **Estratégia de testes:** para comportamento novo, inclua teste que falha antes da implementação, mudança mínima e regressão; para interface, inclua verificação visual se disponível.
+6. **Proteção:** use branch de trabalho e checkpoints; descreva rollback quando alterações afetarem produção ou dados.
+7. **Execução:** se o usuário autorizou plano **e execução**, encaminhe a `execucao-de-planos`. Se pediu só plano, pare sem escrever ou publicar.
 
-1. Confirme objetivo, código/arquitetura existente, escopo, ambiente e restrições. Considere decisões já tomadas, sem perguntar novamente.
-2. Identifique o resultado esperado e critérios concretos de aceitação. Separe fatos verificados de hipóteses.
-3. Divida em poucas etapas executáveis, identificando dependências, áreas afetadas e ordem segura.
-4. Aponte riscos relevantes, validações e reversão quando a mudança puder comprometer produção ou dados.
-5. Se o usuário pediu **planejar e executar**, siga para implementação após definir o plano; não peça novo aval para etapas não destrutivas já autorizadas. Se pediu **apenas planejamento**, não faça commits ou deploys.
+## Formato padrão
 
-**Saída:** plano curto e útil, sem documentos longos por padrão. Para implementações triviais, trabalhe diretamente com Desenvolvimento. Não use esta skill em conversas cotidianas.
+**Objetivo → Etapas e arquivos → Critérios de aceitação → Testes → Riscos/reversão.** Para tarefa pequena, uma descrição curta basta. Não invente nomes de arquivos, resultados nem ferramentas.
