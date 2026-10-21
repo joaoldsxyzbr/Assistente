@@ -10,7 +10,7 @@
   },
   "apps": "./.app.json",
   "name": "dev-6ad8b78e1d9881919055627f45ecc43a",
-  "version": "1.0.4",
+  "version": "1.1.0",
   "description": "Assistente",
   "author": {
     "name": "App developer"
