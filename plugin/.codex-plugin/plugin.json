@@ -1,0 +1,18 @@
+{
+  "apps": "./.app.json",
+  "author": {
+    "name": "App developer"
+  },
+  "description": "Assistente",
+  "interface": {
+    "capabilities": [],
+    "category": "Other",
+    "defaultPrompt": null,
+    "developerName": "App developer",
+    "displayName": "Assistente",
+    "longDescription": "Assistente",
+    "shortDescription": "Assistente"
+  },
+  "name": "dev-6ad8b78e1d9881919055627f45ecc43a",
+  "version": "1.0.1"
+}

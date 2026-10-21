@@ -1,0 +1,23 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "dev-6ad8b78e1d9881919055627f45ecc43a",
+  "version": "1.0.1",
+  "description": "Assistente",
+  "author": {
+    "name": "App developer"
+  },
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "capabilities": [],
+        "category": "Other",
+        "defaultPrompt": null,
+        "developerName": "App developer",
+        "displayName": "Assistente",
+        "longDescription": "Assistente",
+        "shortDescription": "Assistente"
+      },
+      "apps": "./.app.json"
+    }
+  }
+}

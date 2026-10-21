@@ -53,3 +53,6 @@ Antes de publicar: `npm run check`, `npm run test:browser`, `npm run test:runtim
 A ferramenta `github_relocate_directory` copia ou move diretórios na branch usando a API Git Database oficial do GitHub e o **mesmo OAuth já conectado**. Reaproveita o SHA dos arquivos sem reenviar seu conteúdo. Faça uma prévia (`dryRun: true`) e depois confirme com `dryRun: false`, `expectedHeadSha` e `message`. Não sobrescreve arquivos diferentes, não grava diretamente na `main` e não edita imports. As ferramentas oficiais MCP continuam responsáveis pelas edições comuns.
 
 Guia: [docs/RELOCACAO-GITHUB-2026-10-19.md](docs/RELOCACAO-GITHUB-2026-10-19.md).
+## Plugin Assistente (unificação de 21/10/2026)
+
+O plugin ChatGPT com os especialistas e skills está em [`plugin/`](plugin/). O código do MCP permanece em `server/` e `mcps/`, no mesmo repositório. O workflow **CI** valida os manifestos e gera o artefato `assistente-plugin.zip` para atualização do plugin existente no ChatGPT. **O ZIP da raiz do GitHub não é o ZIP instalável do plugin.** Detalhes em [docs/UNIFICACAO.md](docs/UNIFICACAO.md).
