@@ -1,10 +1,10 @@
-# Estado atual — Assistente MCPs (20/10/2026)
+# Estado atual — Assistente MCPs (21/10/2026)
 
 ## Fonte de verdade
-- Repositório `joaoldsxyzbr/Assistente-mcps`, branch `main`.
+- Repositório `joaoldsxyzbr/Assistente`, branch `main` (fonte de verdade após integração desta limpeza).
 - Um Worker Cloudflare `assistente`, endpoint `https://assistente.joaolds.xyz.br/mcp`.
 - Ponte OAuth aos MCPs **oficiais** GitHub e Cloudflare; JavaScript ES Modules; sem Preview ou binding D1.
-- Skills locais de ponto, gastos e desenvolvimento foram **removidas por solicitação expressa do usuário**, no PR #94. Não reintroduzir `assistente_skill` nem essas skills ao auditar.
+- As skills locais de ponto, gastos e desenvolvimento foram removidas anteriormente por decisão do usuário, no PR #94. Em 21/10, também se retirou o pacote `plugin/`, testes de skills e geração de ZIP. Este repositório mantém apenas MCPs e infraestrutura relacionada; não reintroduzir `assistente_skill`.
 
 ## Catálogo MCP atual
 Exatamente sete ferramentas:

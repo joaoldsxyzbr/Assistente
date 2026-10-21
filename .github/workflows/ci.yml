@@ -2,12 +2,6 @@ name: CI
 
 on:
   workflow_dispatch:
-    inputs:
-      publish_plugin_release:
-        description: 'Publicar ZIP instalável do Assistente em GitHub Releases'
-        type: boolean
-        required: false
-        default: false
   pull_request:
   push:
     branches: [main]
@@ -28,60 +22,3 @@ jobs:
       - run: npm run check
       - run: npm run test:browser
       - run: npm run test:runtime
-      - name: Verify ZIP and package the ChatGPT plugin
-        run: |
-          git archive --format=zip --output=assistente-plugin.zip HEAD:plugin
-          unzip -t assistente-plugin.zip
-          unzip -Z -1 assistente-plugin.zip | grep -Fx 'plugin.json'
-          unzip -Z -1 assistente-plugin.zip | grep -Fx '.app.json'
-          unzip -Z -1 assistente-plugin.zip | grep -Fx 'skills/desenvolvimento/SKILL.md'
-          unzip -Z -1 assistente-plugin.zip | grep -Fx 'skills/instrucoes-e-comportamento/SKILL.md'
-      - name: Publish plugin ZIP as workflow artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: assistente-plugin
-          path: assistente-plugin.zip
-          if-no-files-found: error
-
-  publish_plugin_release:
-    name: Publicar ZIP do Assistente
-    if: github.event_name == 'workflow_dispatch' && inputs.publish_plugin_release && github.ref == 'refs/heads/main'
-    needs: checks
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 24
-      - name: Verificar plugin antes de publicar
-        run: node scripts/check-plugin.mjs
-      - name: Gerar ZIP do plugin e checksum
-        shell: bash
-        run: |
-          VERSION="$(node -p "JSON.parse(require('node:fs').readFileSync('plugin/plugin.json','utf8')).version")"
-          ARCHIVE="Assistente-plugin-v$VERSION.zip"
-          git archive --format=zip --output="$ARCHIVE" HEAD:plugin
-          unzip -t "$ARCHIVE"
-          for entry in plugin.json .app.json .codex-plugin/plugin.json skills/desenvolvimento/SKILL.md skills/roteamento/SKILL.md skills/ux-ui/SKILL.md; do
-            unzip -Z -1 "$ARCHIVE" | grep -Fx "$entry"
-          done
-          sha256sum "$ARCHIVE" > "$ARCHIVE.sha256"
-          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
-          echo "ARCHIVE=$ARCHIVE" >> "$GITHUB_ENV"
-      - name: Criar Release com arquivo ZIP
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          TAG="plugin-v$VERSION"
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "::error::Release $TAG já existe. Não sobrescrever."
-            exit 1
-          fi
-          gh release create "$TAG" "$ARCHIVE" "$ARCHIVE.sha256" \
-            --target "$GITHUB_SHA" \
-            --title "Assistente plugin v$VERSION" \
-            --notes "ZIP completo do plugin Assistente para atualizar a instalação existente no ChatGPT. Inclui manifestos e skills, sem código do Worker, segredos ou dados pessoais."
-          gh release view "$TAG" --json url,assets --jq '{url:.url,assets:[.assets[].name]}'
