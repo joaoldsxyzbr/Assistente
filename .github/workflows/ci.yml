@@ -22,3 +22,17 @@ jobs:
       - run: npm run check
       - run: npm run test:browser
       - run: npm run test:runtime
+      - name: Verify ZIP and package the ChatGPT plugin
+        run: |
+          git archive --format=zip --output=assistente-plugin.zip HEAD:plugin
+          unzip -t assistente-plugin.zip
+          unzip -Z -1 assistente-plugin.zip | grep -Fx 'plugin.json'
+          unzip -Z -1 assistente-plugin.zip | grep -Fx '.app.json'
+          unzip -Z -1 assistente-plugin.zip | grep -Fx 'skills/desenvolvimento/SKILL.md'
+          unzip -Z -1 assistente-plugin.zip | grep -Fx 'skills/instrucoes-e-comportamento/SKILL.md'
+      - name: Publish plugin ZIP as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: assistente-plugin
+          path: assistente-plugin.zip
+          if-no-files-found: error
