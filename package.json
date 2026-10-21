@@ -13,7 +13,7 @@
     "check": "npm run syntax && npm run test:plugin && npm test && npm run build:workers",
     "test:browser": "node --test tests/browser/*.test.js",
     "test:runtime": "npm run build:workers && node --test tests/runtime/*.test.js",
-    "test:plugin": "node scripts/check-plugin.mjs"
+    "test:plugin": "node scripts/check-plugin.mjs && node --test tests/plugin-skill-contract.test.mjs"
   },
   "dependencies": {
     "@cloudflare/workers-oauth-provider": "^1.2.3",
