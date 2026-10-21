@@ -1,19 +1,28 @@
 ---
 name: depuracao
-description: Use quando houver um erro reproduzível, falha em produção ou teste, comportamento inesperado, regressão, exceção, log de erro ou bug a diagnosticar e corrigir. Não use para criar funcionalidades novas nem para revisões genéricas sem defeito observado.
+description: Use quando houver bug, erro 500, teste quebrado, falha intermitente, regressão, exceção ou comportamento inesperado para investigar a causa raiz antes de corrigir. Não use para criar uma função nova sem defeito observado.
 ---
 
-# Depuração e correção de falhas
+# Depuração sistemática — evidência antes da correção
 
-O objetivo é identificar a causa antes de aplicar a menor correção segura. Use ferramentas do projeto e não invente resultados de execução.
+O objetivo é **encontrar e confirmar a causa raiz** e só então corrigir. Não resolva sintomas por tentativa e erro. Use `desenvolvimento-orientado-a-testes` para regressões testáveis e `verificacao-de-entrega` antes de declarar o bug resolvido; sem carregar métodos irrelevantes.
 
-## Fluxo
+## Etapas e evidências
 
-1. Delimite o sintoma, o comportamento esperado, ambiente e impacto. Use logs e relatos disponíveis; não peça dados que já constam no contexto.
-2. Reproduza quando possível e verifique código, configurações, dados e mudanças recentes relacionados ao problema.
-3. Formule hipóteses, teste a mais provável e determine a causa raiz; não faça correções aleatórias.
-4. Aplique a menor mudança correta, preservando a arquitetura e as regras de segurança do projeto.
-5. Execute teste de regressão para o caso corrigido e os efeitos colaterais relevantes; valide UI visualmente se pertinente e possível.
-6. Relate causa, ajuste, verificação real e qualquer risco restante. Se não conseguiu reproduzir ou testar, informe com precisão.
+1. **Definir sintoma:** comportamento observado, esperado, ambiente, impacto e passos reproduzíveis; use o contexto já fornecido.
+2. **Localizar a falha:** leia erro, stack trace, logs e últimas mudanças. Em sistemas distribuídos, verifique cada fronteira (UI → Worker → API → D1) por observações concretas, sem expor segredos nem dados pessoais.
+3. **Hipótese única:** compare com um caso que funciona; formule hipótese falsificável, incluindo a evidência que a confirmaria ou descartaria.
+4. **Teste mínimo:** reproduza em ambiente seguro, alterando uma variável por vez. Se não reproduzir, amplie diagnóstico em vez de inventar a causa.
+5. **Regressão:** quando testável, crie teste que falhe pelo defeito antes de editar o código de produção; confirme que a falha é a correta.
+6. **Correção mínima:** ajuste a origem do problema, não apenas a mensagem. Não faça refatoração paralela.
+7. **Verificação:** execute o teste original, testes relacionados e, se pertinente, validação visual/navegador. Procure impactos entre componentes.
 
-**Limite:** em pedidos somente de diagnóstico ou auditoria, não altere código. Use apenas Python, JavaScript e C# quando necessário, mais HTML, CSS e SQL; prefira APIs nativas e SDKs oficiais, sem dependências independentes não autorizadas.
+## Quando interromper a tentativa de correção
+
+- Se a hipótese não se confirmar, volte aos fatos antes de outra alteração.
+- Depois de repetidas tentativas fracassadas, examine a arquitetura e dependências em vez de acumular remendos.
+- Se o bug envolver produção, dados reais, credenciais ou ação destrutiva, use leitura segura e peça aprovação específica quando necessária.
+
+## Entrega
+
+Informe **causa raiz confirmada ou hipótese pendente**, arquivos alterados, comando/teste executado, resultados observados e risco residual. Sem reproduzir ou testar, não declare "corrigido".
