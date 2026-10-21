@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { classifyRemoteFailure, remoteFailure, invokeRemoteTool, normalizeRemoteResult, selectRemoteTools } from "../server/remote-tools.js";
+import { classifyRemoteFailure, remoteFailure, invokeRemoteTool, normalizeRemoteResult, selectRemoteTools, listAllRemoteTools } from "../server/remote-tools.js";
 import { endpointFor, upstreamFetchTimeoutMs } from "../server/remote-client.js";
 import { MAX_PUSH_BYTES, MAX_PUSH_FILES, remoteCallMetrics, remoteCallTimeout } from "../server/shared/batch-policy.js";
 
@@ -116,6 +116,65 @@ test("focused discovery matches words, ranks names and loads only relevant schem
 
   const accented = selectRemoteTools([{ name: "visao_geral", inputSchema: schema }], { query: "VISÃO" });
   assert.deepEqual(accented.tools[0].inputSchema, schema);
+});
+
+test("exact tool details exclude provider icons and unnecessary metadata", () => {
+  const icon = "base64image".repeat(6500);
+  const schema = { type: "object", properties: { path: { type: "string" } } };
+  const tool = {
+    name: "get_repository_tree", description: "Read the tree",
+    icons: [{ src: icon }], inputSchema: schema,
+    outputSchema: { type: "object", description: "large".repeat(2000) },
+    annotations: { extra: "private" }
+  };
+  const result = selectRemoteTools([tool], { name: tool.name });
+  assert.deepEqual(result, { tool: { name: tool.name, description: tool.description, inputSchema: schema } });
+  assert.ok(JSON.stringify(result).length < 250);
+  assert.ok(!JSON.stringify(result).includes(icon.slice(0, 200)));
+});
+
+test("oversized exact schema returns a controlled error instead of overflowing 64 KiB", () => {
+  const result = selectRemoteTools([{
+    name: "oversized", inputSchema: { description: "x".repeat(70000) }
+  }], { name: "oversized" });
+  assert.match(result.error, /Schema MCP grande demais/);
+  assert.ok(JSON.stringify(result).length < 250);
+});
+
+test("remote catalog reads all paginated pages in order without redundant requests", async () => {
+  const calls = [];
+  const pages = [
+    { tools: [{ name: "first" }], nextCursor: "page-2" },
+    { tools: [{ name: "second" }], nextCursor: "page-3" },
+    { tools: [{ name: "third" }] }
+  ];
+  const client = { async listTools(params, options) {
+    calls.push({ params, options });
+    return pages[calls.length - 1];
+  } };
+  const found = await listAllRemoteTools(client);
+  assert.deepEqual(found.map(tool => tool.name), ["first", "second", "third"]);
+  assert.deepEqual(calls, [
+    { params: undefined, options: { timeout: 15000 } },
+    { params: { cursor: "page-2" }, options: { timeout: 15000 } },
+    { params: { cursor: "page-3" }, options: { timeout: 15000 } }
+  ]);
+  assert.equal(selectRemoteTools(found, { query: "third" }).total, 1);
+});
+
+test("remote catalog rejects invalid or repeated cursors and excessive pages", async () => {
+  await assert.rejects(
+    listAllRemoteTools({ async listTools() { return { tools: [], nextCursor: "repeat" }; } }),
+    /INVALID_TOOL_CATALOG_CURSOR/
+  );
+  await assert.rejects(
+    listAllRemoteTools({ async listTools() { return { tools: [] , nextCursor: "later" }; } }, { maxPages: 1 }),
+    /CATALOG_PAGINATION_LIMIT/
+  );
+  await assert.rejects(
+    listAllRemoteTools({ async listTools() { return { tools: null }; } }),
+    /INVALID_TOOL_CATALOG/
+  );
 });
 
 test("large or broad discovery never loads unrelated full schemas", () => {
