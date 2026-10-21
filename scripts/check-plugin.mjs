@@ -30,7 +30,7 @@ const routing = loadSkill("roteamento");
 const behavior = loadSkill("instrucoes-e-comportamento");
 const development = loadSkill("desenvolvimento");
 
-assert.match(routing, /^---\\nname: roteamento\\ndescription: [^\\n]+duas ou mais capacidades/i);
+assert.match(routing, /^---\nname: roteamento\ndescription: [^\n]+duas ou mais capacidades/i);
 assert.match(routing, /Não use para saudações/i);
 assert.match(routing, /GitHub.*Cloudflare/s);
 assert.match(routing, /Quando não usar/);
