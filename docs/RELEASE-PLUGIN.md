@@ -2,6 +2,11 @@
 
 O ZIP instalável contém `plugin.json`, `.app.json`, `.codex-plugin/` e `skills/` na raiz, sem a pasta `plugin/` como nível adicional. O ZIP do repositório inteiro não serve para essa instalação.
 
-Para criar a Release: **Actions → Publicar ZIP do plugin Assistente → Run workflow**, escolhendo a branch `main`. O workflow valida os arquivos, gera o ZIP com `git archive HEAD:plugin`, confere os manifestos, cria um SHA-256 e anexa ambos em **Releases**.
+## Gerar uma Release permanente
 
-O workflow não modifica o Worker, o OAuth nem os bancos, e não sobrescreve uma Release existente.
+1. Acesse **GitHub → Actions → CI → Run workflow**.
+2. Escolha a branch **main**.
+3. Marque **Publicar ZIP instalável do Assistente em GitHub Releases**.
+4. Confirme o disparo. Após os testes passarem, a Release `plugin-v<versão>` conterá o arquivo `Assistente-plugin-v<versão>.zip` e o checksum SHA-256.
+
+O fluxo usa apenas ferramentas oficiais, não modifica o Worker, OAuth ou banco de dados, e nunca sobrescreve uma Release existente.
