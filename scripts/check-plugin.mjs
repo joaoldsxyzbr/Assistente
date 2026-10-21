@@ -38,15 +38,15 @@ assert.deepEqual(actual, [...skillNames].sort(), "Skills ausentes ou não previs
 
 const descriptions = new Map();
 for (const name of skillNames) {
-  const path = \`skills/\${name}/SKILL.md\`;
+  const path = `skills/${name}/SKILL.md`;
   assert.ok(statSync(new URL(path, root)).isFile());
   const contents = readText(path);
   const header = contents.match(/^---\nname: ([^\n]+)\ndescription: ([^\n]+)\n---\n/);
-  assert.ok(header, \`Frontmatter inválido: \${path}\`);
-  assert.equal(header[1], name, \`Nome de skill divergente: \${name}\`);
-  assert.ok(header[2].length >= 70 && header[2].length <= 400, \`Descrição pouco útil ou longa: \${name}\`);
+  assert.ok(header, `Frontmatter inválido: ${path}`);
+  assert.equal(header[1], name, `Nome de skill divergente: ${name}`);
+  assert.ok(header[2].length >= 70 && header[2].length <= 400, `Descrição pouco útil ou longa: ${name}`);
   descriptions.set(name, header[2].toLowerCase());
-  assert.ok(contents.length > header[0].length + 250, \`Instruções insuficientes: \${name}\`);
+  assert.ok(contents.length > header[0].length + 250, `Instruções insuficientes: ${name}`);
 }
 
 const shouldMention = {
@@ -60,7 +60,7 @@ const shouldMention = {
 };
 for (const [name, terms] of Object.entries(shouldMention)) {
   for (const term of terms) {
-    assert.ok(descriptions.get(name).includes(term), \`Descrição de \${name} sem gatilho: \${term}\`);
+    assert.ok(descriptions.get(name).includes(term), `Descrição de ${name} sem gatilho: ${term}`);
   }
 }
 
@@ -73,4 +73,4 @@ assert.match(readText("skills/depuracao/SKILL.md"), /causa/i);
 assert.match(readText("skills/ux-ui/SKILL.md"), /acessibilidade/i);
 
 // Validação estática do contrato de descoberta; não simula a seleção do modelo.
-console.log(\`Plugin \${manifest.version}: identidade preservada e \${skillNames.length} skills validadas.\`);
+console.log(`Plugin ${manifest.version}: identidade preservada e ${skillNames.length} skills validadas.`);
