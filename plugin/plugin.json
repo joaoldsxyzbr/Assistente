@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "dev-6ad8b78e1d9881919055627f45ecc43a",
-  "version": "1.0.1",
+  "version": "1.0.4",
   "description": "Assistente",
   "author": {
     "name": "App developer"
