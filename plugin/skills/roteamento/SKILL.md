@@ -1,35 +1,38 @@
 ---
 name: roteamento
-description: Use quando o usuário pedir explicitamente para melhorar ou analisar o roteamento de skills e especialistas, ou solicitar uma operação que precise coordenar diferentes integrações e áreas, como GitHub mais Cloudflare. Não use para saudações, pedidos técnicos de uma única área ou tarefas cotidianas.
+description: Use somente quando o usuário pedir analisar o roteamento de skills ou coordenar operação realmente multidisciplinar entre integrações como GitHub e Cloudflare. Não use para saudações, correção de bug, TDD, planejamento, revisão, UX, execução isolada ou perguntas cotidianas.
 ---
 
-# Assistente — coordenação seletiva
+# Assistente — roteamento seletivo
 
-Esta skill **não** é executada antes de todo pedido. A plataforma descobre skills por seus nomes e descrições. Escolha diretamente a skill focada quando um único objetivo estiver claro.
+**A descoberta de skills é responsabilidade do ChatGPT.** Este arquivo não intercepta mensagens nem atua como pré-requisito de toda resposta. Para cada pedido escolha a skill mais específica e carregue auxiliares apenas quando agregarem valor.
 
-## Quando usar
+## Preferências de seleção
 
-- Auditoria, evolução ou teste do próprio mecanismo de seleção de skills.
-- Pedido realmente misto que requer coordenação entre ferramentas ou especialidades distintas, em ordem e com validação.
+| Objetivo | Skill principal |
+| --- | --- |
+| Bug, erro 500, teste falhando | `depuracao` |
+| Especificação ainda indefinida | `descoberta-de-requisitos` |
+| Arquitetura, plano de várias etapas | `planejamento-tecnico` |
+| Implementação de código | `desenvolvimento` |
+| Ciclo de teste falhando antes do código | `desenvolvimento-orientado-a-testes` |
+| Executar plano já definido | `execucao-de-planos` |
+| Auditoria e revisão de PR | `revisao-e-testes` |
+| Avaliar comentário de revisão | `revisao-de-feedback` |
+| Provar que a entrega está concluída | `verificacao-de-entrega` |
+| PR, merge, tag, release | `integracao-de-branches` |
+| Layout, dashboard, interação | `ux-ui` |
+| Instruções, comportamento e preferências | `instrucoes-e-comportamento` |
 
-## Quando não usar
+## Coordenação
 
-- Conversas simples e perguntas diretas: responda sem consulta a ferramentas desnecessárias.
-- Implementação de código: `desenvolvimento`.
-- Bugs/erros: `depuracao`.
-- Planos técnicos complexos: `planejamento-tecnico`.
-- Auditorias, PRs e cobertura de testes: `revisao-e-testes`.
-- Layouts, telas e dashboards: `ux-ui`.
-- Tom, preferências e instruções pessoais: `instrucoes-e-comportamento`.
-- Pesquisa, arquivos, imagens, previsão ou dados pessoais: use os recursos adequados sem inventar capacidades.
+1. Defina a intenção e a restrição **pelo contexto**, não por palavras isoladas.
+2. Prefira **uma** skill principal. Combine etapas (planejar → implementar → verificar → integrar) apenas para tarefas que realmente exigem esse processo.
+3. Para GitHub + Cloudflare, confirme estado de uma integração antes de operar a outra. Descubra ferramentas sob demanda e evite listar capacidades por hábito.
+4. Em pedidos de leitura/auditoria, não escreva. Em produção ou mudanças destrutivas, respeite autorização.
+5. Não faça chamadas a MCPs em saudações, perguntas simples, mídia ou documentos sem ligação com esses serviços.
+6. Nunca alegue uso de subagentes, testes ou ferramentas que o ambiente não ofereça.
 
-## Execução
+## Limite
 
-1. Identifique o resultado real usando o contexto. Não classifique só por palavras como “site”, “banco” ou “visual”.
-2. Prefira **uma única skill principal**. Em tarefas multifase, ative uma skill de processo somente quando ela acrescentar valor e depois a execução necessária.
-3. Conhecendo a ferramenta e o esquema, chame-a diretamente; faça descoberta seletiva apenas quando for indispensável. Não liste MCPs por hábito.
-4. Para GitHub e Cloudflare, siga a ordem dependente da tarefa, confirme o retorno de uma etapa antes da seguinte e preserve autorização, segurança e separação de ambientes.
-5. Não leia todos os métodos, não anuncie o roteamento sem necessidade e não transforme um ajuste simples em processo extenso.
-6. Informe claramente o que foi concluído, o que foi testado e o que depende de validação externa.
-
-**Limite:** a descoberta de skills depende do ChatGPT. Este texto não intercepta todas as conversas nem garante ativação universal. Preferências gerais devem permanecer nas instruções personalizadas do usuário.
+A descrição da skill melhora a chance de seleção, mas não garante ativação automática nem permite medir a seleção real sem testes no host.

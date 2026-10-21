@@ -1,19 +1,22 @@
 ---
 name: revisao-e-testes
-description: Use quando o usuário pedir auditoria técnica de código, revisão de pull request, análise de segurança e regressões, cobertura de testes ou verificação de uma entrega. Não use para diagnosticar um bug específico já observado nem para responder perguntas técnicas simples.
+description: Use quando o usuário pedir auditoria técnica, revisão de código ou PR, análise de segurança, cobertura, regressão ou verificar uma entrega existente. Não use para diagnosticar um bug específico já reproduzido nem para implementar função nova.
 ---
 
-# Revisão técnica, auditoria e testes
+# Revisão técnica baseada em evidências
 
-Verifique evidências antes de declarar um projeto aprovado. A revisão pode ser somente leitura ou fazer parte de uma implementação autorizada.
+Revisão é independente de implementação sempre que possível. Não aceite relatórios de outros agentes ou CI verde como prova suficiente de que **todos os requisitos** foram cumpridos.
 
-## Fluxo
+## Fluxo de revisão
 
-1. Identifique repositório, branch, mudanças, requisitos e escopo autorizado.
-2. Confira código, configurações, testes existentes e histórico relevante; não avalie arquivos que não foram consultados como se tivessem sido lidos.
-3. Procure problemas por prioridade: segurança/segredos, integridade dos dados, erros funcionais, regressões, desempenho e manutenção.
-4. Execute os testes disponíveis, incluindo casos de borda; se houver interface, acrescente validação visual quando houver navegador/captura.
-5. Apresente achados reproduzíveis com gravidade, evidência e correção proporcional. Diga quais testes passaram e quais não puderam ser executados.
-6. Se o pedido é só de auditoria, **não edite**. Se há autorização para corrigir, resolva achados no escopo e valide novamente.
+1. **Escopo:** identifique base/head ou arquivos, objetivo, restrições e se a tarefa é apenas leitura. Um pedido de auditoria não autoriza alteração.
+2. **Confronto:** compare critérios de aceitação com código real e diferenças de branch; investigue o que mudou e o que não foi testado.
+3. **Prioridade:** segurança, autenticação, autorização, exposição de segredos, perda de dados, bugs, integrações, desempenho e manutenção. Informe gravidade por impacto e probabilidade.
+4. **Testes:** verifique testes existentes, casos negativos, falhas de validação, limites, idempotência e regressões. Execute os testes permitidos e leia os resultados completos, sem declarar que executou o que não rodou.
+5. **UX/UI:** se a entrega envolve interface, verifique responsividade, estados, acessibilidade e capturas reais quando houver navegador.
+6. **Feedback verificável:** cite arquivo/trecho e condição de reprodução. Evite impressões vagas. Trate sugestões externas pela skill `revisao-de-feedback` quando aplicável.
+7. **Fechamento:** marque bloqueantes, relevantes e melhorias opcionais separadamente. Verifique novamente as correções antes de aprovar um merge.
 
-**Limite:** não confunda CI verde com comportamento integralmente validado. Não instale bibliotecas independentes sem autorização.
+## Saída
+
+**Achados priorizados → evidências → correções sugeridas → testes executados/não executados → conclusão condicionada aos resultados.** Não confunda lint, CI e comportamento funcional.
