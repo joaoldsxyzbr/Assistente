@@ -188,7 +188,7 @@ test(
       try {
         await client.connect(transport);
         const list = await client.listTools();
-        assert.equal(list.tools.length, 17);
+        assert.equal(list.tools.length, 25);
          for (const toolName of ["github_ler_arquivo", "github_branches", "github_criar_branch", "github_criar_pr"]) {
            assert.ok(list.tools.some(tool => tool.name === toolName), "Atalho ausente: " + toolName);
          }
@@ -201,7 +201,10 @@ test(
         assert.ok(list.tools.some(tool => tool.name === "github_relocate_directory"));
         const unexpected = ["mcp_github_tools", "mcp_github_call", "mcp_cloudflare_tools", "mcp_cloudflare_call"];
         for (const name of unexpected) assert.ok(!list.tools.some(t => t.name === name));
-        const cloudflareNames = ["cloudflare_contas", "cloudflare_workers", "cloudflare_bancos_d1", "cloudflare_documentacao"];
+        for (const name of ["github_enviar_arquivos", "github_integrar_pr", "github_excluir_arquivo"]) {
+          assert.ok(list.tools.some(t => t.name === name), "GitHub operation missing: " + name);
+        }
+        const cloudflareNames = ["cloudflare_contas", "cloudflare_workers", "cloudflare_bancos_d1", "cloudflare_documentacao", "cloudflare_d1_consultar", "cloudflare_d1_executar", "cloudflare_worker_versoes", "cloudflare_worker_deployments", "cloudflare_worker_publicar_versao"];
         for (const name of cloudflareNames) assert.ok(list.tools.some(t => t.name === name));
         const cf = await client.callTool({ name: "cloudflare_contas", arguments: {} });
         assert.equal(cf.isError, true);

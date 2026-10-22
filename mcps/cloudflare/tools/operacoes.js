@@ -44,6 +44,8 @@ export const cloudflareOperationTools=Object.freeze([
   READ_ARGS,["account_id","database_id","sql"],a=>({code:requestCode("POST",d1path(a),{sql:a.sql,params:validateParams(a.params)}),account_id:a.account_id})),
  spec("cloudflare_d1_executar","Executa alteração D1 isolada com confirmação explícita. Use dryRun para prévia. Não repita escrita incerta.",true,
   {...READ_ARGS,confirmar:CONFIRM,dryRun:CONFIRM},["account_id","database_id","sql"],a=>({code:requestCode("POST",d1path(a),{sql:a.sql,params:validateParams(a.params)}),account_id:a.account_id})),
+ spec("cloudflare_worker_versoes","Lista as versões disponíveis de um Worker pela API oficial.",false,
+  DEPLOY_ARGS,["account_id","worker"],a=>({code:requestCode("GET",workerPath(a).replace(/\/deployments$/,"/versions")),account_id:a.account_id})),
  spec("cloudflare_worker_deployments","Lista deploys de um Worker por conta, para diagnóstico e rollback planejado.",false,
   DEPLOY_ARGS,["account_id","worker"],a=>({code:requestCode("GET",workerPath(a)),account_id:a.account_id})),
  spec("cloudflare_worker_publicar_versao","Publica 100% do tráfego em uma versão Worker existente com confirmação e opcional dryRun.",true,
