@@ -8,7 +8,7 @@
   },
   "scripts": {
     "syntax": "node scripts/check-syntax.mjs",
-    "test": "node --test tests/*.test.js",
+    "test": "node --test tests/*.test.js mcps/*/tests/*.test.js",
     "build:workers": "wrangler deploy --dry-run --outdir .wrangler-build/assistente --config wrangler.assistente.jsonc",
     "check": "npm run syntax && npm test && npm run build:workers",
     "test:browser": "node --test tests/browser/*.test.js",
