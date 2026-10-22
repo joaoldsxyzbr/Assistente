@@ -1,7 +1,7 @@
 import { fromJsonSchema, McpServer } from "@modelcontextprotocol/server";
 import { oauthSecuritySchemesForTool } from "./shared/oauth-helpers.js";
-import { registerCloudflareTools } from "../mcps/cloudflare/index.js";
-import { registerGithubRelocation, registerGithubExactEdit, registerGithubDirectTools } from "../mcps/github/index.js";
+import { registerCloudflareTools, registerCloudflareOperations } from "../mcps/cloudflare/index.js";
+import { registerGithubRelocation, registerGithubExactEdit, registerGithubDirectTools, registerGithubOperations } from "../mcps/github/index.js";
 import { hasUpstreamConnection } from "./upstream-oauth.js";
 
 const MCP_SERVER_INSTRUCTIONS = "Assistente MCPs publica apenas ferramentas próprias GitHub e Cloudflare. OAuth e MCP oficiais permanecem exclusivamente no backend. Não expor ferramentas genéricas dos MCPs oficiais. Use github_edit_file com dryRun e SHA para edições seguras. Se uma operação específica ainda não estiver disponível, informe a limitação. Nunca repita uma escrita incerta sem reconciliar o estado.";
@@ -23,8 +23,10 @@ export function createAssistenteMcpServer(env = {}, traceId) {
     return { content: [{ type: "text", text: JSON.stringify({ connections }) }] };
   });
   registerCloudflareTools(server, env, fromJsonSchema, oauthSecuritySchemesForTool, traceId);
+  registerCloudflareOperations(server, env, fromJsonSchema, oauthSecuritySchemesForTool, traceId);
   registerGithubRelocation(server, env, fromJsonSchema, oauthSecuritySchemesForTool, traceId);
   registerGithubExactEdit(server, env, fromJsonSchema, oauthSecuritySchemesForTool, traceId);
   registerGithubDirectTools(server, env, fromJsonSchema, oauthSecuritySchemesForTool, traceId);
+  registerGithubOperations(server, env, fromJsonSchema, oauthSecuritySchemesForTool, traceId);
   return server;
 }

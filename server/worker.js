@@ -1,6 +1,7 @@
 import { createOAuthMcpWorker } from "./shared/oauth-mcp-worker.js";
 import { createAssistenteMcpServer } from "./mcp-server.js";
-import { githubDirectWriteNames } from "../mcps/github/index.js";
+import {githubDirectWriteNames,githubOperationWriteNames} from "../mcps/github/index.js";
+import {cloudflareOperationWriteNames} from "../mcps/cloudflare/index.js";
 
 const providers = new Map();
 function providerFor(env) {
@@ -10,7 +11,7 @@ function providerFor(env) {
       createServer: createAssistenteMcpServer,
       resource: new URL("/mcp", origin).href,
       resourceName: "Assistente MCP",
-      writeToolNames: ["github_relocate_directory", "github_edit_file", ...githubDirectWriteNames]
+      writeToolNames: ["github_relocate_directory", "github_edit_file", ...githubDirectWriteNames, ...githubOperationWriteNames, ...cloudflareOperationWriteNames]
     }));
   }
   return providers.get(origin);
