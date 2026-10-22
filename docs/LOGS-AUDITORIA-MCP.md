@@ -1,21 +1,23 @@
-# Diagnóstico de ferramentas MCP
+# Diagnóstico e auditoria das ferramentas MCP
 
-O Assistente registra um evento estruturado `tool_execution` por execução, ligado ao `mcp_request` e `mcp_response_stream` pelo mesmo `traceId`.
+Todas as 25 ferramentas geram exatamente um evento `tool_execution` por execução. O identificador `traceId` liga a ferramenta aos eventos HTTP `mcp_request` e `mcp_response_stream`.
 
-Campos: `tool`, `server`, `traceId`, `write`, `stage`, `durationMs`, `outcome`, `category` (erros) e `uncertain`.
+Campos: `tool`, `server`, `traceId`, `write`, `stage`, `durationMs`, `outcome`, `category` (em falhas) e `uncertain`.
 
-Etapas: `validation`, `oauth`, `connection`, `upstream`, `normalization` e `preview`.
+As etapas são `validation`, `oauth`, `connection`, `upstream`, `normalization` e `preview`. Para chamadas GitHub/Cloudflare via MCP oficial, as etapas são marcadas durante a execução. Para as ferramentas GitHub de edição exata e realocação, a mutação é sinalizada explicitamente somente antes da primeira escrita na API GitHub.
 
-As chamadas diretas conhecem as etapas detalhadas; ferramentas especiais antigas usam uma classificação conservadora. Em erros de escrita com efeito incerto, consultar o provedor antes de repetir.
+`uncertain:true` significa que uma operação de escrita foi tentada e o resultado não é confirmado. **Não repetir automaticamente**: consultar o estado remoto. Erros de validação, OAuth, conexão inicial e prévias não são considerados tentativas de escrita.
 
-Não registrar SQL, parâmetros, tokens, credenciais, conteúdo, nomes de arquivos, mensagens de erro ou respostas.
+Se a API Cloudflare devolver `success:false` dentro de uma resposta MCP válida, a ferramenta também retorna `isError:true` ao cliente; o conteúdo da resposta não é copiado para o log.
 
-## Como consultar
+## Privacidade
 
-Cloudflare Dashboard > Workers & Pages > assistente > Observability > Logs. Filtre `tool_execution`, ferramenta e `traceId`. Compare eventos `mcp_request` e `mcp_response_stream`. HTTP 200 e stream concluído não garantem entrega ao ChatGPT.
+O log é restrito a metadados padronizados. Não contém SQL, argumentos, caminhos de arquivos, conteúdo, tokens, credenciais, respostas MCP, emails nem mensagens remotas. A Cloudflare persiste os logs conforme a retenção contratada; não há novo banco ou serviço.
 
-A retenção é da Cloudflare Workers Logs; não há banco ou sistema de monitoramento adicional.
+## Investigação
 
-## Validação e publicação
+No Cloudflare Dashboard, acesse **Workers & Pages → assistente → Observability → Logs**. Pesquise `tool_execution`, a ferramenta e o `traceId`. Correlacione com `mcp_request` e `mcp_response_stream`. HTTP 200 e stream concluído não garantem que o ChatGPT recebeu ou interpretou a resposta.
 
-Testes Node: sucesso, isError, `success:false`, OAuth, timeout, prévia e privacidade. CI inclui navegador e Workerd. Merge na main não faz deploy do Worker; validar versão promovida antes de assumir que os logs já estão ativos.
+## Validação
+
+O CI executa testes Node, navegador, Workerd e build Wrangler. Os testes verificam prévias sem mutação, início da primeira escrita, resposta da Cloudflare com erro interno, autenticação e ausência de dados sensíveis. Testes de escrita usam API GitHub simulada, sem modificar dados de produção.

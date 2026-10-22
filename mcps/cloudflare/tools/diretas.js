@@ -1,6 +1,6 @@
 import {readRemoteConfiguration,withRemoteClient} from "../../../server/remote-client.js";
 import {invokeRemoteTool,normalizeRemoteResult,remoteFailure} from "../../../server/remote-tools.js";
-import {createToolDiagnostics} from "../../../server/shared/tool-diagnostics.js";
+import {createToolDiagnostics,markCloudflareResultError} from "../../../server/shared/tool-diagnostics.js";
 import {cloudflareTools,prepareCloudflareCall} from "./contratos.js";
 
 const fail=message=>({isError:true,content:[{type:"text",text:message}]});
@@ -20,7 +20,7 @@ export function registerCloudflareTools(server,env,fromJsonSchema,securityScheme
         const raw=await withRemoteClient(config,async client=>
           invokeRemoteTool(client,call.upstream,call.arguments),{onStage:stage=>diagnostic.stage(stage)});
         diagnostic.stage("normalization");
-        return diagnostic.done(normalizeRemoteResult(raw));
+        return diagnostic.done(markCloudflareResultError(normalizeRemoteResult(raw)));
       }catch(error){
         diagnostic.fail(error);
         return remoteFailure(error,"cloudflare");

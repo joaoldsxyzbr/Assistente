@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createToolDiagnostics } from "../server/shared/tool-diagnostics.js";
+import { createToolDiagnostics, markCloudflareResultError } from "../server/shared/tool-diagnostics.js";
 
 function harness(write=false) {
   let tick = 100;
@@ -39,6 +39,7 @@ test("timeout on writes is uncertain only after upstream attempt", () => {
   assert.equal(a.entries[0][2].category,"TIMEOUT");
   assert.equal(a.entries[0][2].uncertain,false);
   const b=harness(true);b.diagnostics.stage("upstream");
+  b.diagnostics.markWriteAttempt();
   b.diagnostics.fail(Error("UPSTREAM_REQUEST_TIMEOUT"));
   assert.equal(b.entries[0][2].uncertain,true);
 });
@@ -68,4 +69,32 @@ test("Cloudflare API success:false inside MCP text is logged as failure without 
   assert.equal(records[0][2].outcome,"error");
   assert.equal(records[0][2].category,"UPSTREAM_ERROR");
   assert.doesNotMatch(JSON.stringify(records),/private-key/);
+});
+test("reading remote state before a write does not imply an uncertain mutation", () => {
+  const x=harness(true);
+  x.diagnostics.stage("upstream");
+  x.diagnostics.fail(Error("UPSTREAM_REQUEST_TIMEOUT"));
+  assert.equal(x.entries[0][2].uncertain,false);
+  const y=harness(true);
+  y.diagnostics.markWriteAttempt();
+  y.diagnostics.done({isError:true});
+  assert.equal(y.entries[0][2].uncertain,true);
+});
+test("Cloudflare API error is a real tool error, not just a warning log", () => {
+  const response={content:[{type:"text",text:JSON.stringify({success:false,errors:[{message:"sensitive"}]})}]};
+  const normalized=markCloudflareResultError(response);
+  assert.equal(normalized.isError,true);
+  assert.equal(response.isError,undefined);
+  const ok=markCloudflareResultError({content:[{type:"text",text:'{"success":true}'}]});
+  assert.notEqual(ok.isError,true);
+});
+test("OAuth-not-connected and preflight validation cannot imply an uncertain write", () => {
+  const x=harness(true);x.diagnostics.stage("oauth");
+  x.diagnostics.fail(Error("GITHUB_NOT_CONNECTED"));
+  assert.equal(x.entries[0][2].category,"AUTHORIZATION");
+  assert.equal(x.entries[0][2].uncertain,false);
+  const y=harness(true);y.diagnostics.fail(Error("SECRET-DATA"));
+  assert.equal(y.entries[0][2].category,"VALIDATION");
+  assert.equal(y.entries[0][2].uncertain,false);
+  assert.doesNotMatch(JSON.stringify(y.entries),/SECRET-DATA/);
 });

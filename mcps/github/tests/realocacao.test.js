@@ -86,7 +86,9 @@ function mockGithub({ files = entries, truncated = false, failedOn = null, head 
 
 test("preview is read-only and returns SHA/paths without contents", async () => {
   const { request, calls } = mockGithub();
-  const preview = await relocateDirectory(args, { token: "fake-oauth-token", request });
+  let mutations=0;
+  const preview = await relocateDirectory(args, { token: "fake-oauth-token", request, onMutation:()=>mutations++ });
+  assert.equal(mutations,0);
   assert.equal(preview.status, "preview");
   assert.equal(preview.headSha, hashes.a);
   assert.equal(preview.sourceFiles, 3);
@@ -97,9 +99,11 @@ test("preview is read-only and returns SHA/paths without contents", async () => 
 
 test("execution creates one tree/commit then updates branch without force", async () => {
   const { request, calls } = mockGithub();
+  let mutations=0;
   const result = await relocateDirectory({
     ...args, dryRun: false, expectedHeadSha: hashes.a, message: "refactor: move frontend"
-  }, { token: "fake-oauth-token", request });
+  }, { token: "fake-oauth-token", request, onMutation:()=>mutations++ });
+  assert.equal(mutations,1);
   assert.equal(result.status, "committed");
   assert.equal(result.commitSha, hashes.d);
   assert.deepEqual(calls.map(c => c.method ?? "GET"),
@@ -112,9 +116,11 @@ test("execution creates one tree/commit then updates branch without force", asyn
 
 test("stale expected HEAD, conflicts and truncated trees never write", async () => {
   const stale = mockGithub();
+  let staleMutations=0;
   await assert.rejects(relocateDirectory({
     ...args, dryRun: false, expectedHeadSha: hashes.e, message: "refactor: move frontend"
-  }, { token: "fake-oauth-token", request: stale.request }), /STALE_HEAD/);
+  }, { token: "fake-oauth-token", request: stale.request, onMutation:()=>staleMutations++ }), /STALE_HEAD/);
+  assert.equal(staleMutations,0);
   assert.equal(stale.calls.length, 1);
   const truncated = mockGithub({ truncated: true });
   await assert.rejects(relocateDirectory(args, {

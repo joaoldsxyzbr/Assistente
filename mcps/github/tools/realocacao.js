@@ -1,5 +1,6 @@
 import { getUpstreamAccessToken } from "../../../server/upstream-oauth.js";
 import { audit } from "../../../server/shared/audit.js";
+import { createToolDiagnostics } from "../../../server/shared/tool-diagnostics.js";
 
 const MAX_FILES = 250;
 const HASH = /^[0-9a-f]{40}$/i;
@@ -110,7 +111,8 @@ export async function githubJson(token, url, { method = "GET", body, fetchFn = f
 
 export async function relocateDirectory(input, {
   token,
-  request = githubJson
+  request = githubJson,
+  onMutation = () => {}
 }) {
   const { from, to, branch, mode, dryRun } = validateRelocation(input);
   if (!token) throw Error("GITHUB_NOT_CONNECTED");
@@ -137,6 +139,7 @@ export async function relocateDirectory(input, {
   if (dryRun || plan.changes.length === 0)
     return { ...summary, status: dryRun ? "preview" : "already_synced" };
 
+  onMutation();
   const createdTree = await request(token, base + "/git/trees", {
     method: "POST", body: { base_tree: commit.tree.sha, tree: plan.changes }
   });
@@ -175,9 +178,17 @@ export function registerGithubRelocation(server, env, fromJsonSchema, securitySc
     _meta: { securitySchemes: securitySchemes(true) }
   }, async args => {
     const started = Date.now();
+    const diagnostic = createToolDiagnostics({provider:"github",tool:"github_relocate_directory",
+      write:args?.dryRun === false,traceId});
     try {
+      validateRelocation(args);
+      diagnostic.stage("oauth");
       const token = await getUpstreamAccessToken(env, "github");
-      const result = await relocateDirectory(args, { token });
+      diagnostic.stage("upstream");
+      const result = await relocateDirectory(args, { token,
+        onMutation:()=>diagnostic.markWriteAttempt() });
+      diagnostic.stage("normalization");
+      diagnostic.done({}, {preview:result.dryRun});
       audit("info", "github_relocation", {
         server: "github", traceId, outcome: result.status,
         fileCount: result.sourceFiles,
@@ -185,6 +196,7 @@ export function registerGithubRelocation(server, env, fromJsonSchema, securitySc
       });
       return { content: [{ type: "text", text: JSON.stringify(result) }] };
     } catch (error) {
+      diagnostic.fail(error);
       const category = String(error?.message ?? "UNCONFIRMED");
       const allowed = new Set([
         "INVALID_REPOSITORY", "INVALID_BRANCH", "INVALID_DIRECTORY", "INVALID_MODE",

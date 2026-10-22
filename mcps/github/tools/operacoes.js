@@ -1,6 +1,6 @@
 import {readRemoteConfiguration,withRemoteClient} from "../../../server/remote-client.js";
 import {invokeRemoteTool,normalizeRemoteResult,remoteFailure} from "../../../server/remote-tools.js";
-import {audit} from "../../../server/shared/audit.js";
+import {createToolDiagnostics} from "../../../server/shared/tool-diagnostics.js";
 import {remoteCallMetrics,remoteCallTimeout} from "../../../server/shared/batch-policy.js";
 const OWNER={type:"string",minLength:1,maxLength:100,pattern:"^[A-Za-z0-9-]+$"};
 const REPO={type:"string",minLength:1,maxLength:100,pattern:"^[A-Za-z0-9_.-]+$"};
@@ -64,22 +64,27 @@ export function registerGithubOperations(server,env,fromJsonSchema,securitySchem
    description:tool.description,inputSchema:fromJsonSchema(tool.schema),
    _meta:{securitySchemes:securitySchemes(true)}
   },async(args={})=>{
-   const started=Date.now();
-   try{
+   const diagnostic=createToolDiagnostics({provider:"github",tool:tool.name,write:true,traceId});
+   try {
     const call=prepareGithubOperation(tool.name,args);
-    if(call.preview)return {content:[{type:"text",text:JSON.stringify({dryRun:true,operation:tool.name,
-     owner:args.owner,repo:args.repo,branch:args.branch,paths:args.files?.map(f=>f.path),
-     path:args.path,pullNumber:args.pullNumber,expectedHeadSha:args.expectedHeadSha})}]};
+    if(call.preview)return diagnostic.done({content:[{type:"text",text:JSON.stringify({
+     dryRun:true,operation:tool.name,owner:args.owner,repo:args.repo,
+     branch:args.branch,paths:args.files?.map(f=>f.path),
+     path:args.path,pullNumber:args.pullNumber,expectedHeadSha:args.expectedHeadSha
+    })}]},{preview:true});
+    diagnostic.stage("oauth");
     const config=await readRemoteConfiguration(env,"github");
-    if(!config)return {isError:true,content:[{type:"text",text:"[AUTHORIZATION] Conecte GitHub via OAuth."}]};
+    if(!config)return diagnostic.done({isError:true,content:[{type:"text",text:"[AUTHORIZATION] Conecte GitHub via OAuth."}]},{missingAuth:true});
     const timeoutMs=remoteCallTimeout("github",call.upstream);
-    const result=await withRemoteClient(config,async client=>normalizeRemoteResult(
-      await invokeRemoteTool(client,call.upstream,call.args,timeoutMs)),{callTimeoutMs:timeoutMs});
-    audit(result.isError?"warn":"info","github_operation",{tool:tool.name,traceId,
-     outcome:result.isError?"error":"ok",durationMs:Date.now()-started});
-    return result;
-   }catch(error){
-    audit("warn","github_operation",{tool:tool.name,traceId,outcome:"error",durationMs:Date.now()-started});
+    const raw=await withRemoteClient(config,client=>invokeRemoteTool(client,call.upstream,call.args,timeoutMs),
+      {callTimeoutMs:timeoutMs,onStage:stage=>{
+       diagnostic.stage(stage);
+       if(stage==="upstream")diagnostic.markWriteAttempt();
+      }});
+    diagnostic.stage("normalization");
+    return diagnostic.done(normalizeRemoteResult(raw));
+   } catch(error) {
+    diagnostic.fail(error);
     return remoteFailure(error,"github");
    }
   });
