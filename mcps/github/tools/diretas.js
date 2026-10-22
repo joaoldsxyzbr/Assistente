@@ -18,7 +18,7 @@ export function registerGithubDirectTools(server,env,fromJsonSchema,securitySche
         const config=await readRemoteConfiguration(env,"github");
         if(!config)return diagnostic.done(fail("[AUTHORIZATION] Conecte o MCP GitHub oficial via OAuth; consulte assistente_status."),{missingAuth:true});
         const raw=await withRemoteClient(config,async client=>
-          invokeRemoteTool(client,call.upstream,call.arguments),{onStage:stage=>diagnostic.stage(stage)});
+          invokeRemoteTool(client,call.upstream,call.arguments),{onStage:stage=>{ diagnostic.stage(stage); if(stage==="upstream"&&spec.write) diagnostic.markWriteAttempt(); }});
         diagnostic.stage("normalization");
         return diagnostic.done(normalizeRemoteResult(raw));
       }catch(error){
