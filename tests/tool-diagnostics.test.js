@@ -57,3 +57,15 @@ test("preview and repeated completion only record once", () => {
   assert.equal(a.entries[0][2].outcome,"preview");
   assert.equal(a.entries[0][2].uncertain,false);
 });
+test("Cloudflare API success:false inside MCP text is logged as failure without leaking data", () => {
+  const d = createToolDiagnostics({
+    tool:"cloudflare_workers", provider:"cloudflare", traceId:"trace",
+    log:(...x)=>records.push(x)
+  });
+  const records=[];
+  d.stage("normalization");
+  d.done({content:[{type:"text",text:JSON.stringify({success:false,errors:[{message:"private-key"}]})}]});
+  assert.equal(records[0][2].outcome,"error");
+  assert.equal(records[0][2].category,"UPSTREAM_ERROR");
+  assert.doesNotMatch(JSON.stringify(records),/private-key/);
+});
