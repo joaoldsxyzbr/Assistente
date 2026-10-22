@@ -26,8 +26,9 @@ test("D1 escreve somente com confirmar; dryRun não executa remotamente",()=>{
 });
 test("Workers só aceitam nomes válidos e publicam versão UUID existente",()=>{
  let args={account_id:account,worker:"worker_test",version_id:db};
- assert.equal(prepare("cloudflare_worker_deployments",args).write,false);
- assert.match(prepare("cloudflare_worker_versoes",args).arguments.code,/\/versions/);
+ const readArgs={account_id:account,worker:"worker_test"};
+ assert.equal(prepare("cloudflare_worker_deployments",readArgs).write,false);
+ assert.match(prepare("cloudflare_worker_versoes",readArgs).arguments.code,/\/versions/);
  assert.throws(()=>prepare("cloudflare_worker_publicar_versao",args),/CONFIRMATION_REQUIRED/);
  let deployment=prepare("cloudflare_worker_publicar_versao",{...args,confirmar:true});
  assert.match(deployment.arguments.code,/"percentage":100/);
