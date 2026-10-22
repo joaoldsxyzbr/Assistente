@@ -21,7 +21,7 @@ export async function readRemoteConfiguration(env, id) {
 export function upstreamFetchTimeoutMs(method, callTimeoutMs = 45000) {
   return method === "DELETE" ? 5000 : Math.min(callTimeoutMs + 10000, 110000);
 }
-export async function withRemoteClient(config, fn, { callTimeoutMs = 45000 } = {}) {
+export async function withRemoteClient(config, fn, { callTimeoutMs = 45000, onStage } = {}) {
   // Auto-negotiate the modern MCP era, falling back to the legacy initialize handshake.
   const client = new Client({ name: "assistente-hub", version: "1.1.0" }, { versionNegotiation: { mode: "auto" } });
   const transport = new StreamableHTTPClientTransport(new URL(config.endpoint), {
@@ -29,7 +29,9 @@ export async function withRemoteClient(config, fn, { callTimeoutMs = 45000 } = {
     fetch: (url, init) => fetchUpstream(fetch, url, init, upstreamFetchTimeoutMs(init?.method, callTimeoutMs))
   });
   try {
+    onStage?.("connection");
     await client.connect(transport, { timeout: 15000 });
+    onStage?.("upstream");
     return await fn(client);
   } finally {
     await transport.terminateSession().catch(() => {});
