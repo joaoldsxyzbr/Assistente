@@ -1,11 +1,10 @@
 import { fromJsonSchema, McpServer } from "@modelcontextprotocol/server";
 import { oauthSecuritySchemesForTool } from "./shared/oauth-helpers.js";
 import { registerRemoteTools } from "./remote-tools.js";
-import { registerGithubRelocation } from "../mcps/github/index.js";
-import { registerGithubExactEdit } from "../mcps/github/index.js";
+import { registerGithubRelocation, registerGithubExactEdit, registerGithubDirectTools } from "../mcps/github/index.js";
 import { hasUpstreamConnection } from "./upstream-oauth.js";
 
-const MCP_SERVER_INSTRUCTIONS = "Assistente MCPs é um único Worker com uma ponte dinâmica para os MCPs oficiais GitHub e Cloudflare. Use mcp_github_tools e mcp_cloudflare_tools para descobrir as ferramentas publicadas em tempo real e mcp_github_call / mcp_cloudflare_call para encaminhar chamadas sem copiar ou redefinir ferramentas. As conexões upstream exigem OAuth independente e podem estar indisponíveis até a autorização; não peça ao usuário para colar tokens no chat. Consulte assistente_status para estado e links de conexão. Toda chamada remota genérica exige escopo mcp:write do Assistente, mesmo quando apenas leitura. Nunca repita escrita incerta sem reconciliação.";
+const MCP_SERVER_INSTRUCTIONS = "Assistente MCPs conecta ao GitHub e Cloudflare oficiais por OAuth. Use preferencialmente as ferramentas github_* diretas para tarefas comuns e github_edit_file para editar trechos com prévia e validação de SHA. Para ferramentas sem atalho use mcp_github_tools e mcp_github_call; para Cloudflare use mcp_cloudflare_tools e mcp_cloudflare_call. As conexões exigem OAuth independente; não solicite tokens no chat. Consulte assistente_status para diagnóstico. O fallback genérico exige mcp:write inclusive para leituras, pois pode alterar recursos. Nunca repita escrita incerta sem reconciliação.";
 
 export function createAssistenteMcpServer(env = {}, traceId) {
   const server = new McpServer({ name: "assistente", version: "1.1.0" }, { instructions: MCP_SERVER_INSTRUCTIONS });
@@ -26,5 +25,6 @@ export function createAssistenteMcpServer(env = {}, traceId) {
   registerRemoteTools(server, env, fromJsonSchema, oauthSecuritySchemesForTool, traceId);
   registerGithubRelocation(server, env, fromJsonSchema, oauthSecuritySchemesForTool, traceId);
   registerGithubExactEdit(server, env, fromJsonSchema, oauthSecuritySchemesForTool, traceId);
+  registerGithubDirectTools(server, env, fromJsonSchema, oauthSecuritySchemesForTool, traceId);
   return server;
 }
