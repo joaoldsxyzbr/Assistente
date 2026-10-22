@@ -104,7 +104,9 @@ test("decode only verified UTF-8 GitHub files, rejecting binary and inconsistent
 
 test("preview fetches immutable commit and file; never writes or returns source", async () => {
   const mock = mockGithub();
-  const result = await editGithubFile(base, { token: "mock-token", request: mock.request });
+  let mutations=0;
+  const result = await editGithubFile(base, { token: "mock-token", request: mock.request, onMutation:()=>mutations++ });
+  assert.equal(mutations,0);
   assert.deepEqual(Object.keys(result).sort(),
     ["blobSha","branch","dryRun","edits","headSha","originalBytes",
       "path","status","updatedBytes"].sort());
@@ -119,10 +121,12 @@ test("preview fetches immutable commit and file; never writes or returns source"
 
 test("commit is atomic and preserves executable bit, without transmitting entire original file through MCP", async () => {
   const mock = mockGithub({ fileMode: "100755" });
+  let mutations=0;
   const result = await editGithubFile({
     ...base, dryRun: false, expectedHeadSha: sha.head,
     expectedBlobSha: sha.old, message: "fix: update app safely"
-  }, { token: "mock-token", request: mock.request });
+  }, { token: "mock-token", request: mock.request, onMutation:()=>mutations++ });
+  assert.equal(mutations,1);
   assert.equal(result.status, "committed");
   assert.equal(result.commitSha, sha.newCommit);
   assert.deepEqual(mock.calls.map(call => call.method),
@@ -140,8 +144,10 @@ test("stale branch or blob, symlink and ambiguous context never create a commit"
   const write = { ...base, dryRun: false, expectedHeadSha: sha.head,
     expectedBlobSha: sha.old, message: "fix: update app safely" };
   const stale = mockGithub();
+  let staleMutations=0;
   await assert.rejects(editGithubFile({ ...write, expectedHeadSha: sha.stale },
-    { token: "mock-token", request: stale.request }), /STALE_HEAD/);
+    { token: "mock-token", request: stale.request, onMutation:()=>staleMutations++ }), /STALE_HEAD/);
+  assert.equal(staleMutations,0);
   assert.equal(stale.calls.length, 1);
   const blob = mockGithub({ blobSha: sha.stale });
   await assert.rejects(editGithubFile(write, { token: "mock-token", request: blob.request }),
