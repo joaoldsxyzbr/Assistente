@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   validateExactEdit, applyExactEdits, decodeGithubText, editGithubFile
-} from "../server/github-exact-edit.js";
+} from "../tools/edicao-exata.js";
 
 const sha = Object.fromEntries(["head","tree","folder","old","blob","newTree","newCommit","stale"].map(
   (name, index) => [name, (index + 1).toString(16).repeat(40)]

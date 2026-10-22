@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   validateRelocation, planDirectoryRelocation, relocateDirectory, githubJson
-} from "../server/github-relocation.js";
+} from "../tools/realocacao.js";
 
 const hashes = { a: "a".repeat(40), b: "b".repeat(40), c: "c".repeat(40), d: "d".repeat(40), e: "e".repeat(40) };
 const entries = [

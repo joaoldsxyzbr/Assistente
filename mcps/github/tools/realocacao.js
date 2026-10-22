@@ -1,5 +1,5 @@
-import { getUpstreamAccessToken } from "./upstream-oauth.js";
-import { audit } from "./shared/audit.js";
+import { getUpstreamAccessToken } from "../../../server/upstream-oauth.js";
+import { audit } from "../../../server/shared/audit.js";
 
 const MAX_FILES = 250;
 const HASH = /^[0-9a-f]{40}$/i;

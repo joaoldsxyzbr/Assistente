@@ -1,6 +1,6 @@
-import { getUpstreamAccessToken } from "./upstream-oauth.js";
-import { audit } from "./shared/audit.js";
-import { githubJson } from "./github-relocation.js";
+import { getUpstreamAccessToken } from "../../../server/upstream-oauth.js";
+import { audit } from "../../../server/shared/audit.js";
+import { githubJson } from "./realocacao.js";
 
 const HASH = /^[0-9a-f]{40}$/i;
 const REPO = /^[A-Za-z0-9_.-]{1,100}$/;
