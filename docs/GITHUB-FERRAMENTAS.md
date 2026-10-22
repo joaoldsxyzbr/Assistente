@@ -1,9 +1,15 @@
 # Ferramentas próprias do GitHub
 
-O Assistente MCPs mantém OAuth e MCP oficial GitHub exclusivamente nos bastidores. O ChatGPT só recebe nomes e contratos das ferramentas implementadas em `mcps/github/`.
+A integração usa OAuth e o MCP **oficial GitHub no backend**. No ChatGPT estão apenas 15 ferramentas próprias.
 
-**Leitura:** `github_ler_arquivo`, `github_estrutura`, `github_branches`, `github_commits`, `github_pesquisar_codigo`, `github_pull_requests`, `github_detalhar_pr`, `github_execucoes_ci`.
+Leituras: `github_ler_arquivo`, `github_estrutura`, `github_branches`, `github_commits`, `github_pesquisar_codigo`, `github_pull_requests`, `github_detalhar_pr` e `github_execucoes_ci`.
 
-**Escrita:** `github_criar_branch`, `github_criar_pr`, `github_edit_file` (prévia com `dryRun`, proteção por SHA) e `github_relocate_directory`.
+Escritas: `github_criar_branch`, `github_criar_pr`, `github_edit_file`, `github_relocate_directory`, `github_enviar_arquivos`, `github_integrar_pr`, `github_excluir_arquivo`.
 
-As operações são delegadas internamente ao provedor oficial quando aplicável, mas os comandos genéricos `mcp_github_tools` e `mcp_github_call` não são publicados. Funcionalidades sem ferramenta própria ainda precisam ser implementadas.
+- Edição exata: `dryRun` e controle concorrente por SHA para preservar contexto.
+- Envio de arquivos: máximo 8 arquivos/128 KiB; não escreve diretamente em `main` ou `master`.
+- Merge de PR: exige SHA esperado e confirmação explícita.
+- Exclusão: branch de trabalho, confirmação obrigatória.
+- O servidor oficial executa as operações internamente, sem o cliente conhecer o nome das ferramentas upstream.
+
+Módulos e testes ficam inteiros em `mcps/github/`.
