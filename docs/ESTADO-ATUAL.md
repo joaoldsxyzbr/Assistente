@@ -1,26 +1,23 @@
-# Estado atual — Assistente MCPs (21/10/2026)
+# Estado atual — Assistente MCPs (22/10/2026)
 
-## Fonte de verdade
-- Repositório `joaoldsxyzbr/Assistente`, branch `main` (fonte de verdade após integração desta limpeza).
-- Um Worker Cloudflare `assistente`, endpoint `https://assistente.joaolds.xyz.br/mcp`.
-- Ponte OAuth aos MCPs **oficiais** GitHub e Cloudflare; JavaScript ES Modules; sem Preview ou binding D1.
-- As skills locais de ponto, gastos e desenvolvimento foram removidas anteriormente por decisão do usuário, no PR #94. Em 21/10, também se retirou o pacote `plugin/`, testes de skills e geração de ZIP. Este repositório mantém apenas MCPs e infraestrutura relacionada; não reintroduzir `assistente_skill`.
+## Arquitetura
 
-## Catálogo MCP atual
-Exatamente sete ferramentas:
-`assistente_status`, `mcp_github_tools`, `mcp_github_call`, `mcp_cloudflare_tools`, `mcp_cloudflare_call`, `github_relocate_directory` e `github_edit_file`.
+O repositório `joaoldsxyzbr/Assistente` mantém somente o Worker MCP, integrações oficiais e testes. O ChatGPT vê **apenas nossas próprias ferramentas**; os MCPs oficiais GitHub e Cloudflare e seu OAuth operam exclusivamente no backend. Um Worker serve `https://assistente.joaolds.xyz.br/mcp`.
 
-Ao aparecer `Tool assistente_skill not found`, há defasagem no catálogo do cliente ChatGPT ou Vibe Work, não necessidade de restaurar a ferramenta. Atualizar/reconectar **Assistente MCPs** no cliente para obter novamente o catálogo. Upload ou promoção do Worker não garante atualização automática do catálogo em sessões existentes.
+O código está organizado em `mcps/github/` (ferramentas, OAuth e testes), `mcps/cloudflare/` (idem) e `server/` (transporte e infraestrutura comum). JavaScript ES Modules e SDKs oficiais; sem novas dependências e sem skills.
 
-## Desenvolvimento e implantação
-1. Trabalhar em branch e abrir PR. Validar `checks` (CI: sintaxe, testes Node, browser Chromium, Workerd e build dry-run).
-2. `npm run test:runtime` utiliza o pacote compilado por `wrangler deploy --dry-run --outdir`; `esbuild` não é dependência direta, mas continua transitiva via Wrangler.
-3. Após merge e upload da versão Cloudflare, promover explicitamente, confirmar 100% do tráfego e validar chamadas reais de **leitura** aos dois MCPs.
-4. Não usar D1 pessoal em testes nem alterar escopos, segredos ou autenticação sem necessidade.
-5. `dependency-security.yml` audita dependências semanalmente; consultar o lockfile e as políticas antes de atualizações.
+## Catálogo de ferramentas
 
-## Manutenção
-- Registros em `docs/*-2026-10-*.md` são históricos: podem mencionar skills, Preview e integrações aposentadas; **este documento e o README descrevem o estado vigente**.
-- PRs e branches antigas de arquitetura anterior não devem ser mesclados sem comparação com a `main`.
-- Limpeza de branches via workflow manual `cleanup-merged-branches.yml` (primeiro `apply=false`, depois `apply=true` se a prévia estiver adequada). O script `scripts/cleanup-merged-branches.mjs` verifica PR mesclado, SHA igual e ausência de PR aberto. Branches não mescladas ou com commits novos são preservadas e o histórico permanece no Git.
-- Proteger `main` contra exclusão e force-push; exigir PR e o status do CI, conforme suporte e permissões do GitHub.
+São 25 ferramentas públicas: 1 de status, 15 do GitHub e 9 da Cloudflare.
+
+- GitHub: 10 atalhos de arquivos, branches, commits, PRs e CI, mais edição exata de arquivo, realocação de diretório, commit de múltiplos arquivos, merge de PR por SHA e exclusão de arquivo em branch protegida por validação.
+- Cloudflare: contas, Workers, bancos D1, documentação; SELECT e alterações D1 parametrizadas com confirmação; listagem de versões e deploys de Worker, e publicação de versão existente com confirmação.
+- Genéricas removidas da interface: `mcp_github_tools`, `mcp_github_call`, `mcp_cloudflare_tools`, `mcp_cloudflare_call`. Execução remota oficial continua por funções internas tipadas.
+
+Todas as escritas requerem `mcp:write`; leituras usam `mcp:read`. Chamadas com efeito incerto nunca devem ser repetidas automaticamente. Para operações fora do catálogo, implementar ferramenta própria no módulo do provedor.
+
+## Publicação
+
+O merge na `main` não implica deploy Cloudflare. Validar `npm run check`, `npm run test:browser` e `npm run test:runtime` no CI antes do merge. Após deploy independente, atualizar a conexão do ChatGPT e validar as leituras oficiais e OAuth.
+
+Nenhum teste automatizado deve gravar em D1 real. O Worker de produção não tem binding D1 direto; operações passam pelo MCP oficial Cloudflare.

@@ -1,11 +1,6 @@
-import { readRemoteConfiguration, withRemoteClient } from "./remote-client.js";
-import { audit } from "./shared/audit.js";
-import { remoteCallMetrics, remoteCallTimeout, MAX_PUSH_BYTES, MAX_PUSH_FILES } from "./shared/batch-policy.js";
 
-const PROVIDERS = ["github", "cloudflare"];
 const MAX_OUTPUT_BYTES = 64 * 1024;
 const encoder = new TextEncoder();
-export const remoteToolNames = [...PROVIDERS.map(provider => "mcp_" + provider + "_call"), "github_relocate_directory", "github_edit_file"];
 
 function fail(message) {
   return { isError: true, content: [{ type: "text", text: message }] };
@@ -219,87 +214,3 @@ export function invokeRemoteTool(client, name, args, timeoutMs = 45000) {
   return client.callTool({ name, arguments: args }, { timeout: timeoutMs });
 }
 
-export function registerRemoteTools(server, env, fromJsonSchema, securitySchemes, traceId) {
-  for (const provider of PROVIDERS) {
-    server.registerTool("mcp_" + provider + "_tools", {
-      description: "Pesquisa as ferramentas do MCP oficial " + provider + " por palavras (query). Lista resumos ordenados por relevância; resultado único inclui inputSchema quando compacto. Use name para o schema completo.",
-      inputSchema: fromJsonSchema({
-        type: "object",
-        properties: {
-          query: { type: "string", maxLength: 128 },
-          name: { type: "string", minLength: 1, maxLength: 128 },
-          cursor: { type: "integer", minimum: 0 },
-          limit: { type: "integer", minimum: 1, maximum: 50 }
-        },
-        additionalProperties: false
-      }),
-      _meta: { securitySchemes: securitySchemes(false) }
-    }, async (options = {}) => {
-      const started = Date.now();
-      try {
-        const config = await readRemoteConfiguration(env, provider);
-        if (!config) return fail("[AUTHORIZATION] OAuth upstream indisponivel para " + provider + ". Consulte assistente_status.");
-        const tools = await withRemoteClient(config, client => listAllRemoteTools(client));
-        const selected = selectRemoteTools(tools, options);
-        if (selected.error) return fail(selected.error);
-        const result = normalizeRemoteResult({ content: [{ type: "text", text: JSON.stringify(selected) }] });
-        audit(result.isError ? "warn" : "info", "remote_discovery", {
-          server: provider, outcome: result.isError ? "error" : "ok", traceId, durationMs: Date.now() - started
-        });
-        return result;
-      } catch (error) {
-        const category = classifyRemoteFailure(error);
-        audit("warn", "remote_discovery", { server: provider, outcome: "error", category, traceId, durationMs: Date.now() - started });
-        return remoteFailure(error, provider);
-      }
-    });
-    server.registerTool("mcp_" + provider + "_call", {
-      description: "Encaminha uma chamada ao MCP oficial " + provider + ". No GitHub, push_files aceita ate 8 arquivos/128 KiB por commit; lotes maiores devem ser divididos antes da chamada. Nunca repita escrita incerta. Exige mcp:write.",
-      inputSchema: fromJsonSchema({
-        type: "object",
-        properties: {
-          name: { type: "string", minLength: 1, maxLength: 128 },
-          arguments: { type: "object", additionalProperties: true }
-        },
-        required: ["name", "arguments"],
-        additionalProperties: false
-      }),
-      _meta: { securitySchemes: securitySchemes(true) }
-    }, async ({ name, arguments: args }) => {
-      const started = Date.now();
-      const metrics = remoteCallMetrics(provider, name, args);
-      const details = { inputBytes: metrics.inputBytes, fileCount: metrics.fileCount, batch: metrics.batch };
-      if (metrics.tooLarge) {
-        audit("warn", "remote_call", {
-          server: provider, outcome: "rejected", category: "BATCH_TOO_LARGE",
-          traceId, durationMs: Date.now() - started, ...details
-        });
-        return fail("[BATCH_TOO_LARGE] Lote GitHub acima do limite seguro: " +
-          MAX_PUSH_FILES + " arquivos e " + (MAX_PUSH_BYTES / 1024) + " KiB por chamada. " +
-          "Divida em commits menores, confirme cada commit no GitHub e nao repita escritas incertas.");
-      }
-      const timeoutMs = remoteCallTimeout(provider, name);
-      try {
-        const config = await readRemoteConfiguration(env, provider);
-        if (!config) return fail("[AUTHORIZATION] OAuth upstream indisponivel para " + provider + ". Consulte assistente_status.");
-        const result = await withRemoteClient(config, async client => {
-          // Nunca repetir automaticamente uma chamada generica; ela pode modificar dados.
-          return normalizeRemoteResult(await invokeRemoteTool(client, name, args, timeoutMs));
-        }, { callTimeoutMs: timeoutMs });
-        audit(result.isError ? "warn" : "info", "remote_call", {
-          server: provider, outcome: result.isError ? "error" : "ok",
-          category: result.isError ? "upstream_result" : undefined,
-          traceId, durationMs: Date.now() - started, ...details
-        });
-        return result;
-      } catch (error) {
-        const category = classifyRemoteFailure(error);
-        audit("warn", "remote_call", {
-          server: provider, outcome: "uncertain", uncertain: true,
-          category, traceId, durationMs: Date.now() - started, ...details
-        });
-        return remoteFailure(error, provider);
-      }
-    });
-  }
-}

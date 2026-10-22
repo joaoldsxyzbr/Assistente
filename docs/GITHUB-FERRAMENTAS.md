@@ -1,15 +1,15 @@
-# Ferramentas diretas GitHub
+# Ferramentas próprias do GitHub
 
-O Assistente MCPs mantém o OAuth atual e executa cada chamada pelo MCP oficial GitHub.
+A integração usa OAuth e o MCP **oficial GitHub no backend**. No ChatGPT estão apenas 15 ferramentas próprias.
 
-**Leitura (mcp:read):** github_ler_arquivo, github_estrutura, github_branches, github_commits, github_pesquisar_codigo, github_pull_requests, github_detalhar_pr e github_execucoes_ci.
+Leituras: `github_ler_arquivo`, `github_estrutura`, `github_branches`, `github_commits`, `github_pesquisar_codigo`, `github_pull_requests`, `github_detalhar_pr` e `github_execucoes_ci`.
 
-**Escrita (mcp:write):** github_criar_branch e github_criar_pr. Nenhuma delas faz merge ou deploy automaticamente.
+Escritas: `github_criar_branch`, `github_criar_pr`, `github_edit_file`, `github_relocate_directory`, `github_enviar_arquivos`, `github_integrar_pr`, `github_excluir_arquivo`.
 
-As ferramentas existentes github_edit_file (substituição exata com dryRun e validação SHA) e github_relocate_directory continuam. As ferramentas genéricas mcp_github_tools e mcp_github_call permanecem como fallback.
+- Edição exata: `dryRun` e controle concorrente por SHA para preservar contexto.
+- Envio de arquivos: máximo 8 arquivos/128 KiB; não escreve diretamente em `main` ou `master`.
+- Merge de PR: exige SHA esperado e confirmação explícita.
+- Exclusão: branch de trabalho, confirmação obrigatória.
+- O servidor oficial executa as operações internamente, sem o cliente conhecer o nome das ferramentas upstream.
 
-Contratos e validação: mcps/github/tools/contratos.js. Registro e encaminhamento: mcps/github/tools/diretas.js. Testes: mcps/github/tests/diretas.test.js.
-
-Não há novas dependências. Chamadas mutáveis incertas não são repetidas automaticamente. Limite de resposta e tratamento de erro seguem a ponte existente.
-
-Após validar CI e fazer deploy do Worker, atualizar ou reconectar o Assistente MCPs no ChatGPT para obter o novo catálogo.
+Módulos e testes ficam inteiros em `mcps/github/`.

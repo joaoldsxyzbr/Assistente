@@ -1,32 +1,25 @@
-# MCPs e recursos do Assistente
+# MCPs oficiais como infraestrutura, ferramentas próprias como interface
 
-## Arquitetura
+O ChatGPT usa exclusivamente ferramentas registradas pelo Assistente MCPs. Os MCPs **oficiais** do GitHub e Cloudflare, assim como o OAuth, ficam internamente no Worker. Não publicamos `mcp_*_tools` nem `mcp_*_call`.
 
-O Worker Assistente MCPs, em **JavaScript puro (ES Modules)**, encaminha as chamadas aos MCPs oficiais GitHub e Cloudflare, preservando as ferramentas oficiais.
+## GitHub (15 ferramentas)
 
-- `mcp_github_tools` e `mcp_github_call`: descoberta e execução das ferramentas MCP oficiais do GitHub.
-- `mcp_cloudflare_tools` e `mcp_cloudflare_call`: descoberta e execução das ferramentas MCP oficiais da Cloudflare.
-- `github_relocate_directory`: operação específica para **cópia/movimentação de diretórios**, via API Git Database oficial com o mesmo token OAuth GitHub; não envia conteúdo dos arquivos pelo ChatGPT.
-- `assistente_status`: estado das conexões upstream e links seguros para conectar/desconectar provedores.
+Leitura: `github_ler_arquivo`, `github_estrutura`, `github_branches`, `github_commits`, `github_pesquisar_codigo`, `github_pull_requests`, `github_detalhar_pr`, `github_execucoes_ci`.
 
-O Worker não tem binding D1 nem ferramentas D1 próprias; acessos a D1, quando necessários, usam o MCP oficial Cloudflare.
+Escrita: `github_criar_branch`, `github_criar_pr`, `github_edit_file` (substituição exata, dryRun, SHA), `github_relocate_directory`, `github_enviar_arquivos` (até 8 arquivos/128 KiB), `github_integrar_pr` (SHA esperado) e `github_excluir_arquivo`.
 
-## Descoberta otimizada e completa
+## Cloudflare (9 ferramentas)
 
-O catálogo `mcp_*_tools` é consultado no provedor a cada pesquisa, preservando atualidade e isolamento. A listagem percorre páginas `nextCursor` até o fim, rejeitando cursores repetidos e catálogos incompletos. Consultas exatas por `name` devolvem nome, descrição curta e `inputSchema`, sem ícones, metadados visuais e esquemas de saída volumosos. Esquemas de entrada que excedem o limite textual de 64 KiB geram erro controlado; resultados privados não são armazenados em cache.
+Leitura: `cloudflare_contas`, `cloudflare_workers`, `cloudflare_bancos_d1`, `cloudflare_documentacao`, `cloudflare_d1_consultar`, `cloudflare_worker_versoes`, `cloudflare_worker_deployments`.
 
-## OAuth e privacidade
+Escrita: `cloudflare_d1_executar` (SQL de uma instrução, parâmetros, confirmação e dryRun) e `cloudflare_worker_publicar_versao` (deploy 100% de versão existente, confirmação/dryRun). Os wrappers Cloudflare não aceitam código JavaScript arbitrário.
 
-São dois trechos OAuth: ChatGPT → Worker e Worker → GitHub/Cloudflare. O Worker guarda tokens dos provedores cifrados no KV. `github_relocate_directory` reutiliza o token GitHub e não exige credencial, serviço ou permissão nova. Não registrar tokens, caminhos de arquivos ou conteúdo nos logs.
+**Limite de cobertura:** upload de código-fonte de Worker e demais APIs específicas não estão expostos. Para usá-los pelo ChatGPT é necessário implementar um novo contrato próprio. A rota genérica oficial não aparece no catálogo.
 
-## Operações GitHub confiáveis
+## Segurança
 
-Para mudanças de conteúdo, o `push_files` oficial continua com limite preventivo de 8 arquivos/128 KiB por chamada e timeout seletivo. Conferir o estado após erros incertos, sem repetição automática.
+OAuth independente ChatGPT → Worker e Worker → provedores; tokens cifrados em KV, permissões `mcp:read` e `mcp:write`, validações, rate limits e auditoria sem dados sensíveis. Mudanças não são repetidas automaticamente após erro incerto. Não enviar segredos ao ChatGPT.
 
-Para reorganizações, usar `github_relocate_directory`: prévia obrigatória, `expectedHeadSha`, cópia/movimentação em um commit, sem `force` e sem sobrescrever arquivos distintos. Branch `main` e `master` são protegidas contra escrita nessa ferramenta. Alterar imports separadamente e executar CI antes do merge.
+## Testes e deploy
 
-Veja [docs/RELOCACAO-GITHUB-2026-10-19.md](RELOCACAO-GITHUB-2026-10-19.md) e [docs/LOTES-2026-10-19.md](LOTES-2026-10-19.md).
-
-## Produção
-
-Há um único Worker de produção; **não existe Preview mantido**. CI Node/Chromium/Workerd e build dry-run são obrigatórios antes da promoção explícita de versão. Verificar os bindings, realizar testes de leitura e manter a versão anterior para rollback. Nenhum teste deve gravar nos bancos D1 reais.
+CI inclui verificação Node, browser, Workerd e build dry-run. Merge no GitHub não implanta versão Cloudflare; após publicar, renovar o catálogo do cliente ChatGPT.

@@ -188,7 +188,7 @@ test(
       try {
         await client.connect(transport);
         const list = await client.listTools();
-        assert.equal(list.tools.length, 17);
+        assert.equal(list.tools.length, 25);
          for (const toolName of ["github_ler_arquivo", "github_branches", "github_criar_branch", "github_criar_pr"]) {
            assert.ok(list.tools.some(tool => tool.name === toolName), "Atalho ausente: " + toolName);
          }
@@ -199,37 +199,16 @@ test(
          assert.equal(directRead.content[0].text, "upstream:list_branches");
         assert.ok(list.tools.some(tool => tool.name === "github_edit_file"));
         assert.ok(list.tools.some(tool => tool.name === "github_relocate_directory"));
-        for (const [toolName, expected] of [["json_read", "upstream:json_read"], ["sse_read", "upstream:sse_read"]]) {
-          const forwarded = await client.callTool({
-            name: "mcp_github_call", arguments: { name: toolName, arguments: {} }
-          });
-          assert.equal(forwarded.isError, false, JSON.stringify(forwarded));
-          assert.equal(forwarded.content[0].text, expected);
+        const unexpected = ["mcp_github_tools", "mcp_github_call", "mcp_cloudflare_tools", "mcp_cloudflare_call"];
+        for (const name of unexpected) assert.ok(!list.tools.some(t => t.name === name));
+        for (const name of ["github_enviar_arquivos", "github_integrar_pr", "github_excluir_arquivo"]) {
+          assert.ok(list.tools.some(t => t.name === name), "GitHub operation missing: " + name);
         }
-        const validBatch = await client.callTool({
-          name: "mcp_github_call", arguments: { name: "push_files", arguments: {
-            owner: "test", repo: "test", branch: "test", message: "test only",
-            files: [{ path: "one.js", content: "hello" }, { path: "two.js", content: "world" }]
-          } }
-        });
-        assert.equal(validBatch.isError, false, JSON.stringify(validBatch));
-        assert.match(validBatch.content[0].text, /upstream:push_files/);
-        const beforeOversized = calls.length;
-        const oversizedBatch = await client.callTool({
-          name: "mcp_github_call", arguments: { name: "push_files", arguments: {
-            files: Array.from({ length: 9 }, (_, i) => ({ path: i + ".js", content: "x" }))
-          } }
-        });
-        assert.equal(oversizedBatch.isError, true);
-        assert.match(oversizedBatch.content[0].text, /BATCH_TOO_LARGE/);
-        assert.equal(calls.length, beforeOversized, "oversized batch must not reach GitHub");
-        const failure = await client.callTool({
-          name: "mcp_github_call", arguments: { name: "fail_write", arguments: {} }
-        });
-        assert.equal(failure.isError, true);
-        assert.match(failure.content[0].text, /UPSTREAM_UNAVAILABLE/);
-        assert.equal(calls.filter(name => name === "fail_write").length, 1,
-          "writes must never be automatically retried");
+        const cloudflareNames = ["cloudflare_contas", "cloudflare_workers", "cloudflare_bancos_d1", "cloudflare_documentacao", "cloudflare_d1_consultar", "cloudflare_d1_executar", "cloudflare_worker_versoes", "cloudflare_worker_deployments", "cloudflare_worker_publicar_versao"];
+        for (const name of cloudflareNames) assert.ok(list.tools.some(t => t.name === name));
+        const cf = await client.callTool({ name: "cloudflare_contas", arguments: {} });
+        assert.equal(cf.isError, true);
+        assert.match(cf.content[0].text, /AUTHORIZATION/);
       } finally {
         await client.close();
       }
