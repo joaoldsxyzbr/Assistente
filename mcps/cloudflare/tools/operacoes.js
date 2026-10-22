@@ -1,6 +1,6 @@
 import {readRemoteConfiguration,withRemoteClient} from "../../../server/remote-client.js";
 import {invokeRemoteTool,normalizeRemoteResult,remoteFailure} from "../../../server/remote-tools.js";
-import {audit} from "../../../server/shared/audit.js";
+import {createToolDiagnostics,markCloudflareResultError} from "../../../server/shared/tool-diagnostics.js";
 
 const ACCOUNT={type:"string",pattern:"^[0-9a-fA-F]{32}$",minLength:32,maxLength:32};
 const DB={type:"string",pattern:"^[0-9a-fA-F-]{36}$",minLength:36,maxLength:36};
@@ -79,20 +79,26 @@ export function registerCloudflareOperations(server,env,fromJsonSchema,securityS
    inputSchema:fromJsonSchema(def.schema),
    _meta:{securitySchemes:securitySchemes(def.write)}
   },async(args={})=>{
-   const started=Date.now();
-   try{
+   const diagnostic=createToolDiagnostics({provider:"cloudflare",tool:def.name,write:def.write,traceId});
+   try {
     const call=prepareCloudflareOperation(def.name,args);
-    if(call.preview)return textResult(JSON.stringify({dryRun:true,operation:def.name,account_id:args.account_id,
-     database_id:args.database_id,worker:args.worker,version_id:args.version_id,sql:args.sql,params:args.params}));
+    if(call.preview)return diagnostic.done(textResult(JSON.stringify({
+     dryRun:true,operation:def.name,account_id:args.account_id,
+     database_id:args.database_id,worker:args.worker,version_id:args.version_id,
+     sql:args.sql,params:args.params
+    })),{preview:true});
+    diagnostic.stage("oauth");
     const config=await readRemoteConfiguration(env,"cloudflare");
-    if(!config)return {isError:true,content:[{type:"text",text:"[AUTHORIZATION] Conecte Cloudflare via OAuth."}]};
-    const result=await withRemoteClient(config,async client=>
-     normalizeRemoteResult(await invokeRemoteTool(client,"execute",call.arguments)));
-    audit(result.isError?"warn":"info","cloudflare_operation",{tool:def.name,traceId,
-     outcome:result.isError?"error":"ok",durationMs:Date.now()-started});
-    return result;
+    if(!config)return diagnostic.done({isError:true,content:[{type:"text",text:"[AUTHORIZATION] Conecte Cloudflare via OAuth."}]},{missingAuth:true});
+    const raw=await withRemoteClient(config,client=>invokeRemoteTool(client,"execute",call.arguments),
+      {onStage:stage=>{
+       diagnostic.stage(stage);
+       if(stage==="upstream"&&def.write)diagnostic.markWriteAttempt();
+      }});
+    diagnostic.stage("normalization");
+    return diagnostic.done(markCloudflareResultError(normalizeRemoteResult(raw)));
    }catch(error){
-    audit("warn","cloudflare_operation",{tool:def.name,traceId,outcome:"error",durationMs:Date.now()-started});
+    diagnostic.fail(error);
     return remoteFailure(error,"cloudflare");
    }
   });
