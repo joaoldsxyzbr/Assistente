@@ -1,5 +1,6 @@
 import { getUpstreamAccessToken } from "../../../server/upstream-oauth.js";
 import { audit } from "../../../server/shared/audit.js";
+import { createToolDiagnostics } from "../../../server/shared/tool-diagnostics.js";
 import { githubJson } from "./realocacao.js";
 
 const HASH = /^[0-9a-f]{40}$/i;
@@ -88,7 +89,7 @@ function repositoryUrl(owner, repo) {
     encodeURIComponent(owner) + "/" + encodeURIComponent(repo);
 }
 
-export async function editGithubFile(input, { token, request = githubJson } = {}) {
+export async function editGithubFile(input, { token, request = githubJson, onMutation = () => {} } = {}) {
   const { branch, path, dryRun } = validateExactEdit(input);
   if (!token) throw Error("GITHUB_NOT_CONNECTED");
   const base = repositoryUrl(input.owner, input.repo);
@@ -140,6 +141,7 @@ export async function editGithubFile(input, { token, request = githubJson } = {}
   };
   if (dryRun) return summary;
 
+  onMutation();
   const blob = await request(token, base + "/git/blobs", {
     method: "POST", body: { content: updated, encoding: "utf-8" }
   });
@@ -204,15 +206,24 @@ export function registerGithubExactEdit(server, env, fromJsonSchema, securitySch
     _meta: { securitySchemes: securitySchemes(true) }
   }, async args => {
     const start = Date.now();
+    const diagnostic = createToolDiagnostics({provider:"github",tool:"github_edit_file",
+      write:args?.dryRun === false,traceId});
     try {
+      validateExactEdit(args);
+      diagnostic.stage("oauth");
       const token = await getUpstreamAccessToken(env, "github");
-      const result = await editGithubFile(args, { token });
+      diagnostic.stage("upstream");
+      const result = await editGithubFile(args, { token,
+        onMutation:()=>diagnostic.markWriteAttempt() });
+      diagnostic.stage("normalization");
+      diagnostic.done({}, {preview:result.dryRun});
       audit("info", "github_exact_edit", {
         traceId, server: "github", outcome: result.status,
         durationMs: Date.now() - start, bytes: result.updatedBytes
       });
       return { content: [{ type: "text", text: JSON.stringify(result) }] };
     } catch (error) {
+      diagnostic.fail(error);
       const raw = String(error?.message ?? "");
       const category = allowedErrors.has(raw) ? raw
         : /^GITHUB_HTTP_(400|401|403|404|409|422|429|500|502|503|504)$/.test(raw)
