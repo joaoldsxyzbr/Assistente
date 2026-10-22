@@ -188,7 +188,15 @@ test(
       try {
         await client.connect(transport);
         const list = await client.listTools();
-        assert.equal(list.tools.length, 7);
+        assert.equal(list.tools.length, 17);
+         for (const toolName of ["github_ler_arquivo", "github_branches", "github_criar_branch", "github_criar_pr"]) {
+           assert.ok(list.tools.some(tool => tool.name === toolName), "Atalho ausente: " + toolName);
+         }
+         const directRead = await client.callTool({
+           name: "github_branches", arguments: { owner: "test", repo: "test" }
+         });
+         assert.equal(directRead.isError, false, JSON.stringify(directRead));
+         assert.equal(directRead.content[0].text, "upstream:list_branches");
         assert.ok(list.tools.some(tool => tool.name === "github_edit_file"));
         assert.ok(list.tools.some(tool => tool.name === "github_relocate_directory"));
         for (const [toolName, expected] of [["json_read", "upstream:json_read"], ["sse_read", "upstream:sse_read"]]) {
