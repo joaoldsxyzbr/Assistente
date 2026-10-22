@@ -1,6 +1,6 @@
 import {readRemoteConfiguration,withRemoteClient} from "../../../server/remote-client.js";
 import {invokeRemoteTool,normalizeRemoteResult,remoteFailure} from "../../../server/remote-tools.js";
-import {audit} from "../../../server/shared/audit.js";
+import {createToolDiagnostics} from "../../../server/shared/tool-diagnostics.js";
 import {cloudflareTools,prepareCloudflareCall} from "./contratos.js";
 
 const fail=message=>({isError:true,content:[{type:"text",text:message}]});
@@ -11,19 +11,18 @@ export function registerCloudflareTools(server,env,fromJsonSchema,securityScheme
       inputSchema:fromJsonSchema(tool.schema),
       _meta:{securitySchemes:securitySchemes(false)}
     },async (args={})=>{
-      const started=Date.now();
+      const diagnostic=createToolDiagnostics({provider:"cloudflare",tool:tool.name,write:false,traceId});
       try{
         const call=prepareCloudflareCall(tool.name,args);
+        diagnostic.stage("oauth");
         const config=await readRemoteConfiguration(env,"cloudflare");
-        if(!config)return fail("[AUTHORIZATION] Conecte Cloudflare via OAuth; consulte assistente_status.");
-        const result=await withRemoteClient(config,async client=>
-          normalizeRemoteResult(await invokeRemoteTool(client,call.upstream,call.arguments)));
-        audit(result.isError?"warn":"info","cloudflare_direct",{
-          outcome:result.isError?"error":"ok",tool:call.name,traceId,durationMs:Date.now()-started
-        });
-        return result;
+        if(!config)return diagnostic.done(fail("[AUTHORIZATION] Conecte Cloudflare via OAuth; consulte assistente_status."),{missingAuth:true});
+        const raw=await withRemoteClient(config,async client=>
+          invokeRemoteTool(client,call.upstream,call.arguments),{onStage:stage=>diagnostic.stage(stage)});
+        diagnostic.stage("normalization");
+        return diagnostic.done(normalizeRemoteResult(raw));
       }catch(error){
-        audit("warn","cloudflare_direct",{outcome:"error",tool:tool.name,traceId,durationMs:Date.now()-started});
+        diagnostic.fail(error);
         return remoteFailure(error,"cloudflare");
       }
     });
